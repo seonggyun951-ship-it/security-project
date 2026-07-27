@@ -14,6 +14,12 @@ import {
   UpdateWebACLCommand,
   CreateIPSetCommand,
 } from 'npm:@aws-sdk/client-wafv2@3'
+import {
+  IAMClient,
+  CreateUserCommand,
+  AttachUserPolicyCommand,
+  CreateAccessKeyCommand,
+} from 'npm:@aws-sdk/client-iam@3'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -173,6 +179,20 @@ async function handleWaf(waf, req) {
   return { web_acl_id: req.target_id }
 }
 
+// ---- IAM 읽기전용 계정 ----
+async function handleIam(iam, req, issueKey) {
+  const p = req.payload || {}
+  await iam.send(new CreateUserCommand({ UserName: p.user_name }))
+  await iam.send(new AttachUserPolicyCommand({ UserName: p.user_name, PolicyArn: p.policy_arn }))
+  const result = { user_name: p.user_name, policy_arn: p.policy_arn }
+  if (issueKey) {
+    const keyRes = await iam.send(new CreateAccessKeyCommand({ UserName: p.user_name }))
+    result.access_key_id = keyRes.AccessKey.AccessKeyId
+    result.secret_access_key = keyRes.AccessKey.SecretAccessKey // DB에는 저장하지 않고 응답으로만 1회 반환
+  }
+  return result
+}
+
 // 관리자가 승인 누른 신청을 실제 AWS에 반영. status='pending'인 요청만 처리(중복 승인 방지).
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
@@ -185,7 +205,7 @@ serve(async (req) => {
     const { data: { user }, error: authError } = await userClient.auth.getUser(token)
     if (authError || !user) return json({ ok: false, error: '로그인이 필요합니다' }, 401)
 
-    const { request_id } = await req.json()
+    const { request_id, issue_key } = await req.json()
     if (!request_id) throw new Error('request_id가 필요합니다')
 
     const supabase = createClient(Deno.env.get('SUPABASE_URL'), Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'))
@@ -219,10 +239,14 @@ serve(async (req) => {
         result = await handleSg(new EC2Client({ region, credentials }), claimed)
       } else if (claimed.resource_type === 'waf_web_acl') {
         result = await handleWaf(new WAFV2Client({ region, credentials }), claimed)
+      } else if (claimed.resource_type === 'iam_user') {
+        result = await handleIam(new IAMClient({ region, credentials }), claimed, !!issue_key)
       } else {
         throw new Error('지원하지 않는 resource_type: ' + claimed.resource_type)
       }
-      await supabase.from('aws_requests').update({ status: 'applied', applied_at: new Date().toISOString(), result }).eq('id', request_id)
+      // secret_access_key는 응답으로만 1회 반환하고 DB에는 절대 저장하지 않음
+      const { secret_access_key, ...resultForDb } = result
+      await supabase.from('aws_requests').update({ status: 'applied', applied_at: new Date().toISOString(), result: resultForDb }).eq('id', request_id)
       return json({ ok: true, result })
     } catch (awsErr) {
       await supabase.from('aws_requests').update({ status: 'failed', error_message: String(awsErr) }).eq('id', request_id)

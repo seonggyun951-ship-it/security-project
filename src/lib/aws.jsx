@@ -5,14 +5,22 @@ export const RESOURCE_META = {
   waf_web_acl:    { icon: '🧱', label: 'WAF Web ACL' },
   iam_role:       { icon: '👤', label: 'IAM Role' },
   iam_policy:     { icon: '📜', label: 'IAM Policy' },
+  iam_user:       { icon: '🔑', label: 'IAM 읽기전용 계정' },
 }
 
 export const ACTION_LABEL = {
-  create_sg:      '신규 SG 생성',
-  add_rules:      'SG 규칙 추가',
-  create_acl:     '신규 WAF 생성',
-  add_waf_rules:  'WAF 규칙 추가',
+  create_sg:            '신규 SG 생성',
+  add_rules:            'SG 규칙 추가',
+  create_acl:           '신규 WAF 생성',
+  add_waf_rules:        'WAF 규칙 추가',
+  create_readonly_user: '읽기전용 계정 생성',
 }
+
+// 배포된 IAM 정책이 딱 이 두 관리형 정책으로만 AttachUserPolicy 하도록 제한되어 있음
+export const IAM_READONLY_POLICIES = [
+  { arn: 'arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess', label: 'S3 읽기 전용' },
+  { arn: 'arn:aws:iam::aws:policy/ReadOnlyAccess', label: '전체 서비스 읽기 전용 (ReadOnlyAccess)' },
+]
 
 export const REQ_STATUS_META = {
   pending:  { label: '대기중', color: '#f59e0b' },
@@ -112,6 +120,10 @@ export function reqDetailLines(r) {
   if (r.action === 'add_waf_rules') {
     return (p.rules || []).map(wafRuleLabel)
   }
+  if (r.action === 'create_readonly_user') {
+    const policy = IAM_READONLY_POLICIES.find((x) => x.arn === p.policy_arn)
+    return [`계정: ${p.user_name}`, `권한: ${policy ? policy.label : p.policy_arn}`]
+  }
   return []
 }
 
@@ -131,7 +143,14 @@ export function ReqCard({ r, busyId, onApprove, onReject, onRemove }) {
       {r.requester_email && <div className="ac-req-meta">신청자: {r.requester_email}</div>}
       {r.error_message && <div className="ac-req-error">⚠️ {r.error_message}</div>}
       <div className="ac-req-meta">{new Date(r.requested_at).toLocaleString('ko-KR')}</div>
-      {r.status === 'pending' && onApprove && (
+      {r.status === 'pending' && onApprove && r.resource_type === 'iam_user' && (
+        <div className="ac-req-actions">
+          <button className="ac-btn" disabled={busy} onClick={() => onApprove(r.id, { issueKey: true })}>{busy ? '처리 중...' : '승인 (키 발급)'}</button>
+          <button className="ac-btn ac-btn-secondary" disabled={busy} onClick={() => onApprove(r.id, { issueKey: false })}>승인 (키 없이)</button>
+          <button className="ac-btn ac-btn-secondary" disabled={busy} onClick={() => onReject(r.id)}>거절</button>
+        </div>
+      )}
+      {r.status === 'pending' && onApprove && r.resource_type !== 'iam_user' && (
         <div className="ac-req-actions">
           <button className="ac-btn" disabled={busy} onClick={() => onApprove(r.id)}>{busy ? '처리 중...' : '승인'}</button>
           <button className="ac-btn ac-btn-secondary" disabled={busy} onClick={() => onReject(r.id)}>거절</button>

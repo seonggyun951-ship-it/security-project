@@ -112,6 +112,7 @@ const HISTORY_CATEGORIES = [
   { key: 'all', label: '전체' },
   { key: 'security_group', label: '🛡️ SG' },
   { key: 'waf_web_acl', label: '🧱 WAF' },
+  { key: 'iam_user', label: '🔑 IAM' },
 ]
 
 function HistoryList({ historyRequests, busyId, onRemove }) {
@@ -199,11 +200,42 @@ function groupSnapshotsByResource(snapshots) {
   }).sort((a, b) => new Date(b.latest.collected_at) - new Date(a.latest.collected_at))
 }
 
+// 발급된 액세스키를 한 번만 보여주는 팝업 (DB에는 저장하지 않음 — 닫으면 다시 못 봄)
+function RevealKeyPopup({ result, onClose }) {
+  const copy = (text) => navigator.clipboard?.writeText(text)
+  return (
+    <div className="ac-datepop-backdrop" onClick={onClose}>
+      <div className="ac-datepop" onClick={(e) => e.stopPropagation()}>
+        <div className="ac-cal-title">🔑 {result.user_name} 액세스키 발급됨</div>
+        <p className="ac-cred-note">⚠️ 이 화면을 닫으면 Secret Key는 다시 조회할 수 없습니다. 지금 바로 복사해두세요.</p>
+        <div className="ac-form-row">
+          <div className="ac-field">
+            <label className="ac-label">Access Key ID</label>
+            <input className="ac-input" readOnly value={result.access_key_id} onFocus={(e) => e.target.select()} />
+          </div>
+          <button className="ac-btn ac-btn-secondary" onClick={() => copy(result.access_key_id)}>복사</button>
+        </div>
+        <div className="ac-form-row">
+          <div className="ac-field">
+            <label className="ac-label">Secret Access Key</label>
+            <input className="ac-input" readOnly value={result.secret_access_key} onFocus={(e) => e.target.select()} />
+          </div>
+          <button className="ac-btn ac-btn-secondary" onClick={() => copy(result.secret_access_key)}>복사</button>
+        </div>
+        <div className="ac-datepop-actions">
+          <button className="ac-btn" onClick={onClose}>확인했습니다, 닫기</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // 신청 대기/이력 관리 (통합 큐)
 function RequestQueue() {
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState(null)
+  const [revealKey, setRevealKey] = useState(null)
 
   const pendingRequests = requests.filter((r) => r.status === 'pending')
   const historyRequests = requests.filter((r) => r.status !== 'pending')
@@ -217,17 +249,18 @@ function RequestQueue() {
 
   useEffect(() => { fetchRequests() }, [])
 
-  const approve = async (id) => {
+  const approve = async (id, opts) => {
     setBusyId(id)
     try {
       const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch(AWS_REQUEST_APPLY_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ request_id: id }),
+        body: JSON.stringify({ request_id: id, issue_key: !!opts?.issueKey }),
       })
       const data = await res.json()
       if (!data.ok) alert('적용 실패: ' + data.error)
+      else if (data.result?.access_key_id && data.result?.secret_access_key) setRevealKey(data.result)
     } catch (e) {
       alert('적용 실패: ' + String(e))
     }
@@ -253,6 +286,7 @@ function RequestQueue() {
 
   return (
     <>
+      {revealKey && <RevealKeyPopup result={revealKey} onClose={() => setRevealKey(null)} />}
       <div className="ac-card ac-card-wide">
         <div className="ac-card-title">처리 대기중 {pendingRequests.length > 0 && `(${pendingRequests.length})`}</div>
         {loading && <div className="ac-empty">불러오는 중...</div>}

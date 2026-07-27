@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import {
-  RESOURCE_META, WAF_MANAGED_RULE_GROUPS, WAF_FIELDS, WAF_POSITIONS, ReqCard,
+  RESOURCE_META, WAF_MANAGED_RULE_GROUPS, WAF_FIELDS, WAF_POSITIONS, IAM_READONLY_POLICIES, ReqCard,
   emptyRule, parsePortRange, normalizeCidr,
   emptyWafRule,
 } from '../lib/aws'
@@ -10,6 +10,7 @@ import {
 const RESOURCE_TABS = [
   { key: 'security_group', label: '🛡️ Security Group' },
   { key: 'waf_web_acl', label: '🧱 WAF Web ACL' },
+  { key: 'iam_user', label: '🔑 IAM 읽기전용 계정' },
 ]
 
 function SgForm({ sgOptions, onSubmit, submitting }) {
@@ -317,6 +318,52 @@ function WafForm({ aclOptions, onSubmit, submitting }) {
   )
 }
 
+function IamUserForm({ onSubmit, submitting }) {
+  const [form, setForm] = useState({ user_name: '', policy_arn: IAM_READONLY_POLICIES[0].arn, reason: '' })
+
+  const reset = () => setForm({ user_name: '', policy_arn: IAM_READONLY_POLICIES[0].arn, reason: '' })
+
+  const submit = async () => {
+    const userName = form.user_name.trim()
+    if (!userName) return alert('계정 이름은 필수입니다')
+    if (!/^[\w+=,.@-]+$/.test(userName)) return alert('계정 이름에 사용할 수 없는 문자가 있습니다 (영문/숫자/+=,.@- 만 허용)')
+    if (!form.reason.trim()) return alert('신청 사유는 필수입니다 (승인자가 액세스키 발급 여부를 판단하는 근거로 사용됩니다)')
+
+    const ok = await onSubmit({
+      resource_type: 'iam_user', action: 'create_readonly_user',
+      title: userName, target_id: null,
+      payload: { user_name: userName, policy_arn: form.policy_arn },
+      reason: form.reason.trim(),
+    })
+    if (ok) reset()
+  }
+
+  return (
+    <>
+      <p className="ac-cred-note">읽기 전용 IAM 계정을 신청합니다. 승인자가 사유를 보고 액세스키 발급 여부를 결정합니다.</p>
+      <div className="ac-form-row">
+        <div className="ac-field">
+          <label className="ac-label">계정 이름</label>
+          <input className="ac-input" placeholder="예: readonly-hong" value={form.user_name} onChange={(e) => setForm({ ...form, user_name: e.target.value })} />
+        </div>
+        <div className="ac-field">
+          <label className="ac-label">권한</label>
+          <select className="ac-input" value={form.policy_arn} onChange={(e) => setForm({ ...form, policy_arn: e.target.value })}>
+            {IAM_READONLY_POLICIES.map((p) => <option key={p.arn} value={p.arn}>{p.label}</option>)}
+          </select>
+        </div>
+      </div>
+      <div className="ac-form-row">
+        <div className="ac-field">
+          <label className="ac-label">신청 사유 (필수)</label>
+          <input className="ac-input" placeholder="예: 배포 로그 확인용 3일간 필요" value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} />
+        </div>
+      </div>
+      <button className="ac-btn" onClick={submit} disabled={submitting}>{submitting ? '신청 중...' : '신청하기'}</button>
+    </>
+  )
+}
+
 export default function AwsRequest() {
   const [resourceType, setResourceType] = useState('security_group')
   const [sgOptions, setSgOptions] = useState([])
@@ -384,9 +431,9 @@ export default function AwsRequest() {
               </button>
             ))}
           </div>
-          {resourceType === 'security_group'
-            ? <SgForm sgOptions={sgOptions} onSubmit={submitRequest} submitting={submitting} />
-            : <WafForm aclOptions={aclOptions} onSubmit={submitRequest} submitting={submitting} />}
+          {resourceType === 'security_group' && <SgForm sgOptions={sgOptions} onSubmit={submitRequest} submitting={submitting} />}
+          {resourceType === 'waf_web_acl' && <WafForm aclOptions={aclOptions} onSubmit={submitRequest} submitting={submitting} />}
+          {resourceType === 'iam_user' && <IamUserForm onSubmit={submitRequest} submitting={submitting} />}
         </div>
 
         <div className="ac-card ac-card-wide">
