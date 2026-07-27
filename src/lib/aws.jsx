@@ -1,0 +1,124 @@
+// AWS 자동화 신청/승인 공통 모듈 — 신청자 페이지와 승인자 페이지가 함께 사용
+
+export const RESOURCE_META = {
+  security_group: { icon: '🛡️', label: 'Security Group' },
+  waf_web_acl:    { icon: '🧱', label: 'WAF Web ACL' },
+  iam_role:       { icon: '👤', label: 'IAM Role' },
+  iam_policy:     { icon: '📜', label: 'IAM Policy' },
+}
+
+export const ACTION_LABEL = {
+  create_sg:      '신규 SG 생성',
+  add_rules:      'SG 규칙 추가',
+  create_acl:     '신규 WAF 생성',
+  add_waf_rules:  'WAF 규칙 추가',
+}
+
+export const REQ_STATUS_META = {
+  pending:  { label: '대기중', color: '#f59e0b' },
+  approved: { label: '승인 처리중', color: '#38bdf8' },
+  applied:  { label: '적용 완료', color: '#10b981' },
+  rejected: { label: '거절됨', color: '#64748b' },
+  failed:   { label: '적용 실패', color: '#ef4444' },
+}
+
+// WAF 신규 생성 시 선택 가능한 AWS 관리형 규칙 그룹
+export const WAF_MANAGED_RULE_GROUPS = [
+  { name: 'AWSManagedRulesCommonRuleSet',          label: '공통 규칙 (Common)' },
+  { name: 'AWSManagedRulesKnownBadInputsRuleSet',  label: '알려진 악성 입력' },
+  { name: 'AWSManagedRulesSQLiRuleSet',            label: 'SQL 인젝션' },
+  { name: 'AWSManagedRulesAmazonIpReputationList', label: 'IP 평판 목록' },
+  { name: 'AWSManagedRulesLinuxRuleSet',           label: 'Linux OS' },
+]
+
+// ---- SG 규칙 헬퍼 ----
+export const emptyRule = () => ({ direction: 'ingress', protocol: 'tcp', port: '', cidr: '' })
+
+// "22" -> {from:22,to:22} / "1000-2000" -> {from:1000,to:2000} / "" -> {from:null,to:null}(전체)
+export function parsePortRange(str) {
+  const s = (str || '').trim()
+  if (!s) return { from_port: null, to_port: null }
+  const [a, b] = s.split('-').map((v) => v.trim())
+  const from = Number(a)
+  const to = b ? Number(b) : from
+  return { from_port: from, to_port: to }
+}
+
+// CIDR에 마스크(/)가 없으면 단일 IP로 보고 /32를 붙임. 이미 있으면 그대로.
+export function normalizeCidr(str) {
+  const s = (str || '').trim()
+  if (!s || s.includes('/')) return s
+  return `${s}/32`
+}
+
+export function sgRuleLabel(r) {
+  const port = r.from_port ? `${r.from_port}${r.to_port && r.to_port != r.from_port ? '-' + r.to_port : ''}` : '전체'
+  const dir = r.direction === 'ingress' ? '인바운드' : '아웃바운드'
+  return `${dir} ${r.protocol}:${port} ↔ ${r.cidr}`
+}
+
+// ---- WAF 규칙 헬퍼 ----
+export const emptyWafRule = () => ({ type: 'ip_block', name: '', cidrs: '', limit: '2000' })
+
+export function wafRuleLabel(r) {
+  if (r.type === 'rate_limit') return `속도제한 ${r.name}: ${r.limit}건/5분 초과 차단`
+  return `IP차단 ${r.name}: ${(r.cidrs || []).join(', ')}`
+}
+
+// ---- 신청 표시 헬퍼 ----
+export function reqTitle(r) {
+  const meta = RESOURCE_META[r.resource_type] || { icon: '📦' }
+  const action = ACTION_LABEL[r.action] || r.action
+  const name = r.title || r.target_id || ''
+  const created = r.result?.created_id || r.result?.web_acl_id
+  return `${meta.icon} ${action}: ${name}${created ? ` (${created})` : ''}`
+}
+
+export function reqDetailLines(r) {
+  const p = r.payload || {}
+  if (r.action === 'create_sg' || r.action === 'add_rules') {
+    return (p.rules || []).map(sgRuleLabel)
+  }
+  if (r.action === 'create_acl') {
+    const names = (p.managed_rule_groups || []).map((n) => {
+      const g = WAF_MANAGED_RULE_GROUPS.find((x) => x.name === n)
+      return g ? g.label : n
+    })
+    return [`관리형 규칙: ${names.join(', ') || '없음'}`, `기본 액션: ${p.default_action === 'block' ? '차단' : '허용'}`]
+  }
+  if (r.action === 'add_waf_rules') {
+    return (p.rules || []).map(wafRuleLabel)
+  }
+  return []
+}
+
+// 신청 1건 카드 — 승인자는 onApprove/onReject/onRemove 전달, 신청자는 미전달(상태만 표시)
+export function ReqCard({ r, busyId, onApprove, onReject, onRemove }) {
+  const meta = REQ_STATUS_META[r.status] || { label: r.status, color: '#94a3b8' }
+  const detail = reqDetailLines(r)
+  const busy = busyId === r.id
+  return (
+    <div className="ac-req">
+      <div className="ac-req-top">
+        <span className="ac-req-status" style={{ background: meta.color }}>{meta.label}</span>
+        <span className="ac-req-title">{reqTitle(r)}</span>
+      </div>
+      {detail.map((line, i) => <div key={i} className="ac-req-reason">{line}</div>)}
+      {r.reason && <div className="ac-req-reason">사유: {r.reason}</div>}
+      {r.requester_email && <div className="ac-req-meta">신청자: {r.requester_email}</div>}
+      {r.error_message && <div className="ac-req-error">⚠️ {r.error_message}</div>}
+      <div className="ac-req-meta">{new Date(r.requested_at).toLocaleString('ko-KR')}</div>
+      {r.status === 'pending' && onApprove && (
+        <div className="ac-req-actions">
+          <button className="ac-btn" disabled={busy} onClick={() => onApprove(r.id)}>{busy ? '처리 중...' : '승인'}</button>
+          <button className="ac-btn ac-btn-secondary" disabled={busy} onClick={() => onReject(r.id)}>거절</button>
+        </div>
+      )}
+      {(r.status === 'failed' || r.status === 'rejected') && onRemove && (
+        <div className="ac-req-actions">
+          <button className="ac-btn ac-btn-secondary" disabled={busy} onClick={() => onRemove(r.id)}>{busy ? '삭제 중...' : '목록에서 삭제'}</button>
+        </div>
+      )}
+    </div>
+  )
+}

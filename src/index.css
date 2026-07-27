@@ -345,6 +345,15 @@ body {
 .ac-rule-row { display: grid; grid-template-columns: 1fr 1fr 1.2fr 1.5fr auto; gap: 8px; align-items: center; }
 .ac-rule-head { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.03em; padding: 0 2px; }
 .ac-rule-del { padding: 10px 14px; white-space: nowrap; }
+/* WAF 폼: 관리형 규칙 체크리스트 */
+.ac-check-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.ac-check { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border: 1px solid #334155; border-radius: 8px; cursor: pointer; font-size: 13px; color: #cbd5e1; user-select: none; }
+.ac-check:hover { border-color: #475569; }
+.ac-check.active { border-color: #38bdf8; background: rgba(56,189,248,0.1); color: #f1f5f9; }
+.ac-check input { accent-color: #38bdf8; }
+/* WAF 폼: 추가 규칙 카드 */
+.ac-waf-rules { display: flex; flex-direction: column; gap: 12px; }
+.ac-waf-rule { border: 1px solid #334155; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
 .ac-date-groups { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 .ac-date-group { border: 1px solid #334155; border-radius: 8px; overflow: hidden; }
 .ac-date-header { display: flex; align-items: center; gap: 10px; padding: 10px 14px; cursor: pointer; background: rgba(148,163,184,0.04); }

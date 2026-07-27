@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom'
 
 const mainModules = [
   { id: 'cloud', icon: '☁️', title: '클라우드 설정 점검', desc: 'AWS/GCP/Azure 보안 설정 검토', path: '/cloud' },
-  { id: 'cloud-automation', icon: '⚙️', title: 'AWS 자동화', desc: 'AWS SG/WAF/IAM 자동 수집', path: '/cloud-automation' },
+  { id: 'aws-request', icon: '📝', title: 'AWS 리소스 신청', desc: 'SG/WAF 설정 신청', path: '/aws-request' },
+  { id: 'cloud-automation', icon: '⚙️', title: 'AWS 자동화 (승인/관리)', desc: '신청 승인·반영 + 설정 자동 수집', path: '/cloud-automation' },
 ]
 
 const otherModules = [

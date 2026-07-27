@@ -9,6 +9,7 @@ import LogAnalysis from './pages/LogAnalysis'
 import PrivacyCheck from './pages/PrivacyCheck'
 import CloudCheck from './pages/CloudCheck'
 import CloudAutomation from './pages/CloudAutomation'
+import AwsRequest from './pages/AwsRequest'
 import PhishingDetect from './pages/PhishingDetect'
 
 function BackButton() {
@@ -49,6 +50,7 @@ export default function App() {
         <Route path="/log" element={<Layout><LogAnalysis /></Layout>} />
         <Route path="/privacy" element={<Layout><PrivacyCheck /></Layout>} />
         <Route path="/cloud" element={<Layout><CloudCheck /></Layout>} />
+        <Route path="/aws-request" element={<Layout><AwsRequest /></Layout>} />
         <Route path="/cloud-automation" element={<Layout><CloudAutomation /></Layout>} />
         <Route path="/phishing" element={<Layout><PhishingDetect /></Layout>} />
       </Routes>
