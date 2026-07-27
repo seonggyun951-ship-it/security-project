@@ -58,10 +58,33 @@ export function sgRuleLabel(r) {
 }
 
 // ---- WAF 규칙 헬퍼 ----
-export const emptyWafRule = () => ({ type: 'ip_block', name: '', cidrs: '', limit: '2000' })
+// 패턴 매칭 검사 대상
+export const WAF_FIELDS = [
+  { key: 'uri_path', label: 'URI 경로' },
+  { key: 'query_string', label: '쿼리스트링' },
+  { key: 'header', label: '헤더' },
+  { key: 'body', label: '본문' },
+]
+// 문자열 매칭 위치 조건
+export const WAF_POSITIONS = [
+  { key: 'CONTAINS', label: '포함' },
+  { key: 'STARTS_WITH', label: '시작' },
+  { key: 'ENDS_WITH', label: '끝' },
+  { key: 'EXACTLY', label: '정확히 일치' },
+]
+const wafFieldLabel = (k) => WAF_FIELDS.find((f) => f.key === k)?.label || k
+const wafPosLabel = (k) => WAF_POSITIONS.find((p) => p.key === k)?.label || k
+
+export const emptyWafRule = () => ({
+  type: 'ip_block', name: '', cidrs: '', limit: '2000',
+  field: 'uri_path', position: 'CONTAINS', header_name: '', pattern: '',
+})
 
 export function wafRuleLabel(r) {
+  const target = `${wafFieldLabel(r.field)}${r.field === 'header' && r.header_name ? `(${r.header_name})` : ''}`
   if (r.type === 'rate_limit') return `속도제한 ${r.name}: ${r.limit}건/5분 초과 차단`
+  if (r.type === 'string_match') return `문자열차단 ${r.name}: ${target} ${wafPosLabel(r.position)} "${r.pattern}"`
+  if (r.type === 'regex_match') return `정규식차단 ${r.name}: ${target} =~ /${r.pattern}/`
   return `IP차단 ${r.name}: ${(r.cidrs || []).join(', ')}`
 }
 

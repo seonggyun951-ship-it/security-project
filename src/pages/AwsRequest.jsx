@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import {
-  RESOURCE_META, WAF_MANAGED_RULE_GROUPS, ReqCard,
+  RESOURCE_META, WAF_MANAGED_RULE_GROUPS, WAF_FIELDS, WAF_POSITIONS, ReqCard,
   emptyRule, parsePortRange, normalizeCidr,
   emptyWafRule,
 } from '../lib/aws'
@@ -160,14 +160,23 @@ function WafForm({ aclOptions, onSubmit, submitting }) {
     if (!form.target_id.trim()) return alert('대상 Web ACL을 선택해주세요')
     const selected = aclOptions.find((a) => a.resource_id === form.target_id.trim())
     const clean = wafRules.map((r) => {
-      if (r.type === 'rate_limit') {
-        return { type: 'rate_limit', name: r.name.trim(), limit: Number(r.limit) || 2000 }
+      const base = { name: r.name.trim() }
+      if (r.type === 'rate_limit') return { ...base, type: 'rate_limit', limit: Number(r.limit) || 2000 }
+      if (r.type === 'string_match') return {
+        ...base, type: 'string_match', field: r.field, position: r.position,
+        header_name: r.field === 'header' ? r.header_name.trim() : null, pattern: r.pattern,
+      }
+      if (r.type === 'regex_match') return {
+        ...base, type: 'regex_match', field: r.field,
+        header_name: r.field === 'header' ? r.header_name.trim() : null, pattern: r.pattern,
       }
       const cidrs = (r.cidrs || '').split(',').map((c) => normalizeCidr(c)).filter(Boolean)
-      return { type: 'ip_block', name: r.name.trim(), cidrs }
+      return { ...base, type: 'ip_block', cidrs }
     }).filter((r) => r.name)
     if (clean.length === 0) return alert('규칙 이름을 최소 1개 이상 입력해주세요')
     if (clean.some((r) => r.type === 'ip_block' && r.cidrs.length === 0)) return alert('IP 차단 규칙은 CIDR을 최소 1개 입력해야 합니다')
+    if (clean.some((r) => (r.type === 'string_match' || r.type === 'regex_match') && !(r.pattern || '').trim())) return alert('패턴 매칭 규칙은 패턴을 입력해야 합니다')
+    if (clean.some((r) => (r.type === 'string_match' || r.type === 'regex_match') && r.field === 'header' && !r.header_name)) return alert('헤더 검사 규칙은 헤더 이름을 입력해야 합니다')
 
     const ok = await onSubmit({
       resource_type: 'waf_web_acl', action: 'add_waf_rules',
@@ -232,6 +241,8 @@ function WafForm({ aclOptions, onSubmit, submitting }) {
                     <select className="ac-input" value={r.type} onChange={(e) => updateWafRule(i, { type: e.target.value })}>
                       <option value="ip_block">IP 차단</option>
                       <option value="rate_limit">요청 속도 제한</option>
+                      <option value="string_match">문자열 매칭</option>
+                      <option value="regex_match">정규식 매칭</option>
                     </select>
                   </div>
                   <div className="ac-field">
@@ -239,20 +250,53 @@ function WafForm({ aclOptions, onSubmit, submitting }) {
                     <input className="ac-input" placeholder="예: block-bad-ips" value={r.name} onChange={(e) => updateWafRule(i, { name: e.target.value })} />
                   </div>
                 </div>
-                {r.type === 'ip_block' ? (
+                {r.type === 'ip_block' && (
                   <div className="ac-form-row">
                     <div className="ac-field">
                       <label className="ac-label">차단 CIDR (쉼표로 구분)</label>
                       <input className="ac-input" placeholder="1.2.3.4, 10.0.0.0/24" value={r.cidrs} onChange={(e) => updateWafRule(i, { cidrs: e.target.value })} />
                     </div>
                   </div>
-                ) : (
+                )}
+                {r.type === 'rate_limit' && (
                   <div className="ac-form-row">
                     <div className="ac-field">
                       <label className="ac-label">5분당 요청 한도 (초과 시 차단)</label>
                       <input className="ac-input" type="number" placeholder="2000" value={r.limit} onChange={(e) => updateWafRule(i, { limit: e.target.value })} />
                     </div>
                   </div>
+                )}
+                {(r.type === 'string_match' || r.type === 'regex_match') && (
+                  <>
+                    <div className="ac-form-row">
+                      <div className="ac-field">
+                        <label className="ac-label">검사 대상</label>
+                        <select className="ac-input" value={r.field} onChange={(e) => updateWafRule(i, { field: e.target.value })}>
+                          {WAF_FIELDS.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+                        </select>
+                      </div>
+                      {r.field === 'header' && (
+                        <div className="ac-field">
+                          <label className="ac-label">헤더 이름</label>
+                          <input className="ac-input" placeholder="예: User-Agent" value={r.header_name} onChange={(e) => updateWafRule(i, { header_name: e.target.value })} />
+                        </div>
+                      )}
+                      {r.type === 'string_match' && (
+                        <div className="ac-field">
+                          <label className="ac-label">조건</label>
+                          <select className="ac-input" value={r.position} onChange={(e) => updateWafRule(i, { position: e.target.value })}>
+                            {WAF_POSITIONS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                    <div className="ac-form-row">
+                      <div className="ac-field">
+                        <label className="ac-label">{r.type === 'regex_match' ? '정규식 패턴' : '문자열'}</label>
+                        <input className="ac-input" placeholder={r.type === 'regex_match' ? '예: (?i)(union|select).*from' : "예: /admin"} value={r.pattern} onChange={(e) => updateWafRule(i, { pattern: e.target.value })} />
+                      </div>
+                    </div>
+                  </>
                 )}
                 {wafRules.length > 1 && <button className="ac-btn ac-btn-secondary" onClick={() => removeWafRule(i)}>이 규칙 삭제</button>}
               </div>

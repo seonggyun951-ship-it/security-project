@@ -66,6 +66,17 @@ async function handleSg(ec2, req) {
 // ---- WAF ----
 const vis = (metric) => ({ SampledRequestsEnabled: true, CloudWatchMetricsEnabled: true, MetricName: safeName(metric) })
 
+// 패턴 매칭 검사 대상 -> WAF FieldToMatch
+function wafFieldToMatch(r) {
+  switch (r.field) {
+    case 'query_string': return { QueryString: {} }
+    case 'header': return { SingleHeader: { Name: (r.header_name || '').toLowerCase() } }
+    case 'body': return { Body: { OversizeHandling: 'CONTINUE' } }
+    case 'uri_path':
+    default: return { UriPath: {} }
+  }
+}
+
 async function handleWaf(waf, req) {
   const p = req.payload || {}
   if (req.action === 'create_acl') {
@@ -108,6 +119,35 @@ async function handleWaf(waf, req) {
         Priority: priority,
         Action: { Block: {} },
         Statement: { IPSetReferenceStatement: { ARN: ipset.Summary.ARN } },
+        VisibilityConfig: vis(r.name),
+      })
+    } else if (r.type === 'string_match') {
+      newRules.push({
+        Name: r.name,
+        Priority: priority,
+        Action: { Block: {} },
+        Statement: {
+          ByteMatchStatement: {
+            SearchString: new TextEncoder().encode(r.pattern || ''),
+            FieldToMatch: wafFieldToMatch(r),
+            TextTransformations: [{ Priority: 0, Type: 'NONE' }],
+            PositionalConstraint: r.position || 'CONTAINS',
+          },
+        },
+        VisibilityConfig: vis(r.name),
+      })
+    } else if (r.type === 'regex_match') {
+      newRules.push({
+        Name: r.name,
+        Priority: priority,
+        Action: { Block: {} },
+        Statement: {
+          RegexMatchStatement: {
+            RegexString: r.pattern || '',
+            FieldToMatch: wafFieldToMatch(r),
+            TextTransformations: [{ Priority: 0, Type: 'NONE' }],
+          },
+        },
         VisibilityConfig: vis(r.name),
       })
     } else {
