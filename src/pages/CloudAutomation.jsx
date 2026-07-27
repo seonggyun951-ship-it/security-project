@@ -284,6 +284,8 @@ export default function CloudAutomation() {
   const [expanded, setExpanded] = useState(() => new Set())
   const [expandedHistory, setExpandedHistory] = useState(() => new Set())
   const [filter, setFilter] = useState('all')
+  const [changedOnly, setChangedOnly] = useState(true)
+  const [search, setSearch] = useState('')
 
   const fetchSnapshots = async () => {
     setLoading(true)
@@ -331,7 +333,12 @@ export default function CloudAutomation() {
     return acc
   }, {})
   const totalResources = new Set(snapshots.map((s) => `${s.resource_type}:${s.resource_id}`)).size
-  const resourceGroups = groupSnapshotsByResource(visible)
+  const resourceGroupsAll = groupSnapshotsByResource(visible)
+  const changedCount = resourceGroupsAll.filter((g) => g.history.length > 0).length
+  const q = search.trim().toLowerCase()
+  const resourceGroups = resourceGroupsAll
+    .filter((g) => !changedOnly || g.history.length > 0)
+    .filter((g) => !q || (g.latest.resource_name || '').toLowerCase().includes(q) || (g.latest.resource_id || '').toLowerCase().includes(q))
 
   return (
     <div className="ac-page">
@@ -401,9 +408,25 @@ export default function CloudAutomation() {
             </button>
           ))}
         </div>
+        <div className="ac-filter-row">
+          <button className={`ac-filter-btn ${changedOnly ? 'active' : ''}`} onClick={() => setChangedOnly((v) => !v)}>
+            변경된 것만 {changedCount}
+          </button>
+          <input
+            className="ac-input ac-search-input"
+            placeholder="🔍 이름 또는 ID로 검색"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
 
         {loading && <div className="ac-empty">불러오는 중...</div>}
-        {!loading && resourceGroups.length === 0 && <div className="ac-empty">아직 수집된 데이터가 없습니다. 자격증명 설정 후 "지금 수집하기"를 눌러보세요.</div>}
+        {!loading && resourceGroups.length === 0 && resourceGroupsAll.length === 0 && (
+          <div className="ac-empty">아직 수집된 데이터가 없습니다. 자격증명 설정 후 "지금 수집하기"를 눌러보세요.</div>
+        )}
+        {!loading && resourceGroups.length === 0 && resourceGroupsAll.length > 0 && (
+          <div className="ac-empty">조건에 맞는 리소스가 없습니다. {changedOnly && '(변경된 것만 보기 켜짐)'}</div>
+        )}
 
         <div className="ac-snapshot-list">
           {resourceGroups.map(({ key, sorted, latest, history }) => {
