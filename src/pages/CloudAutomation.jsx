@@ -377,7 +377,7 @@ export default function CloudAutomation() {
   return (
     <div className="ac-page">
       <h2 className="ac-title">⚙️ AWS 자동화 (승인/관리)</h2>
-      <p className="ac-sub">신청 승인·AWS 반영 + 설정 자동 수집. 신청은 "AWS 리소스 신청" 페이지에서 합니다.</p>
+      <p className="ac-sub">신청 승인·AWS 반영 + 설정 자동 수집. 신청은 "보안 설정 신청" 페이지에서 합니다.</p>
 
       <div className="ac-grid">
       <RequestQueue />

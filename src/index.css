@@ -355,6 +355,13 @@ body {
 .ac-waf-rules { display: flex; flex-direction: column; gap: 12px; }
 .ac-waf-rule { border: 1px solid #334155; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
 .ac-search-input { max-width: 240px; }
+/* 신청자 화면: 한 줄 요약 + 클릭 시 상세 펼침 */
+.ac-myreq { border: 1px solid #334155; border-radius: 8px; overflow: hidden; }
+.ac-myreq-top { display: flex; align-items: center; gap: 10px; padding: 10px 12px; cursor: pointer; }
+.ac-myreq-top:hover { background: rgba(148,163,184,0.05); }
+.ac-myreq-title { flex: 1; min-width: 0; color: #f1f5f9; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ac-myreq-date { color: #64748b; font-size: 12px; white-space: nowrap; }
+.ac-myreq-body { padding: 0 12px 12px; display: flex; flex-direction: column; gap: 4px; }
 .ac-date-groups { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 .ac-date-group { border: 1px solid #334155; border-radius: 8px; overflow: hidden; }
 .ac-date-header { display: flex; align-items: center; gap: 10px; padding: 10px 14px; cursor: pointer; background: rgba(148,163,184,0.04); }

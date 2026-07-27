@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import {
-  RESOURCE_META, WAF_MANAGED_RULE_GROUPS, WAF_FIELDS, WAF_POSITIONS, IAM_READONLY_POLICIES, ReqCard,
+  RESOURCE_META, WAF_MANAGED_RULE_GROUPS, WAF_FIELDS, WAF_POSITIONS, IAM_READONLY_POLICIES,
+  REQ_STATUS_META, reqTitle, reqDetailLines,
   emptyRule, parsePortRange, normalizeCidr,
   emptyWafRule,
 } from '../lib/aws'
@@ -364,6 +365,34 @@ function IamUserForm({ onSubmit, submitting }) {
   )
 }
 
+// 신청자용 한 줄 요약 행 — 클릭하면 상세 펼침 (신청자 본인 화면이라 신청자 이메일은 생략)
+function MyReqRow({ r }) {
+  const [open, setOpen] = useState(false)
+  const meta = REQ_STATUS_META[r.status] || { label: r.status, color: '#94a3b8' }
+  const detail = reqDetailLines(r)
+  const d = new Date(r.requested_at)
+  const shortDate = `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+  return (
+    <div className="ac-myreq">
+      <div className="ac-myreq-top" onClick={() => setOpen((v) => !v)}>
+        <span className="ac-req-status" style={{ background: meta.color }}>{meta.label}</span>
+        <span className="ac-myreq-title">{reqTitle(r)}</span>
+        <span className="ac-myreq-date">{shortDate}</span>
+        <span className="ac-expand-icon">{open ? '▲' : '▼'}</span>
+      </div>
+      {open && (
+        <div className="ac-myreq-body">
+          {detail.map((line, i) => <div key={i} className="ac-req-reason">{line}</div>)}
+          {r.reason && <div className="ac-req-reason">사유: {r.reason}</div>}
+          {r.error_message && <div className="ac-req-error">⚠️ {r.error_message}</div>}
+          <div className="ac-req-meta">{d.toLocaleString('ko-KR')}</div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function AwsRequest() {
   const [resourceType, setResourceType] = useState('security_group')
   const [sgOptions, setSgOptions] = useState([])
@@ -418,8 +447,8 @@ export default function AwsRequest() {
 
   return (
     <div className="ac-page">
-      <h2 className="ac-title">📝 AWS 리소스 신청</h2>
-      <p className="ac-sub">필요한 SG/WAF 설정을 신청하면 승인자 검토 후 실제 AWS에 반영됩니다.</p>
+      <h2 className="ac-title">📝 보안 설정 신청</h2>
+      <p className="ac-sub">SG 규칙 · WAF 규칙 · IAM 읽기전용 계정을 신청하면 승인자 검토 후 실제 AWS에 반영됩니다.</p>
 
       <div className="ac-grid">
         <div className="ac-card ac-card-wide">
@@ -441,7 +470,7 @@ export default function AwsRequest() {
           {loading && <div className="ac-empty">불러오는 중...</div>}
           {!loading && myRequests.length === 0 && <div className="ac-empty">아직 신청 내역이 없습니다.</div>}
           <div className="ac-snapshot-list">
-            {myRequests.map((r) => <ReqCard key={r.id} r={r} />)}
+            {myRequests.map((r) => <MyReqRow key={r.id} r={r} />)}
           </div>
         </div>
       </div>
