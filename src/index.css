@@ -333,7 +333,21 @@ body {
 .ac-grid > .ac-card { margin-bottom: 0; }
 .ac-card-wide { grid-column: 1 / -1; }
 .ac-card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; }
-.ac-card-title { font-size: 15px; font-weight: 700; color: #f1f5f9; margin-bottom: 8px; }
+.ac-card-title { font-size: 15px; font-weight: 700; color: #f1f5f9; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+/* 지금 처리할 일이 있는 카드 — 화면의 주인공 */
+.ac-card-alert { border-color: #f59e0b; box-shadow: 0 0 0 1px rgba(245,158,11,0.15); }
+.ac-card-alert .ac-card-title { font-size: 17px; }
+.ac-count-badge { background: #f59e0b; color: #0f172a; font-size: 13px; font-weight: 800; min-width: 24px; height: 24px; padding: 0 7px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; }
+/* 참고용 보조 카드 — 한 단계 뒤로 */
+.ac-card-muted { background: rgba(30,41,59,0.5); border-color: #2a3a52; }
+.ac-card-muted .ac-card-title { color: #94a3b8; font-size: 14px; }
+/* 접히는 카드 (details/summary) */
+.ac-card-summary { font-size: 14px; font-weight: 700; color: #94a3b8; cursor: pointer; display: flex; align-items: center; gap: 8px; list-style: none; }
+.ac-card-summary::-webkit-details-marker { display: none; }
+.ac-card-summary::before { content: '▶'; font-size: 10px; color: #64748b; transition: transform 0.15s; }
+details[open] > .ac-card-summary { margin-bottom: 12px; }
+details[open] > .ac-card-summary::before { transform: rotate(90deg); }
+.ac-tag { font-size: 11px; font-weight: 600; color: #64748b; background: rgba(148,163,184,0.1); padding: 2px 8px; border-radius: 6px; }
 .ac-cred-note { font-size: 12px; color: #94a3b8; margin-bottom: 12px; line-height: 1.5; }
 .ac-form-row { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
 .ac-field { flex: 1; min-width: 140px; display: flex; flex-direction: column; gap: 4px; }
@@ -356,9 +370,9 @@ body {
 .ac-waf-rule { border: 1px solid #334155; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
 .ac-search-input { max-width: 240px; }
 /* 신청자 화면: 한 줄 요약 + 클릭 시 상세 펼침 */
-.ac-myreq { border: 1px solid #334155; border-radius: 8px; overflow: hidden; }
+.ac-myreq { background: #0f172a; border-radius: 8px; overflow: hidden; }
 .ac-myreq-top { display: flex; align-items: center; gap: 10px; padding: 10px 12px; cursor: pointer; }
-.ac-myreq-top:hover { background: rgba(148,163,184,0.05); }
+.ac-myreq-top:hover { background: rgba(148,163,184,0.06); }
 .ac-myreq-title { flex: 1; min-width: 0; color: #f1f5f9; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ac-myreq-date { color: #64748b; font-size: 12px; white-space: nowrap; }
 .ac-myreq-body { padding: 0 12px 12px; display: flex; flex-direction: column; gap: 4px; }
@@ -398,8 +412,10 @@ body {
 .ac-result-ok { background: rgba(16,185,129,0.1); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.3); }
 .ac-result-error { background: rgba(239,68,68,0.1); color: #fca5a5; border: 1px solid rgba(239,68,68,0.3); }
 .ac-filter-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
-.ac-filter-btn { background: transparent; border: 1px solid #334155; color: #94a3b8; border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
-.ac-filter-btn.active { border-color: #38bdf8; color: #38bdf8; background: rgba(56,189,248,0.08); }
+/* 비활성 칩은 테두리를 없애 배경만 남김 — 활성 칩 하나만 눈에 들어오게 */
+.ac-filter-btn { background: rgba(148,163,184,0.07); border: 1px solid transparent; color: #94a3b8; border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; transition: color 0.12s, background 0.12s; }
+.ac-filter-btn:hover { color: #cbd5e1; background: rgba(148,163,184,0.13); }
+.ac-filter-btn.active { border-color: #38bdf8; color: #38bdf8; background: rgba(56,189,248,0.1); font-weight: 700; }
 .ac-date-picker { display: flex; align-items: center; gap: 4px; position: relative; }
 .ac-date-trigger { background: transparent; border: 1px solid #334155; color: #94a3b8; border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
 .ac-date-trigger:hover { border-color: #38bdf8; color: #38bdf8; }
@@ -426,8 +442,8 @@ body {
 .ac-datepop-actions { display: flex; flex-direction: column; gap: 8px; }
 .ac-empty { color: #64748b; font-size: 13px; padding: 20px 0; text-align: center; }
 .ac-snapshot-list { display: flex; flex-direction: column; gap: 8px; }
-.ac-snapshot { border: 1px solid #334155; border-radius: 8px; overflow: hidden; }
-.ac-snapshot.has-changes { border-left: 3px solid #f59e0b; background: rgba(245,158,11,0.05); }
+.ac-snapshot { background: #0f172a; border: none; border-radius: 8px; overflow: hidden; }
+.ac-snapshot.has-changes { border-left: 3px solid #f59e0b; }
 .ac-snapshot-top { display: flex; align-items: center; gap: 8px; padding: 10px 12px; cursor: pointer; }
 .ac-snapshot-icon { font-size: 14px; }
 .ac-snapshot-name { color: #f1f5f9; font-size: 13px; font-weight: 600; flex: 1; }
@@ -439,11 +455,12 @@ body {
 .ac-diff-added { color: #4ade80; background: rgba(74,222,128,0.12); }
 .ac-diff-removed { color: #f87171; background: rgba(248,113,113,0.12); }
 .ac-diff-same { color: #64748b; }
-.ac-snapshot-history { border-top: 1px solid #334155; }
+.ac-snapshot-history { border-top: 1px solid #1e293b; }
 .ac-snapshot-history-toggle { padding: 8px 12px; font-size: 11px; color: #38bdf8; cursor: pointer; }
 .ac-snapshot-history-item { border-top: 1px solid #1e293b; }
 .ac-snapshot-history-top { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px 6px 24px; cursor: pointer; }
-.ac-req { border: 1px solid #334155; border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+/* 카드 안의 행은 테두리 대신 배경으로 구분 — 테두리 중첩(박스 안 박스) 방지 */
+.ac-req { background: #0f172a; border: none; border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
 .ac-req-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .ac-req-status { color: #fff; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 6px; }
 .ac-req-title { color: #f1f5f9; font-size: 13px; font-weight: 600; }

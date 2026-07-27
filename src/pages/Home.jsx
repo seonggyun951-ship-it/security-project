@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 const mainModules = [
   { id: 'cloud', icon: '☁️', title: '클라우드 설정 점검', desc: 'AWS/GCP/Azure 보안 설정 검토', path: '/cloud' },
   { id: 'aws-request', icon: '📝', title: '보안 설정 신청', desc: 'SG 규칙 · WAF 규칙 · IAM 계정 신청', path: '/aws-request' },
-  { id: 'cloud-automation', icon: '✅', title: '승인함', desc: '신청 검토·승인 후 AWS 반영', path: '/cloud-automation' },
+  { id: 'cloud-automation', icon: '✅', title: '관리자 승인', desc: '신청 검토·승인 후 AWS 반영', path: '/cloud-automation' },
   { id: 'aws-status', icon: '📡', title: 'AWS 현황', desc: '설정 자동 수집 · 변경 이력 추적', path: '/aws-status' },
 ]
 

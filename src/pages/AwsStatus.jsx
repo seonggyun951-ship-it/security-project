@@ -125,8 +125,8 @@ export default function AwsStatus() {
       <p className="ac-sub">AWS에 실제로 적용된 설정을 수집해서 변경 이력을 추적합니다.</p>
 
       <div className="ac-grid">
-      <div className="ac-card">
-        <div className="ac-card-title">AWS 자격증명</div>
+      <details className="ac-card ac-card-muted">
+        <summary className="ac-card-summary">AWS 자격증명 <span className="ac-tag">준비 중</span></summary>
         <p className="ac-cred-note">⚠️ 실제 운영 키는 여기 저장되지 않습니다. Supabase Edge Function 시크릿으로 별도 설정합니다. 이 폼은 아직 스켈레톤 단계입니다.</p>
         <div className="ac-form-row">
           <input
@@ -153,7 +153,7 @@ export default function AwsStatus() {
           />
         </div>
         <button className="ac-btn ac-btn-secondary" disabled>저장 (준비 중)</button>
-      </div>
+      </details>
 
       <div className="ac-card">
         <div className="ac-card-title">수동 수집</div>
@@ -174,7 +174,7 @@ export default function AwsStatus() {
       </div>
 
       <div className="ac-card ac-card-wide">
-        <div className="ac-card-title">수집 이력</div>
+        <div className="ac-card-title">수집 이력 {changedCount > 0 && <span className="ac-count-badge">{changedCount}</span>}</div>
         <div className="ac-filter-row">
           <button className={`ac-filter-btn ${filter === 'all' ? 'active' : ''}`} onClick={() => setFilter('all')}>
             전체 {totalResources}

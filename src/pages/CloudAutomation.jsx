@@ -236,10 +236,13 @@ function RequestQueue() {
   return (
     <>
       {revealKey && <RevealKeyPopup result={revealKey} onClose={() => setRevealKey(null)} />}
-      <div className="ac-card ac-card-wide">
-        <div className="ac-card-title">처리 대기중 {pendingRequests.length > 0 && `(${pendingRequests.length})`}</div>
+      <div className={`ac-card ac-card-wide ${pendingRequests.length > 0 ? 'ac-card-alert' : ''}`}>
+        <div className="ac-card-title">
+          처리 대기중
+          {pendingRequests.length > 0 && <span className="ac-count-badge">{pendingRequests.length}</span>}
+        </div>
         {loading && <div className="ac-empty">불러오는 중...</div>}
-        {!loading && pendingRequests.length === 0 && <div className="ac-empty">대기중인 신청이 없습니다.</div>}
+        {!loading && pendingRequests.length === 0 && <div className="ac-empty">✓ 대기중인 신청이 없습니다.</div>}
         <div className="ac-snapshot-list">
           {pendingRequests.map((r) => (
             <ReqCard key={r.id} r={r} busyId={busyId} onApprove={approve} onReject={reject} onRemove={removeRequest} />
@@ -247,7 +250,7 @@ function RequestQueue() {
         </div>
       </div>
 
-      <div className="ac-card ac-card-wide">
+      <div className="ac-card ac-card-wide ac-card-muted">
         <div className="ac-card-title">처리 이력</div>
         {!loading && historyRequests.length === 0 && <div className="ac-empty">이력이 없습니다.</div>}
         {!loading && historyRequests.length > 0 && (
@@ -261,7 +264,7 @@ function RequestQueue() {
 export default function CloudAutomation() {
   return (
     <div className="ac-page">
-      <h2 className="ac-title">✅ 승인함</h2>
+      <h2 className="ac-title">✅ 관리자 승인</h2>
       <p className="ac-sub">신청을 검토해 승인하면 실제 AWS에 반영됩니다. 적용 결과 확인은 "AWS 현황" 페이지에서 합니다.</p>
 
       <div className="ac-grid">

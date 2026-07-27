@@ -465,7 +465,7 @@ export default function AwsRequest() {
           {resourceType === 'iam_user' && <IamUserForm onSubmit={submitRequest} submitting={submitting} />}
         </div>
 
-        <div className="ac-card ac-card-wide">
+        <div className="ac-card ac-card-wide ac-card-muted">
           <div className="ac-card-title">내 신청 현황</div>
           {loading && <div className="ac-empty">불러오는 중...</div>}
           {!loading && myRequests.length === 0 && <div className="ac-empty">아직 신청 내역이 없습니다.</div>}
