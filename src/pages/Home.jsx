@@ -35,8 +35,8 @@ function localDateKey(ts) {
 
 // 막대 구분 — 그날 무슨 일이 일어났는지 기준
 const SERIES = [
-  { key: 'requested', label: '신청', color: '#0284c7' },
-  { key: 'applied', label: '완료', color: '#10b981' },
+  { key: 'requested', label: '신청', color: '#10b981' },
+  { key: 'applied', label: '완료', color: '#0284c7' },
   { key: 'rejected', label: '승인 거부', color: '#94a3b8' },
   { key: 'failed', label: '실패', color: '#ef4444' },
 ]
