@@ -502,6 +502,29 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .ac-dayrow.is-action:hover { border-color: #b45309; background: #fef3c7; }
 .ac-dayrow-time { color: #64748b; }
 
+/* 대시보드: 월별 일자 막대 그래프 */
+.dash-chart-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+.dash-month-nav { display: flex; align-items: center; gap: 8px; }
+.dash-month-title { font-size: 15px; font-weight: 700; color: #0f172a; min-width: 100px; text-align: center; }
+.dash-legend { display: flex; flex-wrap: wrap; gap: 12px; }
+.dash-legend-item { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: #475569; white-space: nowrap; }
+.dash-legend-dot { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+
+.dash-chart { display: flex; align-items: flex-end; gap: 2px; height: 160px; overflow-x: auto; padding-bottom: 2px; }
+.dash-bar-col {
+  flex: 1; min-width: 14px; height: 100%;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+  gap: 4px; border-radius: 4px; padding: 2px 1px;
+}
+.dash-bar-col.has-data { cursor: pointer; }
+.dash-bar-col.has-data:hover { background: rgba(148,163,184,0.14); }
+.dash-bar-col.is-today .dash-bar-label { color: #0284c7; font-weight: 800; }
+/* 막대는 아래에서 위로 쌓임 */
+.dash-bar-stack { width: 100%; max-width: 22px; flex: 1; display: flex; flex-direction: column-reverse; justify-content: flex-start; }
+.dash-bar-seg { width: 100%; min-height: 2px; border-radius: 2px 2px 0 0; }
+.dash-bar-seg + .dash-bar-seg { border-radius: 0; }
+.dash-bar-label { font-size: 9px; color: #94a3b8; }
+
 /* 상세 모달 */
 .ac-modal {
   background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px;

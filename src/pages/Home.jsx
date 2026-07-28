@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { RESOURCE_META, REQ_STATUS_META, ReqCard } from '../lib/aws'
+import { RESOURCE_META, ReqCard } from '../lib/aws'
 
 // 리소스별 최신 스냅샷만 남기고, 변경 이력이 있는 리소스 수를 센다
 function countChangedResources(snapshots) {
@@ -24,73 +24,104 @@ function StatCard({ label, value, unit, tone, onClick }) {
   )
 }
 
-// 손이 필요한 상태를 위로
-const STATUS_ORDER = ['pending', 'failed', 'approved', 'applied', 'rejected']
+const pad = (n) => String(n).padStart(2, '0')
+const dateKey = (y, m, d) => `${y}-${pad(m + 1)}-${pad(d)}`
 
-const shortType = { security_group: 'SG', waf_web_acl: 'WAF', iam_user: 'IAM' }
-
-function elapsed(ts) {
-  const h = Math.floor((Date.now() - new Date(ts).getTime()) / 3600000)
-  if (h < 1) return '1시간 미만'
-  if (h < 24) return `${h}시간`
-  return `${Math.floor(h / 24)}일`
+// DB의 timestamptz는 UTC라 문자열을 자르면 한국 날짜와 어긋난다. 로컬로 변환 후 날짜를 뽑는다.
+function localDateKey(ts) {
+  const d = new Date(ts)
+  return dateKey(d.getFullYear(), d.getMonth(), d.getDate())
 }
 
-const mmdd = (ts) => new Date(ts).toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' })
+// 막대 구분 — 그날 무슨 일이 일어났는지 기준
+const SERIES = [
+  { key: 'requested', label: '신청', color: '#0284c7' },
+  { key: 'applied', label: '완료', color: '#10b981' },
+  { key: 'rejected', label: '승인 거부', color: '#94a3b8' },
+  { key: 'failed', label: '실패', color: '#ef4444' },
+]
+
+// 신청 1건이 날짜별로 어떤 사건을 만드는지 펼친다.
+// 신청은 신청한 날, 완료/거부/실패는 처리한 날에 잡힌다.
+function eventsByDate(rows) {
+  const days = {}
+  const touch = (key) => {
+    if (!days[key]) days[key] = { requested: 0, applied: 0, rejected: 0, failed: 0, ids: new Set() }
+    return days[key]
+  }
+  for (const r of rows) {
+    const reqDay = touch(localDateKey(r.requested_at))
+    reqDay.requested++
+    reqDay.ids.add(r.id)
+
+    const doneAt = r.applied_at || r.reviewed_at
+    if (!doneAt) continue
+    if (r.status === 'applied' || r.status === 'rejected' || r.status === 'failed') {
+      const d = touch(localDateKey(doneAt))
+      d[r.status]++
+      d.ids.add(r.id)
+    }
+  }
+  return days
+}
 
 export default function Home() {
   const navigate = useNavigate()
-  // 집계용: 컬럼 3개만 전부 받아서 정확히 센다 (limit 걸린 목록으로 세면 값이 틀림)
-  const [summaryRows, setSummaryRows] = useState([])
+  // 집계용: 필요한 컬럼만 전부 받아 정확히 센다 (limit 걸린 목록으로 세면 값이 틀림)
+  const [rows, setRows] = useState([])
   const [snapshots, setSnapshots] = useState([])
   const [loading, setLoading] = useState(true)
-
-  // 요약 줄을 눌렀을 때만 해당 상태의 상세를 조회 (미리 다 받아두지 않음)
-  const [detail, setDetail] = useState(null) // { status, items, loading }
+  const [viewMonth, setViewMonth] = useState(() => {
+    const t = new Date()
+    return new Date(t.getFullYear(), t.getMonth(), 1)
+  })
+  const [detail, setDetail] = useState(null) // { date, items, loading }
 
   useEffect(() => {
     const load = async () => {
       const [reqRes, snapRes] = await Promise.all([
-        supabase.from('aws_requests').select('status, resource_type, requested_at'),
+        supabase.from('aws_requests').select('id, status, resource_type, requested_at, reviewed_at, applied_at'),
         supabase.from('aws_resource_snapshots').select('resource_type, resource_id, collected_at').order('collected_at', { ascending: false }).limit(200),
       ])
-      setSummaryRows(reqRes.data || [])
+      setRows(reqRes.data || [])
       setSnapshots(snapRes.data || [])
       setLoading(false)
     }
     load()
   }, [])
 
-  const openDetail = async (status) => {
-    setDetail({ status, items: [], loading: true })
+  // 막대를 눌렀을 때만 그날 신청 상세를 조회한다 (미리 다 받아두지 않음)
+  const openDay = async (dateStr, ids) => {
+    if (ids.length === 0) return
+    setDetail({ date: dateStr, items: [], loading: true })
     const { data } = await supabase.from('aws_requests').select('*')
-      .eq('status', status).order('requested_at', { ascending: false }).limit(200)
-    setDetail({ status, items: data || [], loading: false })
+      .in('id', ids).order('requested_at', { ascending: false })
+    setDetail({ date: dateStr, items: data || [], loading: false })
   }
 
-  const pendingCount = summaryRows.filter((r) => r.status === 'pending').length
-  const failedCount = summaryRows.filter((r) => r.status === 'failed').length
+  const pendingCount = rows.filter((r) => r.status === 'pending').length
+  const failedCount = rows.filter((r) => r.status === 'failed').length
   const changedCount = countChangedResources(snapshots)
   const totalResources = new Set(snapshots.map((s) => `${s.resource_type}:${s.resource_id}`)).size
   const lastCollected = snapshots[0]?.collected_at
 
-  // 상태별 요약: 건수 + 리소스 타입 분포 + 시간 정보까지 줄에 남긴다
-  const statusRows = STATUS_ORDER.map((status) => {
-    const items = summaryRows.filter((r) => r.status === status)
-    if (items.length === 0) return null
-    const byType = {}
-    for (const r of items) byType[r.resource_type] = (byType[r.resource_type] || 0) + 1
-    const times = items.map((r) => r.requested_at).sort()
-    return {
-      status,
-      meta: REQ_STATUS_META[status] || { label: status, color: '#94a3b8' },
-      count: items.length,
-      types: Object.entries(byType).map(([t, n]) => `${shortType[t] || t} ${n}`).join(' · '),
-      oldest: times[0],
-      newest: times[times.length - 1],
-      needsAction: status === 'pending' || status === 'failed',
-    }
-  }).filter(Boolean)
+  const days = eventsByDate(rows)
+  const year = viewMonth.getFullYear()
+  const month = viewMonth.getMonth()
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const todayKey = localDateKey(new Date())
+
+  const bars = []
+  for (let d = 1; d <= daysInMonth; d++) {
+    const key = dateKey(year, month, d)
+    const e = days[key] || { requested: 0, applied: 0, rejected: 0, failed: 0, ids: new Set() }
+    bars.push({ day: d, key, ...e, ids: [...e.ids], total: e.requested + e.applied + e.rejected + e.failed })
+  }
+  const maxTotal = Math.max(1, ...bars.map((b) => b.total))
+  const monthTotals = SERIES.reduce((acc, s) => {
+    acc[s.key] = bars.reduce((n, b) => n + b[s.key], 0)
+    return acc
+  }, {})
 
   const resourceCounts = Object.keys(RESOURCE_META).map((key) => ({
     key,
@@ -98,7 +129,7 @@ export default function Home() {
     count: new Set(snapshots.filter((s) => s.resource_type === key).map((s) => s.resource_id)).size,
   })).filter((r) => r.count > 0)
 
-  const detailMeta = detail ? (REQ_STATUS_META[detail.status] || { label: detail.status }) : null
+  const shiftMonth = (delta) => setViewMonth(new Date(year, month + delta, 1))
 
   return (
     <div className="ac-page dash-page">
@@ -133,28 +164,48 @@ export default function Home() {
 
       <div className="ac-grid">
         <div className="ac-card ac-card-wide">
-          <div className="ac-card-title">신청 현황</div>
-          {loading && <div className="ac-empty">불러오는 중...</div>}
-          {!loading && statusRows.length === 0 && <div className="ac-empty">아직 신청 내역이 없습니다.</div>}
-          <div className="ac-daylist">
-            {statusRows.map((row) => (
-              <div
-                key={row.status}
-                className={`ac-dayrow ${row.needsAction ? 'is-action' : ''}`}
-                onClick={() => openDetail(row.status)}
-              >
-                <span className="ac-req-status" style={{ background: row.meta.color }}>{row.meta.label}</span>
-                <span className="ac-dayrow-total">{row.count}건</span>
-                <span className="ac-dayrow-breakdown">
-                  <span className="ac-dayrow-stat">{row.types}</span>
-                  <span className="ac-dayrow-stat ac-dayrow-time">
-                    {row.needsAction ? `가장 오래 ${elapsed(row.oldest)}` : `최근 ${mmdd(row.newest)}`}
-                  </span>
+          <div className="dash-chart-head">
+            <div className="dash-month-nav">
+              <button className="ac-btn ac-btn-secondary ac-cal-nav" onClick={() => shiftMonth(-1)}>‹</button>
+              <span className="dash-month-title">{year}년 {month + 1}월</span>
+              <button className="ac-btn ac-btn-secondary ac-cal-nav" onClick={() => shiftMonth(1)}>›</button>
+            </div>
+            <div className="dash-legend">
+              {SERIES.map((s) => (
+                <span key={s.key} className="dash-legend-item">
+                  <i className="dash-legend-dot" style={{ background: s.color }} />
+                  {s.label} {monthTotals[s.key]}
                 </span>
-                <span className="ac-dayrow-open">보기</span>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
+
+          {loading && <div className="ac-empty">불러오는 중...</div>}
+          {!loading && (
+            <div className="dash-chart">
+              {bars.map((b) => (
+                <div
+                  key={b.key}
+                  className={`dash-bar-col ${b.total > 0 ? 'has-data' : ''} ${b.key === todayKey ? 'is-today' : ''}`}
+                  onClick={() => openDay(b.key, b.ids)}
+                  title={b.total > 0
+                    ? `${month + 1}/${b.day} — ${SERIES.filter((s) => b[s.key] > 0).map((s) => `${s.label} ${b[s.key]}`).join(', ')}`
+                    : `${month + 1}/${b.day} — 없음`}
+                >
+                  <div className="dash-bar-stack">
+                    {SERIES.map((s) => b[s.key] > 0 && (
+                      <div
+                        key={s.key}
+                        className="dash-bar-seg"
+                        style={{ height: `${(b[s.key] / maxTotal) * 100}%`, background: s.color }}
+                      />
+                    ))}
+                  </div>
+                  <span className="dash-bar-label">{b.day}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="ac-card ac-card-wide ac-card-muted">
@@ -175,7 +226,7 @@ export default function Home() {
         <div className="ac-datepop-backdrop" onClick={() => setDetail(null)}>
           <div className="ac-modal" onClick={(e) => e.stopPropagation()}>
             <div className="ac-modal-head">
-              <span className="ac-modal-title">{detailMeta.label} 신청 <b>{detail.items.length}</b>건</span>
+              <span className="ac-modal-title">{detail.date} <b>{detail.items.length}</b>건</span>
               <button className="ac-btn ac-btn-secondary" onClick={() => setDetail(null)}>닫기</button>
             </div>
             <div className="ac-modal-body">
