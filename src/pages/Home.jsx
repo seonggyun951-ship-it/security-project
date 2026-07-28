@@ -30,12 +30,25 @@ export default function Home() {
   const [snapshots, setSnapshots] = useState([])
   const [loading, setLoading] = useState(true)
 
+  // 건수는 목록을 받아서 세지 않고 DB에서 직접 센다.
+  // (최신 50건만 받아 세면 신청이 50건을 넘는 순간 값이 틀림)
+  const [statusCounts, setStatusCounts] = useState({ pending: 0, failed: 0 })
+
+  const countByStatus = async (status) => {
+    const { count } = await supabase.from('aws_requests')
+      .select('id', { count: 'exact', head: true }).eq('status', status)
+    return count || 0
+  }
+
   useEffect(() => {
     const load = async () => {
-      const [reqRes, snapRes] = await Promise.all([
+      const [pendingCount, failedCount, reqRes, snapRes] = await Promise.all([
+        countByStatus('pending'),
+        countByStatus('failed'),
         supabase.from('aws_requests').select('*').order('requested_at', { ascending: false }).limit(50),
         supabase.from('aws_resource_snapshots').select('resource_type, resource_id, collected_at').order('collected_at', { ascending: false }).limit(200),
       ])
+      setStatusCounts({ pending: pendingCount, failed: failedCount })
       setRequests(reqRes.data || [])
       setSnapshots(snapRes.data || [])
       setLoading(false)
@@ -43,8 +56,6 @@ export default function Home() {
     load()
   }, [])
 
-  const pending = requests.filter((r) => r.status === 'pending')
-  const failed = requests.filter((r) => r.status === 'failed')
   const recent = requests.slice(0, 5)
   const changedCount = countChangedResources(snapshots)
   const totalResources = new Set(snapshots.map((s) => `${s.resource_type}:${s.resource_id}`)).size
@@ -67,8 +78,8 @@ export default function Home() {
 
       <div className="dash-stats">
         <StatCard
-          label="승인 대기중" value={pending.length} unit="건"
-          tone={pending.length > 0 ? 'alert' : null}
+          label="승인 대기중" value={statusCounts.pending} unit="건"
+          tone={statusCounts.pending > 0 ? 'alert' : null}
           onClick={() => navigate('/cloud-automation')}
         />
         <StatCard
@@ -81,8 +92,8 @@ export default function Home() {
           onClick={() => navigate('/aws-status')}
         />
         <StatCard
-          label="적용 실패" value={failed.length} unit="건"
-          tone={failed.length > 0 ? 'error' : null}
+          label="적용 실패" value={statusCounts.failed} unit="건"
+          tone={statusCounts.failed > 0 ? 'error' : null}
           onClick={() => navigate('/cloud-automation')}
         />
       </div>
