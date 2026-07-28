@@ -106,7 +106,7 @@ body {
   background: #f1f5f9; border-radius: 8px; padding: 10px 12px; cursor: pointer;
 }
 .dash-row:hover { background: rgba(148,163,184,0.08); }
-.dash-row-title { flex: 1; min-width: 0; color: #475569; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-row-title { flex: 1; min-width: 0; color: #0f172a; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .dash-resource-row { display: flex; flex-wrap: wrap; gap: 10px; }
 .dash-resource {
@@ -405,7 +405,7 @@ body {
 .cc-finding-title {
   font-size: 14px;
   font-weight: 700;
-  color: #475569;
+  color: #0f172a;
   line-height: 1.4;
 }
 .cc-finding-detail {
@@ -431,13 +431,13 @@ body {
 .ac-grid > .ac-card { margin-bottom: 0; }
 .ac-card-wide { grid-column: 1 / -1; }
 .ac-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; }
-.ac-card-title { font-size: 15px; font-weight: 700; color: #334155; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+.ac-card-title { font-size: 15px; font-weight: 700; color: #0f172a; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
 /* 지금 처리할 일이 있는 카드 — 화면의 주인공 */
 .ac-card-alert { border-color: #d97706; box-shadow: 0 0 0 1px rgba(245,158,11,0.15); }
 .ac-card-alert .ac-card-title { font-size: 17px; }
 .ac-count-badge { background: #d97706; color: #fff; font-size: 13px; font-weight: 800; min-width: 24px; height: 24px; padding: 0 7px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; }
 /* 참고용 보조 카드 — 한 단계 뒤로 */
-.ac-card-muted { background: rgba(30,41,59,0.5); border-color: #e2e8f0; }
+.ac-card-muted { background: #fafbfc; border-color: #e2e8f0; }
 .ac-card-muted .ac-card-title { color: #64748b; font-size: 14px; }
 /* 접히는 카드 (details/summary) */
 .ac-card-summary { font-size: 14px; font-weight: 700; color: #64748b; cursor: pointer; display: flex; align-items: center; gap: 8px; list-style: none; }
@@ -471,13 +471,13 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .ac-myreq { background: #f1f5f9; border-radius: 8px; overflow: hidden; }
 .ac-myreq-top { display: flex; align-items: center; gap: 10px; padding: 10px 12px; cursor: pointer; }
 .ac-myreq-top:hover { background: rgba(148,163,184,0.06); }
-.ac-myreq-title { flex: 1; min-width: 0; color: #475569; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ac-myreq-title { flex: 1; min-width: 0; color: #0f172a; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ac-myreq-date { color: #94a3b8; font-size: 12px; white-space: nowrap; }
 .ac-myreq-body { padding: 0 12px 12px; display: flex; flex-direction: column; gap: 4px; }
 .ac-date-groups { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 .ac-date-group { border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
 .ac-date-header { display: flex; align-items: center; gap: 10px; padding: 10px 14px; cursor: pointer; background: rgba(148,163,184,0.04); }
-.ac-date-label { color: #475569; font-size: 13px; font-weight: 700; flex: 1; }
+.ac-date-label { color: #0f172a; font-size: 13px; font-weight: 700; flex: 1; }
 .ac-date-count { color: #94a3b8; font-size: 11px; }
 .ac-date-group .ac-snapshot-list { display: flex; flex-direction: column; gap: 8px; padding: 8px; border-top: 1px solid #e2e8f0; }
 .ac-date-group .ac-req { border: none; border-radius: 0; padding: 8px 6px; }
@@ -544,7 +544,7 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .ac-snapshot.has-changes { border-left: 3px solid #d97706; }
 .ac-snapshot-top { display: flex; align-items: center; gap: 8px; padding: 10px 12px; cursor: pointer; }
 .ac-snapshot-icon { font-size: 14px; }
-.ac-snapshot-name { color: #475569; font-size: 13px; font-weight: 600; flex: 1; }
+.ac-snapshot-name { color: #0f172a; font-size: 13px; font-weight: 600; flex: 1; }
 .ac-snapshot-type { color: #0284c7; font-size: 11px; background: rgba(56,189,248,0.1); padding: 2px 8px; border-radius: 6px; }
 .ac-snapshot-time { color: #94a3b8; font-size: 11px; }
 .ac-expand-icon { color: #94a3b8; font-size: 11px; }
@@ -561,7 +561,7 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .ac-req { background: #f1f5f9; border: none; border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
 .ac-req-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .ac-req-status { color: #fff; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 6px; }
-.ac-req-title { color: #475569; font-size: 13px; font-weight: 600; }
+.ac-req-title { color: #0f172a; font-size: 13px; font-weight: 600; }
 .ac-req-reason { color: #64748b; font-size: 12px; }
 .ac-req-error { color: #b91c1c; font-size: 12px; }
 .ac-req-meta { color: #94a3b8; font-size: 11px; }
@@ -667,7 +667,7 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
   flex: 1;
   min-width: 72px;
 }
-.la-stat-val { font-size: 20px; font-weight: 800; color: #334155; }
+.la-stat-val { font-size: 20px; font-weight: 800; color: #0f172a; }
 .la-stat-label { font-size: 11px; color: #94a3b8; margin-top: 4px; }
 
 .la-result-header {
@@ -722,7 +722,7 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .la-finding-title {
   font-size: 14px;
   font-weight: 700;
-  color: #475569;
+  color: #0f172a;
   line-height: 1.4;
   flex: 1;
 }
@@ -793,7 +793,7 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .vs-finding { border-radius: 10px; padding: 14px 16px; border-left-width: 4px; border-left-style: solid; }
 .vs-finding-top { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; cursor: pointer; user-select: none; }
 .vs-sev-badge { color: #fff; border-radius: 6px; padding: 2px 8px; font-size: 11px; font-weight: 700; white-space: nowrap; flex-shrink: 0; }
-.vs-finding-name { font-size: 14px; font-weight: 700; color: #475569; flex: 1; }
+.vs-finding-name { font-size: 14px; font-weight: 700; color: #0f172a; flex: 1; }
 .vs-template-id { font-size: 11px; color: #94a3b8; font-family: 'Courier New', monospace; white-space: nowrap; }
 .vs-expand-icon { font-size: 10px; color: #94a3b8; flex-shrink: 0; }
 .vs-finding-host { font-size: 12px; color: #94a3b8; font-family: 'Courier New', monospace; word-break: break-all; }
@@ -838,7 +838,7 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .pc-breach-header { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
 .pc-breach-icon { font-size: 24px; flex-shrink: 0; }
 .pc-breach-info { flex: 1; }
-.pc-breach-name { font-size: 15px; font-weight: 700; color: #475569; }
+.pc-breach-name { font-size: 15px; font-weight: 700; color: #0f172a; }
 .pc-breach-meta { font-size: 12px; color: #94a3b8; margin-top: 2px; }
 .pc-breach-sev { color: #fff; border-radius: 6px; padding: 3px 10px; font-size: 11px; font-weight: 700; flex-shrink: 0; }
 .pc-breach-desc { font-size: 13px; color: #64748b; margin-bottom: 10px; line-height: 1.5; }
