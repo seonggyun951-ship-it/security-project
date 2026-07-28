@@ -8,6 +8,13 @@ const pad = (n) => String(n).padStart(2, '0')
 const dateKey = (y, m, d) => `${y}-${pad(m + 1)}-${pad(d)}`
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
 
+// DB의 timestamptz는 UTC라, 문자열을 그냥 자르면 한국 시간과 날짜가 어긋난다(UTC+9).
+// 반드시 로컬 시간으로 변환한 뒤 날짜를 뽑을 것.
+function localDateKey(ts) {
+  const d = new Date(ts)
+  return dateKey(d.getFullYear(), d.getMonth(), d.getDate())
+}
+
 function DatePickerPopup({ countsByDate, selected, onSelect, onViewAll, onClose }) {
   const today = new Date()
   const base = selected ? new Date(selected + 'T00:00:00') : today
@@ -63,7 +70,7 @@ function DatePickerPopup({ countsByDate, selected, onSelect, onViewAll, onClose 
 function groupByDate(items) {
   const groups = {}
   for (const item of items) {
-    const date = item.requested_at.slice(0, 10)
+    const date = localDateKey(item.requested_at)
     if (!groups[date]) groups[date] = []
     groups[date].push(item)
   }
@@ -116,11 +123,11 @@ function HistoryList({ historyRequests, busyId, onRemove }) {
 
   const countsByDate = {}
   for (const r of historyRequests) {
-    const key = r.requested_at.slice(0, 10)
+    const key = localDateKey(r.requested_at)
     countsByDate[key] = (countsByDate[key] || 0) + 1
   }
 
-  const dateFiltered = dateFilter ? historyRequests.filter((r) => r.requested_at.slice(0, 10) === dateFilter) : historyRequests
+  const dateFiltered = dateFilter ? historyRequests.filter((r) => localDateKey(r.requested_at) === dateFilter) : historyRequests
   const filtered = category === 'all' ? dateFiltered : dateFiltered.filter((r) => r.resource_type === category)
   const grouped = groupByDate(filtered)
   const counts = { all: dateFiltered.length }
