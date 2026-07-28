@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { ReqCard } from '../lib/aws'
+import { ReqCard, REQ_STATUS_META } from '../lib/aws'
 
 const AWS_REQUEST_APPLY_URL = 'https://phqiejtztwhychazikim.supabase.co/functions/v1/aws-request-apply'
 
@@ -77,6 +77,34 @@ const HISTORY_CATEGORIES = [
   { key: 'iam_user', label: ' IAM' },
 ]
 
+// 날짜 요약 줄에 표시할 상태 순서
+const STATUS_ORDER = ['applied', 'rejected', 'failed', 'approved']
+
+function statusSummary(items) {
+  const c = {}
+  for (const r of items) c[r.status] = (c[r.status] || 0) + 1
+  return STATUS_ORDER.filter((s) => c[s]).map((s) => ({ status: s, count: c[s], meta: REQ_STATUS_META[s] }))
+}
+
+// 하루치 처리 내역을 새 창(모달)으로 — 목록을 화면에 펼치지 않기 위해
+function DayDetailModal({ date, items, busyId, onRemove, onClose }) {
+  return (
+    <div className="ac-datepop-backdrop" onClick={onClose}>
+      <div className="ac-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="ac-modal-head">
+          <span className="ac-modal-title">{date} 처리 내역 <b>{items.length}</b>건</span>
+          <button className="ac-btn ac-btn-secondary" onClick={onClose}>닫기</button>
+        </div>
+        <div className="ac-modal-body">
+          <div className="ac-snapshot-list">
+            {items.map((r) => <ReqCard key={r.id} r={r} busyId={busyId} onRemove={onRemove} />)}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function HistoryList({ historyRequests, busyId, onRemove }) {
   const today = new Date()
   const todayKey = dateKey(today.getFullYear(), today.getMonth(), today.getDate())
@@ -84,12 +112,7 @@ function HistoryList({ historyRequests, busyId, onRemove }) {
   const [category, setCategory] = useState('all')
   const [dateFilter, setDateFilter] = useState(todayKey)
   const [pickerOpen, setPickerOpen] = useState(false)
-  const [expandedDates, setExpandedDates] = useState(() => new Set())
-  const toggleDate = (date) => setExpandedDates((prev) => {
-    const next = new Set(prev)
-    next.has(date) ? next.delete(date) : next.add(date)
-    return next
-  })
+  const [openDate, setOpenDate] = useState(null)
 
   const countsByDate = {}
   for (const r of historyRequests) {
@@ -127,24 +150,34 @@ function HistoryList({ historyRequests, busyId, onRemove }) {
         ))}
       </div>
       {grouped.length === 0 && <div className="ac-empty">해당 항목이 없습니다.</div>}
-      <div className="ac-date-groups">
+      {/* 날짜당 한 줄만 — 건수가 늘어도 화면 길이가 날짜 수만큼만 늘어남 */}
+      <div className="ac-daylist">
         {grouped.map(([date, items]) => (
-          <div key={date} className="ac-date-group">
-            <div className="ac-date-header" onClick={() => toggleDate(date)}>
-              <span className="ac-date-label">{date}</span>
-              <span className="ac-date-count">{items.length}건</span>
-              <span className="ac-expand-icon">{expandedDates.has(date) ? '▲' : '▼'}</span>
-            </div>
-            {expandedDates.has(date) && (
-              <div className="ac-snapshot-list">
-                {items.map((r) => (
-                  <ReqCard key={r.id} r={r} busyId={busyId} onRemove={onRemove} />
-                ))}
-              </div>
-            )}
+          <div key={date} className="ac-dayrow" onClick={() => setOpenDate(date)}>
+            <span className="ac-dayrow-date">{date}</span>
+            <span className="ac-dayrow-total">{items.length}건</span>
+            <span className="ac-dayrow-breakdown">
+              {statusSummary(items).map(({ status, count, meta }) => (
+                <span key={status} className="ac-dayrow-stat">
+                  <i className="ac-dayrow-dot" style={{ background: meta.color }} />
+                  {meta.label} {count}
+                </span>
+              ))}
+            </span>
+            <span className="ac-dayrow-open">보기</span>
           </div>
         ))}
       </div>
+
+      {openDate && (
+        <DayDetailModal
+          date={openDate}
+          items={grouped.find(([d]) => d === openDate)?.[1] || []}
+          busyId={busyId}
+          onRemove={onRemove}
+          onClose={() => setOpenDate(null)}
+        />
+      )}
     </div>
   )
 }

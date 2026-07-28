@@ -482,6 +482,35 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .ac-date-group .ac-snapshot-list { display: flex; flex-direction: column; gap: 8px; padding: 8px; border-top: 1px solid #e2e8f0; }
 .ac-date-group .ac-req { border: none; border-radius: 0; padding: 8px 6px; }
 
+/* 날짜별 한 줄 요약 — 클릭하면 모달로 상세 */
+.ac-daylist { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.ac-dayrow {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 14px; border-radius: 8px; cursor: pointer;
+  background: #f8fafc; border: 1px solid #e2e8f0;
+  transition: border-color 0.12s, background 0.12s;
+}
+.ac-dayrow:hover { border-color: #0284c7; background: #f1f5f9; }
+.ac-dayrow-date { color: #0f172a; font-size: 13px; font-weight: 700; white-space: nowrap; }
+.ac-dayrow-total { color: #64748b; font-size: 12px; white-space: nowrap; }
+.ac-dayrow-breakdown { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 10px; }
+.ac-dayrow-stat { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: #475569; white-space: nowrap; }
+.ac-dayrow-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.ac-dayrow-open { font-size: 12px; font-weight: 700; color: #0284c7; white-space: nowrap; }
+
+/* 상세 모달 */
+.ac-modal {
+  background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px;
+  width: 100%; max-width: 720px; max-height: 82vh;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.ac-modal-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 16px 20px; border-bottom: 1px solid #e2e8f0;
+}
+.ac-modal-title { font-size: 15px; font-weight: 700; color: #0f172a; }
+.ac-modal-body { padding: 16px 20px; overflow-y: auto; }
+
 @media (min-width: 700px) {
   .ac-page { max-width: 1100px; }
   .ac-form-row { flex-wrap: nowrap; }
