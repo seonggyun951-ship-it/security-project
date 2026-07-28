@@ -497,6 +497,10 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .ac-dayrow-stat { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: #475569; white-space: nowrap; }
 .ac-dayrow-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
 .ac-dayrow-open { font-size: 12px; font-weight: 700; color: #0284c7; white-space: nowrap; }
+/* 사람 손이 필요한 줄(대기중/실패)은 눈에 먼저 들어오게 */
+.ac-dayrow.is-action { border-color: #d97706; background: #fffbeb; }
+.ac-dayrow.is-action:hover { border-color: #b45309; background: #fef3c7; }
+.ac-dayrow-time { color: #64748b; }
 
 /* 상세 모달 */
 .ac-modal {
