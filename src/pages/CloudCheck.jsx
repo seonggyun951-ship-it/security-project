@@ -257,7 +257,7 @@ export default function CloudCheck() {
 
   return (
     <div className="cc-page">
-      <h2 className="cc-title">☁️ 클라우드 설정 점검</h2>
+      <h2 className="cc-title">클라우드 설정 점검</h2>
       <p className="cc-sub">AWS S3 버킷, AWS Security Group, 또는 GCP 방화벽 규칙 JSON을 붙여넣으세요.</p>
 
       <div className="cc-examples">

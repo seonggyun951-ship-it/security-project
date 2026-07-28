@@ -1,18 +1,11 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import {
-  RESOURCE_META, WAF_MANAGED_RULE_GROUPS, WAF_FIELDS, WAF_POSITIONS, IAM_READONLY_POLICIES,
+  WAF_MANAGED_RULE_GROUPS, WAF_FIELDS, WAF_POSITIONS, IAM_READONLY_POLICIES,
   REQ_STATUS_META, reqTitle, reqDetailLines,
   emptyRule, parsePortRange, normalizeCidr,
   emptyWafRule,
 } from '../lib/aws'
-
-// 리소스 타입 선택 탭
-const RESOURCE_TABS = [
-  { key: 'security_group', label: '🛡️ Security Group' },
-  { key: 'waf_web_acl', label: '🧱 WAF Web ACL' },
-  { key: 'iam_user', label: '🔑 IAM 읽기전용 계정' },
-]
 
 function SgForm({ sgOptions, onSubmit, submitting }) {
   const [action, setAction] = useState('add_rules') // 'add_rules' | 'create_sg'
@@ -393,8 +386,14 @@ function MyReqRow({ r }) {
   )
 }
 
-export default function AwsRequest() {
-  const [resourceType, setResourceType] = useState('security_group')
+// 리소스 타입별 신청 페이지 — 라우트에서 resourceType을 넘겨 재사용
+const PAGE_META = {
+  security_group: { title: 'Security Group 신청', sub: '신규 SG 생성 또는 기존 SG에 인바운드/아웃바운드 규칙 추가를 신청합니다.' },
+  waf_web_acl:    { title: 'WAF 신청', sub: '신규 Web ACL 생성 또는 기존 Web ACL에 차단 규칙 추가를 신청합니다.' },
+  iam_user:       { title: 'IAM 계정 신청', sub: '읽기 전용 IAM 계정 발급을 신청합니다.' },
+}
+
+export default function AwsRequest({ resourceType = 'security_group' }) {
   const [sgOptions, setSgOptions] = useState([])
   const [aclOptions, setAclOptions] = useState([])
   const [myRequests, setMyRequests] = useState([])
@@ -414,9 +413,11 @@ export default function AwsRequest() {
     setAclOptions(dedupeByResource((data || []).filter((s) => s.resource_type === 'waf_web_acl')))
   }
 
+  // 이 페이지의 리소스 타입 신청만 조회
   const fetchMyRequests = async (uid) => {
     setLoading(true)
-    let q = supabase.from('aws_requests').select('*').order('requested_at', { ascending: false }).limit(50)
+    let q = supabase.from('aws_requests').select('*').eq('resource_type', resourceType)
+      .order('requested_at', { ascending: false }).limit(50)
     if (uid) q = q.eq('requester_id', uid)
     const { data } = await q
     setMyRequests(data || [])
@@ -429,7 +430,7 @@ export default function AwsRequest() {
       fetchMyRequests(data.user?.id)
     })
     fetchOptions()
-  }, [])
+  }, [resourceType])
 
   const submitRequest = async (req) => {
     setSubmitting(true)
@@ -445,21 +446,16 @@ export default function AwsRequest() {
     return true
   }
 
+  const meta = PAGE_META[resourceType] || PAGE_META.security_group
+
   return (
     <div className="ac-page">
-      <h2 className="ac-title">📝 보안 설정 신청</h2>
-      <p className="ac-sub">SG 규칙 · WAF 규칙 · IAM 읽기전용 계정을 신청하면 승인자 검토 후 실제 AWS에 반영됩니다.</p>
+      <h2 className="ac-title">{meta.title}</h2>
+      <p className="ac-sub">{meta.sub} 승인자 검토 후 실제 AWS에 반영됩니다.</p>
 
       <div className="ac-grid">
         <div className="ac-card ac-card-wide">
           <div className="ac-card-title">신청서 작성</div>
-          <div className="ac-filter-row">
-            {RESOURCE_TABS.map((t) => (
-              <button key={t.key} className={`ac-filter-btn ${resourceType === t.key ? 'active' : ''}`} onClick={() => setResourceType(t.key)}>
-                {t.label}
-              </button>
-            ))}
-          </div>
           {resourceType === 'security_group' && <SgForm sgOptions={sgOptions} onSubmit={submitRequest} submitting={submitting} />}
           {resourceType === 'waf_web_acl' && <WafForm aclOptions={aclOptions} onSubmit={submitRequest} submitting={submitting} />}
           {resourceType === 'iam_user' && <IamUserForm onSubmit={submitRequest} submitting={submitting} />}

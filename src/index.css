@@ -52,7 +52,6 @@ body {
 }
 .sb-link:hover { background: rgba(148,163,184,0.08); color: #334155; }
 .sb-link.is-active { background: rgba(56,189,248,0.12); color: #0284c7; font-weight: 700; }
-.sb-link-icon { font-size: 14px; width: 18px; text-align: center; flex-shrink: 0; }
 .sb-link-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sb-logout {
   margin-top: 16px; background: transparent; border: 1px solid #e2e8f0;

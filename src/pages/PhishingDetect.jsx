@@ -160,7 +160,7 @@ export default function PhishingDetect() {
 
   return (
     <div className="pd-page">
-      <h2 className="pd-title">🎣 피싱 URL 탐지</h2>
+      <h2 className="pd-title">피싱 URL 탐지</h2>
       <p className="pd-sub">URL을 입력하면 피싱 여부를 휴리스틱으로 분석합니다. (IP 주소, 브랜드 사칭, 타이포스쿼팅 등 9개 항목 검사)</p>
 
       <div className="pd-input-row">

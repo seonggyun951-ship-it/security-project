@@ -98,11 +98,10 @@ export function wafRuleLabel(r) {
 
 // ---- 신청 표시 헬퍼 ----
 export function reqTitle(r) {
-  const meta = RESOURCE_META[r.resource_type] || { icon: '📦' }
   const action = ACTION_LABEL[r.action] || r.action
   const name = r.title || r.target_id || ''
   const created = r.result?.created_id || r.result?.web_acl_id
-  return `${meta.icon} ${action}: ${name}${created ? ` (${created})` : ''}`
+  return `${action}: ${name}${created ? ` (${created})` : ''}`
 }
 
 export function reqDetailLines(r) {

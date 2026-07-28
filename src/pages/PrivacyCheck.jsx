@@ -100,7 +100,7 @@ export default function PrivacyCheck() {
 
   return (
     <div className="pc-page">
-      <h2 className="pc-title">🔒 개인정보 유출 체크</h2>
+      <h2 className="pc-title">개인정보 유출 체크</h2>
       <p className="pc-sub">이메일 주소가 알려진 데이터 유출 사고에 포함되었는지 확인합니다.</p>
 
       <div className="pc-demo-banner">

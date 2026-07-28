@@ -39,7 +39,9 @@ export default function App() {
             <Route path="/log" element={<LogAnalysis />} />
             <Route path="/privacy" element={<PrivacyCheck />} />
             <Route path="/cloud" element={<CloudCheck />} />
-            <Route path="/aws-request" element={<AwsRequest />} />
+            <Route path="/request/sg" element={<AwsRequest resourceType="security_group" />} />
+            <Route path="/request/waf" element={<AwsRequest resourceType="waf_web_acl" />} />
+            <Route path="/request/iam" element={<AwsRequest resourceType="iam_user" />} />
             <Route path="/cloud-automation" element={<CloudAutomation />} />
             <Route path="/aws-status" element={<AwsStatus />} />
             <Route path="/phishing" element={<PhishingDetect />} />

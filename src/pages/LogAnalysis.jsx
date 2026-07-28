@@ -362,7 +362,7 @@ export default function LogAnalysis() {
 
   return (
     <div className="la-page">
-      <h2 className="la-title">📋 로그 분석</h2>
+      <h2 className="la-title">로그 분석</h2>
       <p className="la-sub">Apache/Nginx 접근 로그 또는 SSH 인증 로그를 붙여넣으세요. 이상 패턴을 자동으로 탐지합니다.</p>
 
       <div className="la-examples">

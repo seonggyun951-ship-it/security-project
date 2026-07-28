@@ -4,22 +4,34 @@ import { useEffect, useState } from 'react'
 // 사이드바 메뉴 — 그룹 단위로 흐름이 보이게 구성
 export const NAV_GROUPS = [
   {
-    label: 'AWS 자동화',
+    label: '개요',
     items: [
-      { icon: '🏠', title: '대시보드', path: '/' },
-      { icon: '📝', title: '보안 설정 신청', path: '/aws-request' },
-      { icon: '✅', title: '관리자 승인', path: '/cloud-automation' },
-      { icon: '📡', title: 'AWS 현황', path: '/aws-status' },
+      { title: '대시보드', path: '/' },
+    ],
+  },
+  {
+    label: 'AWS 신청',
+    items: [
+      { title: 'Security Group', path: '/request/sg' },
+      { title: 'WAF', path: '/request/waf' },
+      { title: 'IAM 계정', path: '/request/iam' },
+    ],
+  },
+  {
+    label: 'AWS 관리',
+    items: [
+      { title: '관리자 승인', path: '/cloud-automation' },
+      { title: 'AWS 현황', path: '/aws-status' },
     ],
   },
   {
     label: '보안 점검',
     items: [
-      { icon: '☁️', title: '클라우드 설정 점검', path: '/cloud' },
-      { icon: '🔍', title: '취약점 스캔', path: '/vuln' },
-      { icon: '📋', title: '로그 분석', path: '/log' },
-      { icon: '🔒', title: '개인정보 유출 체크', path: '/privacy' },
-      { icon: '🎣', title: '피싱 URL 탐지', path: '/phishing' },
+      { title: '클라우드 설정 점검', path: '/cloud' },
+      { title: '취약점 스캔', path: '/vuln' },
+      { title: '로그 분석', path: '/log' },
+      { title: '개인정보 유출 체크', path: '/privacy' },
+      { title: '피싱 URL 탐지', path: '/phishing' },
     ],
   },
 ]
@@ -37,7 +49,7 @@ export default function Sidebar({ onLogout }) {
       {open && <div className="sb-backdrop" onClick={() => setOpen(false)} />}
 
       <aside className={`sb ${open ? 'is-open' : ''}`}>
-        <div className="sb-brand">🛡️ Security</div>
+        <div className="sb-brand">Security Dashboard</div>
 
         <nav className="sb-nav">
           {NAV_GROUPS.map((group) => (
@@ -50,7 +62,6 @@ export default function Sidebar({ onLogout }) {
                   end={item.path === '/'}
                   className={({ isActive }) => `sb-link ${isActive ? 'is-active' : ''}`}
                 >
-                  <span className="sb-link-icon">{item.icon}</span>
                   <span className="sb-link-text">{item.title}</span>
                 </NavLink>
               ))}

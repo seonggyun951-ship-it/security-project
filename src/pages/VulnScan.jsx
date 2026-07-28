@@ -75,7 +75,7 @@ export default function VulnScan() {
 
   return (
     <div className="vs-page">
-      <h2 className="vs-title">🔍 취약점 스캔</h2>
+      <h2 className="vs-title">취약점 스캔</h2>
       <p className="vs-sub">Nuclei 스캔 결과(JSONL 또는 JSON 배열)를 붙여넣으면 심각도별로 정리합니다.</p>
 
       <div className="vs-examples">
