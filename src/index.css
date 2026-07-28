@@ -20,6 +20,105 @@ body {
   .app { max-width: 1200px; }
 }
 
+/* ===== 사이드바 셸 레이아웃 ===== */
+.shell { display: flex; min-height: 100vh; }
+.shell-main { flex: 1; min-width: 0; padding: 28px 24px 48px; }
+
+.sb {
+  width: 232px;
+  flex-shrink: 0;
+  background: #111d33;
+  border-right: 1px solid #1e293b;
+  padding: 20px 12px;
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+.sb-brand { font-size: 16px; font-weight: 800; color: #f1f5f9; padding: 4px 10px 20px; }
+.sb-nav { flex: 1; display: flex; flex-direction: column; gap: 18px; overflow-y: auto; }
+.sb-group { display: flex; flex-direction: column; gap: 2px; }
+.sb-group-label {
+  font-size: 10px; font-weight: 700; color: #64748b;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  padding: 0 10px 6px;
+}
+.sb-link {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 10px; border-radius: 8px;
+  color: #94a3b8; font-size: 13px; text-decoration: none;
+  transition: background 0.12s, color 0.12s;
+}
+.sb-link:hover { background: rgba(148,163,184,0.08); color: #e2e8f0; }
+.sb-link.is-active { background: rgba(56,189,248,0.12); color: #38bdf8; font-weight: 700; }
+.sb-link-icon { font-size: 14px; width: 18px; text-align: center; flex-shrink: 0; }
+.sb-link-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sb-logout {
+  margin-top: 16px; background: transparent; border: 1px solid #334155;
+  color: #94a3b8; border-radius: 8px; padding: 8px 12px;
+  font-size: 12px; cursor: pointer;
+}
+.sb-logout:hover { border-color: #ef4444; color: #ef4444; }
+
+/* 모바일: 사이드바를 오버레이로 */
+.sb-toggle { display: none; }
+.sb-backdrop { display: none; }
+@media (max-width: 860px) {
+  .shell-main { padding: 64px 16px 40px; }
+  .sb {
+    position: fixed; top: 0; left: 0; z-index: 40;
+    transform: translateX(-100%); transition: transform 0.2s ease;
+  }
+  .sb.is-open { transform: translateX(0); }
+  .sb-toggle {
+    display: block; position: fixed; top: 12px; left: 12px; z-index: 30;
+    background: #1e293b; border: 1px solid #334155; color: #e2e8f0;
+    border-radius: 8px; width: 38px; height: 38px; font-size: 16px; cursor: pointer;
+  }
+  .sb-backdrop { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 35; }
+}
+
+/* ===== 대시보드 요약 ===== */
+.dash-page { max-width: 100%; }
+.dash-stats {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px; margin-bottom: 20px;
+}
+.dash-stat {
+  display: flex; align-items: center; gap: 12px;
+  background: #1e293b; border: 1px solid #334155; border-radius: 12px;
+  padding: 16px 18px;
+}
+.dash-stat.is-clickable { cursor: pointer; transition: border-color 0.12s; }
+.dash-stat.is-clickable:hover { border-color: #475569; }
+.dash-stat.tone-alert { border-color: #f59e0b; }
+.dash-stat.tone-alert .dash-stat-value { color: #f59e0b; }
+.dash-stat.tone-warn .dash-stat-value { color: #38bdf8; }
+.dash-stat.tone-error { border-color: #ef4444; }
+.dash-stat.tone-error .dash-stat-value { color: #ef4444; }
+.dash-stat-icon { font-size: 22px; }
+.dash-stat-value { font-size: 26px; font-weight: 800; color: #f1f5f9; line-height: 1.1; }
+.dash-stat-unit { font-size: 13px; font-weight: 600; color: #64748b; margin-left: 3px; }
+.dash-stat-label { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+
+.dash-row {
+  display: flex; align-items: center; gap: 10px;
+  background: #0f172a; border-radius: 8px; padding: 10px 12px; cursor: pointer;
+}
+.dash-row:hover { background: rgba(148,163,184,0.08); }
+.dash-row-title { flex: 1; min-width: 0; color: #f1f5f9; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.dash-resource-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.dash-resource {
+  display: flex; align-items: center; gap: 8px;
+  background: #0f172a; border-radius: 8px; padding: 10px 14px; cursor: pointer;
+}
+.dash-resource:hover { background: rgba(148,163,184,0.08); }
+.dash-resource-icon { font-size: 15px; }
+.dash-resource-count { font-size: 17px; font-weight: 800; color: #f1f5f9; }
+.dash-resource-label { font-size: 12px; color: #94a3b8; }
+
 /* Home */
 .home-header {
   text-align: center;
@@ -326,7 +425,7 @@ body {
 }
 
 /* CloudAutomation */
-.ac-page { max-width: 800px; margin: 0 auto; }
+.ac-page { max-width: 960px; margin: 0 auto; }
 .ac-title { font-size: 22px; font-weight: 800; color: #f1f5f9; margin-bottom: 6px; }
 .ac-sub { font-size: 14px; color: #94a3b8; margin-bottom: 16px; }
 .ac-grid { display: grid; grid-template-columns: 1fr; gap: 16px; align-items: start; }

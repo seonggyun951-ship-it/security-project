@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { HashRouter, Routes, Route, useNavigate } from 'react-router-dom'
+import { HashRouter, Routes, Route } from 'react-router-dom'
 import './index.css'
 import { supabase } from './lib/supabase'
+import Sidebar from './components/Sidebar'
 import Login from './pages/Login'
 import Home from './pages/Home'
 import VulnScan from './pages/VulnScan'
@@ -12,22 +13,6 @@ import CloudAutomation from './pages/CloudAutomation'
 import AwsRequest from './pages/AwsRequest'
 import AwsStatus from './pages/AwsStatus'
 import PhishingDetect from './pages/PhishingDetect'
-
-function BackButton() {
-  const navigate = useNavigate()
-  return (
-    <button className="back-btn" onClick={() => navigate('/')}>← 홈으로</button>
-  )
-}
-
-function Layout({ children }) {
-  return (
-    <div className="app">
-      <BackButton />
-      <div className="page-content">{children}</div>
-    </div>
-  )
-}
 
 export default function App() {
   const [session, setSession] = useState(undefined)
@@ -45,17 +30,22 @@ export default function App() {
 
   return (
     <HashRouter>
-      <Routes>
-        <Route path="/" element={<div className="app"><Home onLogout={logout} /></div>} />
-        <Route path="/vuln" element={<Layout><VulnScan /></Layout>} />
-        <Route path="/log" element={<Layout><LogAnalysis /></Layout>} />
-        <Route path="/privacy" element={<Layout><PrivacyCheck /></Layout>} />
-        <Route path="/cloud" element={<Layout><CloudCheck /></Layout>} />
-        <Route path="/aws-request" element={<Layout><AwsRequest /></Layout>} />
-        <Route path="/cloud-automation" element={<Layout><CloudAutomation /></Layout>} />
-        <Route path="/aws-status" element={<Layout><AwsStatus /></Layout>} />
-        <Route path="/phishing" element={<Layout><PhishingDetect /></Layout>} />
-      </Routes>
+      <div className="shell">
+        <Sidebar onLogout={logout} />
+        <main className="shell-main">
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/vuln" element={<VulnScan />} />
+            <Route path="/log" element={<LogAnalysis />} />
+            <Route path="/privacy" element={<PrivacyCheck />} />
+            <Route path="/cloud" element={<CloudCheck />} />
+            <Route path="/aws-request" element={<AwsRequest />} />
+            <Route path="/cloud-automation" element={<CloudAutomation />} />
+            <Route path="/aws-status" element={<AwsStatus />} />
+            <Route path="/phishing" element={<PhishingDetect />} />
+          </Routes>
+        </main>
+      </div>
     </HashRouter>
   )
 }
