@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { ReqCard, REQ_STATUS_META, RESOURCE_META } from '../lib/aws'
+import { ReqCard, REQ_STATUS_META } from '../lib/aws'
 
 const AWS_REQUEST_APPLY_URL = 'https://phqiejtztwhychazikim.supabase.co/functions/v1/aws-request-apply'
 
@@ -67,14 +67,10 @@ function DatePickerPopup({ countsByDate, selected, onSelect, onViewAll, onClose 
   )
 }
 
-// 처리 이력은 "처리한 날" 기준으로 묶는다. 신청일로 묶으면 며칠 전 신청을 오늘 승인했을 때
-// 오늘 이력에서 사라져 보인다.
-const processedAt = (r) => r.applied_at || r.reviewed_at || r.requested_at
-
 function groupByDate(items) {
   const groups = {}
   for (const item of items) {
-    const date = localDateKey(processedAt(item))
+    const date = localDateKey(item.requested_at)
     if (!groups[date]) groups[date] = []
     groups[date].push(item)
   }
@@ -97,83 +93,22 @@ function statusSummary(items) {
   return STATUS_ORDER.filter((s) => c[s]).map((s) => ({ status: s, count: c[s], meta: REQ_STATUS_META[s] }))
 }
 
-// 목록을 화면에 펼치지 않고 새 창(모달)으로 — 건수가 늘어도 화면 길이가 안 늘어나게
-function DetailModal({ title, items, busyId, onApprove, onReject, onRemove, onClose }) {
+// 하루치 처리 내역을 새 창(모달)으로 — 목록을 화면에 펼치지 않기 위해
+function DayDetailModal({ date, items, busyId, onRemove, onClose }) {
   return (
     <div className="ac-datepop-backdrop" onClick={onClose}>
       <div className="ac-modal" onClick={(e) => e.stopPropagation()}>
         <div className="ac-modal-head">
-          <span className="ac-modal-title">{title} <b>{items.length}</b>건</span>
+          <span className="ac-modal-title">{date} 처리 내역 <b>{items.length}</b>건</span>
           <button className="ac-btn ac-btn-secondary" onClick={onClose}>닫기</button>
         </div>
         <div className="ac-modal-body">
           <div className="ac-snapshot-list">
-            {items.map((r) => (
-              <ReqCard key={r.id} r={r} busyId={busyId}
-                onApprove={onApprove} onReject={onReject} onRemove={onRemove} />
-            ))}
+            {items.map((r) => <ReqCard key={r.id} r={r} busyId={busyId} onRemove={onRemove} />)}
           </div>
         </div>
       </div>
     </div>
-  )
-}
-
-// 대기 시간 표시 — 오래 묵은 신청을 요약 줄에서 바로 알아보게
-function waitLabel(ts) {
-  const h = Math.floor((Date.now() - new Date(ts).getTime()) / 3600000)
-  if (h < 1) return '1시간 미만'
-  if (h < 24) return `${h}시간`
-  return `${Math.floor(h / 24)}일`
-}
-
-// 처리 대기중을 리소스 타입별 한 줄로 — 대기 100건이어도 최대 3줄
-function PendingSummary({ pendingRequests, busyId, approve, reject, removeRequest }) {
-  const [openType, setOpenType] = useState(null)
-
-  const groups = {}
-  for (const r of pendingRequests) {
-    if (!groups[r.resource_type]) groups[r.resource_type] = []
-    groups[r.resource_type].push(r)
-  }
-  const entries = Object.entries(groups)
-    .map(([type, items]) => ({
-      type,
-      items,
-      label: RESOURCE_META[type]?.label || type,
-      oldest: items.reduce((min, r) => (r.requested_at < min ? r.requested_at : min), items[0].requested_at),
-    }))
-    .sort((a, b) => a.oldest.localeCompare(b.oldest))
-
-  const open = entries.find((e) => e.type === openType)
-
-  return (
-    <>
-      <div className="ac-daylist">
-        {entries.map(({ type, items, label, oldest }) => (
-          <div key={type} className="ac-dayrow" onClick={() => setOpenType(type)}>
-            <span className="ac-dayrow-date">{label}</span>
-            <span className="ac-dayrow-total">{items.length}건</span>
-            <span className="ac-dayrow-breakdown">
-              <span className="ac-dayrow-stat">가장 오래 대기 {waitLabel(oldest)}</span>
-            </span>
-            <span className="ac-dayrow-open">처리하기</span>
-          </div>
-        ))}
-      </div>
-
-      {open && (
-        <DetailModal
-          title={`${open.label} 승인 대기`}
-          items={open.items}
-          busyId={busyId}
-          onApprove={approve}
-          onReject={reject}
-          onRemove={removeRequest}
-          onClose={() => setOpenType(null)}
-        />
-      )}
-    </>
   )
 }
 
@@ -188,11 +123,11 @@ function HistoryList({ historyRequests, busyId, onRemove }) {
 
   const countsByDate = {}
   for (const r of historyRequests) {
-    const key = localDateKey(processedAt(r))
+    const key = localDateKey(r.requested_at)
     countsByDate[key] = (countsByDate[key] || 0) + 1
   }
 
-  const dateFiltered = dateFilter ? historyRequests.filter((r) => localDateKey(processedAt(r)) === dateFilter) : historyRequests
+  const dateFiltered = dateFilter ? historyRequests.filter((r) => localDateKey(r.requested_at) === dateFilter) : historyRequests
   const filtered = category === 'all' ? dateFiltered : dateFiltered.filter((r) => r.resource_type === category)
   const grouped = groupByDate(filtered)
   const counts = { all: dateFiltered.length }
@@ -242,8 +177,8 @@ function HistoryList({ historyRequests, busyId, onRemove }) {
       </div>
 
       {openDate && (
-        <DetailModal
-          title={`${openDate} 처리 내역`}
+        <DayDetailModal
+          date={openDate}
           items={grouped.find(([d]) => d === openDate)?.[1] || []}
           busyId={busyId}
           onRemove={onRemove}
@@ -348,15 +283,11 @@ function RequestQueue() {
         </div>
         {loading && <div className="ac-empty">불러오는 중...</div>}
         {!loading && pendingRequests.length === 0 && <div className="ac-empty">대기중인 신청이 없습니다.</div>}
-        {!loading && pendingRequests.length > 0 && (
-          <PendingSummary
-            pendingRequests={pendingRequests}
-            busyId={busyId}
-            approve={approve}
-            reject={reject}
-            removeRequest={removeRequest}
-          />
-        )}
+        <div className="ac-snapshot-list">
+          {pendingRequests.map((r) => (
+            <ReqCard key={r.id} r={r} busyId={busyId} onApprove={approve} onReject={reject} onRemove={removeRequest} />
+          ))}
+        </div>
       </div>
 
       <div className="ac-card ac-card-wide ac-card-muted">

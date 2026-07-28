@@ -386,60 +386,6 @@ function MyReqRow({ r }) {
   )
 }
 
-// 내 신청 현황을 상태별 한 줄로 — 신청이 쌓여도 화면은 상태 수만큼(최대 5줄)
-const MY_STATUS_ORDER = ['pending', 'approved', 'failed', 'applied', 'rejected']
-
-function MyReqSummary({ requests }) {
-  const [openStatus, setOpenStatus] = useState(null)
-
-  const groups = {}
-  for (const r of requests) {
-    if (!groups[r.status]) groups[r.status] = []
-    groups[r.status].push(r)
-  }
-  const entries = MY_STATUS_ORDER.filter((s) => groups[s]).map((s) => ({
-    status: s,
-    items: groups[s],
-    meta: REQ_STATUS_META[s] || { label: s, color: '#94a3b8' },
-  }))
-  const open = entries.find((e) => e.status === openStatus)
-
-  return (
-    <>
-      <div className="ac-daylist">
-        {entries.map(({ status, items, meta }) => (
-          <div key={status} className="ac-dayrow" onClick={() => setOpenStatus(status)}>
-            <span className="ac-req-status" style={{ background: meta.color }}>{meta.label}</span>
-            <span className="ac-dayrow-total">{items.length}건</span>
-            <span className="ac-dayrow-breakdown">
-              <span className="ac-dayrow-stat">
-                최근 {new Date(items[0].requested_at).toLocaleDateString('ko-KR', { month: '2-digit', day: '2-digit' })}
-              </span>
-            </span>
-            <span className="ac-dayrow-open">보기</span>
-          </div>
-        ))}
-      </div>
-
-      {open && (
-        <div className="ac-datepop-backdrop" onClick={() => setOpenStatus(null)}>
-          <div className="ac-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="ac-modal-head">
-              <span className="ac-modal-title">{open.meta.label} <b>{open.items.length}</b>건</span>
-              <button className="ac-btn ac-btn-secondary" onClick={() => setOpenStatus(null)}>닫기</button>
-            </div>
-            <div className="ac-modal-body">
-              <div className="ac-snapshot-list">
-                {open.items.map((r) => <MyReqRow key={r.id} r={r} />)}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
-  )
-}
-
 // 리소스 타입별 신청 페이지 — 라우트에서 resourceType을 넘겨 재사용
 const PAGE_META = {
   security_group: { title: 'Security Group 신청', sub: '신규 SG 생성 또는 기존 SG에 인바운드/아웃바운드 규칙 추가를 신청합니다.' },
@@ -519,7 +465,9 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
           <div className="ac-card-title">내 신청 현황</div>
           {loading && <div className="ac-empty">불러오는 중...</div>}
           {!loading && myRequests.length === 0 && <div className="ac-empty">아직 신청 내역이 없습니다.</div>}
-          {!loading && myRequests.length > 0 && <MyReqSummary requests={myRequests} />}
+          <div className="ac-snapshot-list">
+            {myRequests.map((r) => <MyReqRow key={r.id} r={r} />)}
+          </div>
         </div>
       </div>
     </div>
