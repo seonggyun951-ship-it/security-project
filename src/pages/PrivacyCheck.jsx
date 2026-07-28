@@ -4,7 +4,6 @@ import { useState } from 'react'
 const MOCK_DB = [
   {
     name: 'Facebook',
-    icon: '📘',
     date: '2019-04-03',
     count: '5억 3,300만',
     dataTypes: ['이메일', '전화번호', '이름', '생년월일', '위치 정보'],
@@ -13,7 +12,6 @@ const MOCK_DB = [
   },
   {
     name: 'LinkedIn',
-    icon: '💼',
     date: '2021-06-29',
     count: '7억',
     dataTypes: ['이메일', '비밀번호(해시)', '이름', '직업 정보', '전화번호'],
@@ -22,7 +20,6 @@ const MOCK_DB = [
   },
   {
     name: 'Adobe Creative Cloud',
-    icon: '🎨',
     date: '2019-10-23',
     count: '1억 5,300만',
     dataTypes: ['이메일', '비밀번호(암호화)', '아이디', '결제 관련 정보'],
@@ -31,7 +28,6 @@ const MOCK_DB = [
   },
   {
     name: 'Twitter / X',
-    icon: '🐦',
     date: '2022-12-24',
     count: '4억',
     dataTypes: ['이메일', '전화번호', '아이디', '팔로워 수'],
@@ -40,7 +36,6 @@ const MOCK_DB = [
   },
   {
     name: 'Canva',
-    icon: '🖌️',
     date: '2019-05-24',
     count: '1억 3,900만',
     dataTypes: ['이메일', '아이디', '이름', '비밀번호(bcrypt)'],
@@ -104,7 +99,7 @@ export default function PrivacyCheck() {
       <p className="pc-sub">이메일 주소가 알려진 데이터 유출 사고에 포함되었는지 확인합니다.</p>
 
       <div className="pc-demo-banner">
-        ⚠️ 현재 데모 모드 — 실제 API 연동 전 Mock 데이터로 동작합니다.
+         현재 데모 모드 — 실제 API 연동 전 Mock 데이터로 동작합니다.
       </div>
 
       <div className="pc-input-row">
@@ -172,7 +167,6 @@ export default function PrivacyCheck() {
               return (
                 <div key={i} className="pc-breach" style={{ borderLeft: `4px solid ${cfg.color}`, background: cfg.bg }}>
                   <div className="pc-breach-header">
-                    <span className="pc-breach-icon">{b.icon}</span>
                     <div className="pc-breach-info">
                       <div className="pc-breach-name">{b.name}</div>
                       <div className="pc-breach-meta">{b.date} · 피해 {b.count}명</div>
@@ -198,7 +192,7 @@ export default function PrivacyCheck() {
               '유출된 서비스에서 계정 활동 내역을 확인하세요.',
             ].map((rec, i) => (
               <div key={i} className="pc-rec-item">
-                <span className="pc-rec-icon">✅</span>
+                <span className="pc-rec-icon"></span>
                 <span>{rec}</span>
               </div>
             ))}

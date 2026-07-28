@@ -72,9 +72,9 @@ function groupByDate(items) {
 
 const HISTORY_CATEGORIES = [
   { key: 'all', label: '전체' },
-  { key: 'security_group', label: '🛡️ SG' },
-  { key: 'waf_web_acl', label: '🧱 WAF' },
-  { key: 'iam_user', label: '🔑 IAM' },
+  { key: 'security_group', label: ' SG' },
+  { key: 'waf_web_acl', label: ' WAF' },
+  { key: 'iam_user', label: ' IAM' },
 ]
 
 function HistoryList({ historyRequests, busyId, onRemove }) {
@@ -108,7 +108,7 @@ function HistoryList({ historyRequests, busyId, onRemove }) {
       <div className="ac-filter-row">
         <div className="ac-date-picker">
           <button className="ac-date-trigger" onClick={() => setPickerOpen(true)}>
-            📅 {dateFilter || '전체'}
+             {dateFilter || '전체'}
           </button>
         </div>
         {pickerOpen && (
@@ -155,8 +155,8 @@ function RevealKeyPopup({ result, onClose }) {
   return (
     <div className="ac-datepop-backdrop" onClick={onClose}>
       <div className="ac-datepop" onClick={(e) => e.stopPropagation()}>
-        <div className="ac-cal-title">🔑 {result.user_name} 액세스키 발급됨</div>
-        <p className="ac-cred-note">⚠️ 이 화면을 닫으면 Secret Key는 다시 조회할 수 없습니다. 지금 바로 복사해두세요.</p>
+        <div className="ac-cal-title">{result.user_name} 액세스키 발급됨</div>
+        <p className="ac-cred-note">이 화면을 닫으면 Secret Key는 다시 조회할 수 없습니다. 지금 바로 복사해두세요.</p>
         <div className="ac-form-row">
           <div className="ac-field">
             <label className="ac-label">Access Key ID</label>

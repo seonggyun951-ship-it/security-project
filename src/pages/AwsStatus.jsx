@@ -121,13 +121,13 @@ export default function AwsStatus() {
 
   return (
     <div className="ac-page">
-      <h2 className="ac-title">📡 AWS 현황</h2>
+      <h2 className="ac-title">AWS 현황</h2>
       <p className="ac-sub">AWS에 실제로 적용된 설정을 수집해서 변경 이력을 추적합니다.</p>
 
       <div className="ac-grid">
       <details className="ac-card ac-card-muted">
         <summary className="ac-card-summary">AWS 자격증명 <span className="ac-tag">준비 중</span></summary>
-        <p className="ac-cred-note">⚠️ 실제 운영 키는 여기 저장되지 않습니다. Supabase Edge Function 시크릿으로 별도 설정합니다. 이 폼은 아직 스켈레톤 단계입니다.</p>
+        <p className="ac-cred-note">실제 운영 키는 여기 저장되지 않습니다. Supabase Edge Function 시크릿으로 별도 설정합니다. 이 폼은 아직 스켈레톤 단계입니다.</p>
         <div className="ac-form-row">
           <input
             className="ac-input"
@@ -164,11 +164,11 @@ export default function AwsStatus() {
         {collectResult && (
           collectResult.ok ? (
             <div className="ac-result ac-result-ok">
-              ✅ 수집 완료 — 조회 SG {collectResult.counts.security_group}/IAM Role {collectResult.counts.iam_role}/
+              수집 완료 — 조회 SG {collectResult.counts.security_group}/IAM Role {collectResult.counts.iam_role}/
               IAM Policy {collectResult.counts.iam_policy}/WAF {collectResult.counts.waf_web_acl}개, 그중 변경 {collectResult.changed}건 기록됨
             </div>
           ) : (
-            <div className="ac-result ac-result-error">⚠️ {collectResult.error}</div>
+            <div className="ac-result ac-result-error">{collectResult.error}</div>
           )
         )}
       </div>
@@ -181,7 +181,7 @@ export default function AwsStatus() {
           </button>
           {Object.entries(RESOURCE_META).map(([key, meta]) => counts[key] > 0 && (
             <button key={key} className={`ac-filter-btn ${filter === key ? 'active' : ''}`} onClick={() => setFilter(filter === key ? 'all' : key)}>
-              {meta.icon} {meta.label} {counts[key]}
+              {meta.label} {counts[key]}
             </button>
           ))}
         </div>
@@ -191,7 +191,7 @@ export default function AwsStatus() {
           </button>
           <input
             className="ac-input ac-search-input"
-            placeholder="🔍 이름 또는 ID로 검색"
+            placeholder=" 이름 또는 ID로 검색"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -207,7 +207,7 @@ export default function AwsStatus() {
 
         <div className="ac-snapshot-list">
           {resourceGroups.map(({ key, sorted, latest, history }) => {
-            const meta = RESOURCE_META[latest.resource_type] || { icon: '📦', label: latest.resource_type }
+            const meta = RESOURCE_META[latest.resource_type] || { label: latest.resource_type }
             const isOpen = expanded.has(latest.id)
             const historyOpen = expandedHistory.has(key)
             const prevOf = (item) => {
@@ -217,7 +217,6 @@ export default function AwsStatus() {
             return (
               <div key={key} className={`ac-snapshot ${history.length > 0 ? 'has-changes' : ''}`}>
                 <div className="ac-snapshot-top" onClick={() => toggle(latest.id)}>
-                  <span className="ac-snapshot-icon">{meta.icon}</span>
                   <span className="ac-snapshot-name">{latest.resource_name || latest.resource_id}</span>
                   <span className="ac-snapshot-type">{meta.label}</span>
                   <span className="ac-snapshot-time">{new Date(latest.collected_at).toLocaleString('ko-KR')}</span>

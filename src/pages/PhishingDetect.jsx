@@ -135,9 +135,9 @@ function analyzeURL(rawUrl) {
 }
 
 const VERDICT_CONFIG = {
-  safe:       { label: '안전', color: '#10b981', bg: 'rgba(16,185,129,0.1)',  icon: '✅' },
-  suspicious: { label: '의심', color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', icon: '⚠️' },
-  danger:     { label: '위험', color: '#ef4444', bg: 'rgba(239,68,68,0.1)',  icon: '🚨' },
+  safe:       { label: '안전', color: '#10b981', bg: 'rgba(16,185,129,0.1)' },
+  suspicious: { label: '의심', color: '#f59e0b', bg: 'rgba(245,158,11,0.1)' },
+  danger:     { label: '위험', color: '#ef4444', bg: 'rgba(239,68,68,0.1)' },
 }
 
 const SEV_PASS  = { color: '#10b981' }
@@ -185,13 +185,12 @@ export default function PhishingDetect() {
         ))}
       </div>
 
-      {error && <div className="pd-error">⚠️ {error}</div>}
+      {error && <div className="pd-error">{error}</div>}
 
       {result && (
         <div className="pd-results">
           {/* Verdict card */}
           <div className="pd-verdict-card" style={{ background: vc.bg, borderColor: vc.color }}>
-            <span className="pd-verdict-icon">{vc.icon}</span>
             <div>
               <div className="pd-verdict-label" style={{ color: vc.color }}>{vc.label}</div>
               <div className="pd-verdict-host">{result.hostname}</div>
@@ -235,7 +234,7 @@ export default function PhishingDetect() {
 
           {result.verdict !== 'safe' && (
             <div className="pd-warning">
-              💡 의심스러운 URL은 클릭하지 말고, 공식 웹사이트는 직접 주소창에 입력하거나 북마크를 이용하세요.
+               의심스러운 URL은 클릭하지 말고, 공식 웹사이트는 직접 주소창에 입력하거나 북마크를 이용하세요.
             </div>
           )}
         </div>

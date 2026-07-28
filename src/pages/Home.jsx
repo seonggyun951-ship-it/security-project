@@ -13,10 +13,9 @@ function countChangedResources(snapshots) {
   return Object.values(byResource).filter((n) => n > 1).length
 }
 
-function StatCard({ icon, label, value, unit, tone, onClick }) {
+function StatCard({ label, value, unit, tone, onClick }) {
   return (
     <div className={`dash-stat ${tone ? `tone-${tone}` : ''} ${onClick ? 'is-clickable' : ''}`} onClick={onClick}>
-      <div className="dash-stat-icon">{icon}</div>
       <div className="dash-stat-body">
         <div className="dash-stat-value">{value}<span className="dash-stat-unit">{unit}</span></div>
         <div className="dash-stat-label">{label}</div>
@@ -59,7 +58,7 @@ export default function Home() {
 
   return (
     <div className="ac-page dash-page">
-      <h2 className="ac-title">🛡️ 대시보드</h2>
+      <h2 className="ac-title">대시보드</h2>
       <p className="ac-sub">
         {loading ? '불러오는 중...' : lastCollected
           ? `마지막 수집: ${new Date(lastCollected).toLocaleString('ko-KR')}`
@@ -68,21 +67,21 @@ export default function Home() {
 
       <div className="dash-stats">
         <StatCard
-          icon="⏳" label="승인 대기중" value={pending.length} unit="건"
+          label="승인 대기중" value={pending.length} unit="건"
           tone={pending.length > 0 ? 'alert' : null}
           onClick={() => navigate('/cloud-automation')}
         />
         <StatCard
-          icon="🔄" label="변경된 리소스" value={changedCount} unit="개"
+          label="변경된 리소스" value={changedCount} unit="개"
           tone={changedCount > 0 ? 'warn' : null}
           onClick={() => navigate('/aws-status')}
         />
         <StatCard
-          icon="📦" label="수집된 리소스" value={totalResources} unit="개"
+          label="수집된 리소스" value={totalResources} unit="개"
           onClick={() => navigate('/aws-status')}
         />
         <StatCard
-          icon="⚠️" label="적용 실패" value={failed.length} unit="건"
+          label="적용 실패" value={failed.length} unit="건"
           tone={failed.length > 0 ? 'error' : null}
           onClick={() => navigate('/cloud-automation')}
         />
@@ -113,7 +112,6 @@ export default function Home() {
           <div className="dash-resource-row">
             {resourceCounts.map(({ key, meta, count }) => (
               <div key={key} className="dash-resource" onClick={() => navigate('/aws-status')}>
-                <span className="dash-resource-icon">{meta.icon}</span>
                 <span className="dash-resource-count">{count}</span>
                 <span className="dash-resource-label">{meta.label}</span>
               </div>

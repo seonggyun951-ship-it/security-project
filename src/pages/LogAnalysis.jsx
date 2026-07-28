@@ -386,7 +386,7 @@ export default function LogAnalysis() {
         분석하기
       </button>
 
-      {error && <div className="la-error">⚠️ {error}</div>}
+      {error && <div className="la-error">{error}</div>}
 
       {result && (
         <div className="la-results">
@@ -432,7 +432,7 @@ export default function LogAnalysis() {
           {/* Header */}
           <div className="la-result-header">
             <span className="la-format-badge">
-              {result.format === 'http' ? '🌐 웹 접근 로그' : '🔐 SSH 인증 로그'} 감지됨
+              {result.format === 'http' ? ' 웹 접근 로그' : ' SSH 인증 로그'} 감지됨
             </span>
             <div className="la-counts">
               {counts.high   > 0 && <span className="la-count" style={{ background: '#ef4444' }}>{counts.high} 위험</span>}
@@ -473,7 +473,7 @@ export default function LogAnalysis() {
                   <div className="la-finding-detail">{f.detail}</div>
                   {expanded.has(i) && (
                     <div className="la-finding-expanded">
-                      <div className="la-finding-why">💡 {f.why}</div>
+                      <div className="la-finding-why">{f.why}</div>
                       {f.samples.length > 0 && (
                         <div className="la-samples">
                           <div className="la-samples-label">샘플 요청</div>

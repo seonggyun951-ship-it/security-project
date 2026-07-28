@@ -90,7 +90,7 @@ export default function VulnScan() {
       </div>
 
       <button className="vs-btn" onClick={analyze} disabled={!input.trim()}>분석하기</button>
-      {error && <div className="vs-error">⚠️ {error}</div>}
+      {error && <div className="vs-error">{error}</div>}
 
       {findings && (
         <div className="vs-results">

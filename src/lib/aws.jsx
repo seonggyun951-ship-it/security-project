@@ -1,11 +1,11 @@
 // AWS 자동화 신청/승인 공통 모듈 — 신청자 페이지와 승인자 페이지가 함께 사용
 
 export const RESOURCE_META = {
-  security_group: { icon: '🛡️', label: 'Security Group' },
-  waf_web_acl:    { icon: '🧱', label: 'WAF Web ACL' },
-  iam_role:       { icon: '👤', label: 'IAM Role' },
-  iam_policy:     { icon: '📜', label: 'IAM Policy' },
-  iam_user:       { icon: '🔑', label: 'IAM 읽기전용 계정' },
+  security_group: { label: 'Security Group' },
+  waf_web_acl:    { label: 'WAF Web ACL' },
+  iam_role:       { label: 'IAM Role' },
+  iam_policy:     { label: 'IAM Policy' },
+  iam_user:       { label: 'IAM 읽기전용 계정' },
 }
 
 export const ACTION_LABEL = {
@@ -140,7 +140,7 @@ export function ReqCard({ r, busyId, onApprove, onReject, onRemove }) {
       {detail.map((line, i) => <div key={i} className="ac-req-reason">{line}</div>)}
       {r.reason && <div className="ac-req-reason">사유: {r.reason}</div>}
       {r.requester_email && <div className="ac-req-meta">신청자: {r.requester_email}</div>}
-      {r.error_message && <div className="ac-req-error">⚠️ {r.error_message}</div>}
+      {r.error_message && <div className="ac-req-error">{r.error_message}</div>}
       <div className="ac-req-meta">{new Date(r.requested_at).toLocaleString('ko-KR')}</div>
       {r.status === 'pending' && onApprove && r.resource_type === 'iam_user' && (
         <div className="ac-req-actions">

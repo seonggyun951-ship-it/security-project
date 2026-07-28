@@ -217,9 +217,9 @@ function detectType(data) {
 }
 
 const TYPE_META = {
-  s3:  { icon: '🪣', label: 'AWS S3 버킷' },
-  gcp: { icon: '🔥', label: 'GCP 방화벽' },
-  sg:  { icon: '🛡️', label: 'AWS Security Group' },
+  s3:  { label: 'AWS S3 버킷' },
+  gcp: { label: 'GCP 방화벽' },
+  sg:  { label: 'AWS Security Group' },
 }
 
 /* ─── Component ──────────────────────────────────── */
@@ -279,13 +279,13 @@ export default function CloudCheck() {
         분석하기
       </button>
 
-      {error && <div className="cc-error">⚠️ {error}</div>}
+      {error && <div className="cc-error">{error}</div>}
 
       {findings && (
         <div className="cc-results">
           <div className="cc-result-header">
             <span className="cc-type-badge">
-              {TYPE_META[detectedType].icon} {TYPE_META[detectedType].label} 감지됨
+              {TYPE_META[detectedType].label} 감지됨
             </span>
             <div className="cc-counts">
               {counts.high   > 0 && <span className="cc-count" style={{ background: '#ef4444' }}>{counts.high} 위험</span>}
@@ -312,7 +312,7 @@ export default function CloudCheck() {
                       <span className="cc-finding-title">{f.title}</span>
                     </div>
                     <div className="cc-finding-detail">{f.detail}</div>
-                    {f.why && <div className="cc-finding-why">💡 {f.why}</div>}
+                    {f.why && <div className="cc-finding-why">{f.why}</div>}
                   </div>
                 ))
             )}

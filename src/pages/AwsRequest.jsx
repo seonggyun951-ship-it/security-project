@@ -378,7 +378,7 @@ function MyReqRow({ r }) {
         <div className="ac-myreq-body">
           {detail.map((line, i) => <div key={i} className="ac-req-reason">{line}</div>)}
           {r.reason && <div className="ac-req-reason">사유: {r.reason}</div>}
-          {r.error_message && <div className="ac-req-error">⚠️ {r.error_message}</div>}
+          {r.error_message && <div className="ac-req-error">{r.error_message}</div>}
           <div className="ac-req-meta">{d.toLocaleString('ko-KR')}</div>
         </div>
       )}

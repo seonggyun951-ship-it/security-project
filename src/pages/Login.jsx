@@ -18,7 +18,7 @@ export default function Login() {
   return (
     <div className="login-page">
       <div className="login-card">
-        <h1 className="login-title">🛡️ Security Dashboard</h1>
+        <h1 className="login-title">Security Dashboard</h1>
         <input
           className="login-input"
           type="email"
