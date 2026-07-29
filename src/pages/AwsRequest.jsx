@@ -2,14 +2,50 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import {
   WAF_MANAGED_RULE_GROUPS, WAF_FIELDS, WAF_POSITIONS, IAM_READONLY_POLICIES,
-  REQ_STATUS_META, reqTitle, reqDetailLines,
+  REQ_STATUS_META, ReqCard, reqTitle, reqDetailLines,
   emptyRule, parsePortRange, normalizeCidr,
   emptyWafRule,
 } from '../lib/aws'
 
+const SENSITIVE_PORTS = [22, 3389, 3306, 5432, 1433, 6379, 27017]
+const MIN_CIDR_PREFIX = 24
+const MAX_RULES = 50
+const EXPIRY_OPTIONS = [
+  { value: '', label: '만료 없음 (영구)' },
+  { value: '1', label: '1일' },
+  { value: '3', label: '3일' },
+  { value: '7', label: '1주' },
+  { value: '14', label: '2주' },
+  { value: '30', label: '1개월' },
+  { value: '90', label: '3개월' },
+]
+
+function validateSgRulesClient(rules) {
+  const warnings = []
+  for (const r of rules) {
+    if (r.cidr === '0.0.0.0/0' || r.cidr === '::/0') {
+      warnings.push(`전체 개방(${r.cidr})은 허용되지 않습니다`)
+    }
+    const prefix = parseInt((r.cidr || '').split('/')[1])
+    if (!isNaN(prefix) && prefix < MIN_CIDR_PREFIX) {
+      warnings.push(`CIDR ${r.cidr}: /${MIN_CIDR_PREFIX} 이상만 허용 (현재 /${prefix})`)
+    }
+    const ports = [r.from_port, r.to_port].filter((p) => p != null)
+    for (const port of ports) {
+      if (SENSITIVE_PORTS.includes(port) && r.direction === 'ingress') {
+        warnings.push(`포트 ${port}은 민감 포트입니다 (승인 시 추가 검토 대상)`)
+      }
+    }
+  }
+  if (rules.length > MAX_RULES) {
+    warnings.push(`규칙 수가 ${MAX_RULES}개를 초과합니다`)
+  }
+  return warnings
+}
+
 function SgForm({ sgOptions, onSubmit, submitting }) {
-  const [action, setAction] = useState('add_rules') // 'add_rules' | 'create_sg'
-  const [form, setForm] = useState({ sg_id: '', sg_name: '', vpc_id: '', description: '', reason: '' })
+  const [action, setAction] = useState('add_rules')
+  const [form, setForm] = useState({ sg_id: '', sg_name: '', vpc_id: '', description: '', reason: '', expires_in_days: '' })
   const [rules, setRules] = useState([emptyRule()])
 
   const updateRule = (i, patch) => setRules((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
@@ -17,7 +53,7 @@ function SgForm({ sgOptions, onSubmit, submitting }) {
   const removeRule = (i) => setRules((prev) => prev.filter((_, idx) => idx !== i))
 
   const reset = () => {
-    setForm({ sg_id: '', sg_name: '', vpc_id: '', description: '', reason: '' })
+    setForm({ sg_id: '', sg_name: '', vpc_id: '', description: '', reason: '', expires_in_days: '' })
     setRules([emptyRule()])
   }
 
@@ -29,6 +65,15 @@ function SgForm({ sgOptions, onSubmit, submitting }) {
     }))
     if (cleanRules.length === 0) return alert('규칙을 최소 1개 이상 입력해주세요 (CIDR 필수)')
 
+    const warnings = validateSgRulesClient(cleanRules)
+    const blocked = warnings.filter((w) => w.includes('허용되지 않습니다') || w.includes('이상만 허용') || w.includes('초과'))
+    if (blocked.length > 0) return alert('신청 불가:\n' + blocked.join('\n'))
+    if (warnings.length > 0 && !confirm('주의사항:\n' + warnings.join('\n') + '\n\n그래도 신청하시겠습니까?')) return
+
+    const expiresAt = form.expires_in_days
+      ? new Date(Date.now() + Number(form.expires_in_days) * 86400000).toISOString()
+      : null
+
     const ok = await onSubmit({
       resource_type: 'security_group',
       action,
@@ -39,6 +84,7 @@ function SgForm({ sgOptions, onSubmit, submitting }) {
         vpc_id: action === 'create_sg' ? form.vpc_id.trim() : null,
         description: form.description.trim() || null,
         rules: cleanRules,
+        expires_at: expiresAt,
       },
       reason: form.reason.trim() || null,
     })
@@ -114,6 +160,12 @@ function SgForm({ sgOptions, onSubmit, submitting }) {
         <div className="ac-field">
           <label className="ac-label">신청 사유</label>
           <input className="ac-input" value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} />
+        </div>
+        <div className="ac-field">
+          <label className="ac-label">만료 기간</label>
+          <select className="ac-input" value={form.expires_in_days} onChange={(e) => setForm({ ...form, expires_in_days: e.target.value })}>
+            {EXPIRY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
         </div>
       </div>
       <button className="ac-btn" onClick={submit} disabled={submitting}>{submitting ? '신청 중...' : '신청하기'}</button>
@@ -506,6 +558,7 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
   const [user, setUser] = useState(null)
   const [dateFilter, setDateFilter] = useState('')
   const [calOpen, setCalOpen] = useState(false)
+  const [detailReq, setDetailReq] = useState(null)
 
   const filteredRequests = dateFilter
     ? myRequests.filter((r) => localDateKey(r.requested_at) === dateFilter)
@@ -583,10 +636,10 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
           </div>
           <div className="ac-reject-banner-list">
             {unseenRejected.map((r) => (
-              <div key={r.id} className="ac-reject-banner-item">
+              <div key={r.id} className="ac-reject-banner-item" onClick={() => setDetailReq(r)} style={{ cursor: 'pointer' }}>
                 <span className="ac-reject-banner-title">{reqTitle(r)}</span>
                 {r.error_message && <span className="ac-reject-banner-reason">{r.error_message}</span>}
-                <button className="ac-btn ac-btn-secondary" style={{ padding: '2px 6px', fontSize: 10, flexShrink: 0 }} onClick={() => dismissOne(r.id)}>확인</button>
+                <button className="ac-btn ac-btn-secondary" style={{ padding: '2px 6px', fontSize: 10, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); dismissOne(r.id) }}>확인</button>
               </div>
             ))}
           </div>
@@ -615,6 +668,24 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
           {!loading && filteredRequests.length > 0 && <MyReqGrouped requests={filteredRequests} />}
         </div>
       </div>
+
+      {detailReq && (
+        <div className="ac-datepop-backdrop" onClick={() => setDetailReq(null)}>
+          <div className="ac-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="ac-modal-head">
+              <span className="ac-modal-title">거부된 신청 상세</span>
+              <button className="ac-btn ac-btn-secondary" onClick={() => setDetailReq(null)}>닫기</button>
+            </div>
+            <div className="ac-modal-body">
+              <ReqCard r={detailReq} />
+              {detailReq.error_message && (
+                <div className="ac-reject-box" style={{ marginTop: 12 }}>거부 사유: {detailReq.error_message}</div>
+              )}
+              <button className="ac-btn" style={{ marginTop: 12, width: '100%' }} onClick={() => { dismissOne(detailReq.id); setDetailReq(null) }}>확인</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -139,6 +139,7 @@ export function ReqCard({ r, busyId, onApprove, onReject, onRemove }) {
       </div>
       {detail.map((line, i) => <div key={i} className="ac-req-reason">{line}</div>)}
       {r.reason && <div className="ac-req-reason">사유: {r.reason}</div>}
+      {r.payload?.expires_at && <div className="ac-req-meta">만료: {new Date(r.payload.expires_at).toLocaleDateString('ko-KR')}</div>}
       {r.requester_email && <div className="ac-req-meta">신청자: {r.requester_email}</div>}
       {r.error_message && <div className="ac-req-error">{r.error_message}</div>}
       <div className="ac-req-meta">{new Date(r.requested_at).toLocaleString('ko-KR')}</div>

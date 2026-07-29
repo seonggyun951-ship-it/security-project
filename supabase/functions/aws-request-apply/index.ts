@@ -33,6 +33,34 @@ const json = (body, status = 200) => new Response(JSON.stringify(body), {
 // WAF 이름/메트릭은 [a-zA-Z0-9-_] 만 허용
 const safeName = (s) => (s || '').replace(/[^A-Za-z0-9_-]/g, '') || 'rule'
 
+// ---- SG 가드레일 ----
+const SENSITIVE_PORTS = [22, 3389, 3306, 5432, 1433, 6379, 27017]
+const MAX_RULES_PER_SG = 50
+const MIN_CIDR_PREFIX = 24 // /24 이상만 허용 (/0~/23 차단)
+
+function validateSgRules(rules) {
+  const errors = []
+  for (const r of (rules || [])) {
+    if (r.cidr === '0.0.0.0/0' || r.cidr === '::/0') {
+      errors.push(`전체 개방(${r.cidr})은 허용되지 않습니다`)
+    }
+    const prefix = parseInt((r.cidr || '').split('/')[1])
+    if (!isNaN(prefix) && prefix < MIN_CIDR_PREFIX) {
+      errors.push(`CIDR ${r.cidr}: /${MIN_CIDR_PREFIX} 이상만 허용됩니다 (현재 /${prefix})`)
+    }
+    const ports = [r.from_port, r.to_port].filter((p) => p != null)
+    for (const port of ports) {
+      if (SENSITIVE_PORTS.includes(port) && r.direction === 'ingress') {
+        errors.push(`포트 ${port}은 인바운드 자동 승인이 불가합니다 (수동 승인 필요)`)
+      }
+    }
+  }
+  if ((rules || []).length > MAX_RULES_PER_SG) {
+    errors.push(`규칙 수가 ${MAX_RULES_PER_SG}개를 초과합니다`)
+  }
+  return errors
+}
+
 // ---- Security Group ----
 const toPermission = (rule) => ({
   IpProtocol: rule.protocol,
@@ -54,6 +82,9 @@ async function applySgRules(ec2, sgId, rules) {
 
 async function handleSg(ec2, req) {
   const p = req.payload || {}
+  const sgErrors = validateSgRules(p.rules)
+  if (sgErrors.length > 0) throw new Error('가드레일 위반: ' + sgErrors.join('; '))
+
   if (req.action === 'create_sg') {
     const { GroupId } = await ec2.send(new CreateSecurityGroupCommand({
       GroupName: p.sg_name,
