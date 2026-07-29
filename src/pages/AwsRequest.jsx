@@ -358,18 +358,22 @@ function IamUserForm({ onSubmit, submitting }) {
   )
 }
 
-// 신청자용 한 줄 요약 행 — 클릭하면 상세 펼침 (신청자 본인 화면이라 신청자 이메일은 생략)
+const STATUS_GROUP_ORDER = ['pending', 'failed', 'applied', 'rejected']
+
+function localDateKey(ts) {
+  const d = new Date(ts)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 function MyReqRow({ r }) {
   const [open, setOpen] = useState(false)
-  const meta = REQ_STATUS_META[r.status] || { label: r.status, color: '#94a3b8' }
   const detail = reqDetailLines(r)
   const d = new Date(r.requested_at)
   const shortDate = `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
   return (
-    <div className="ac-myreq">
+    <div className={`ac-myreq ${r.status === 'rejected' ? 'ac-myreq-rejected' : ''}`}>
       <div className="ac-myreq-top" onClick={() => setOpen((v) => !v)}>
-        <span className="ac-req-status" style={{ background: meta.color }}>{meta.label}</span>
         <span className="ac-myreq-title">{reqTitle(r)}</span>
         <span className="ac-myreq-date">{shortDate}</span>
         <span className="ac-expand-icon">{open ? '▲' : '▼'}</span>
@@ -378,10 +382,110 @@ function MyReqRow({ r }) {
         <div className="ac-myreq-body">
           {detail.map((line, i) => <div key={i} className="ac-req-reason">{line}</div>)}
           {r.reason && <div className="ac-req-reason">사유: {r.reason}</div>}
-          {r.error_message && <div className="ac-req-error">{r.error_message}</div>}
+          {r.status === 'rejected' && r.error_message && (
+            <div className="ac-reject-box">거부 사유: {r.error_message}</div>
+          )}
+          {r.status !== 'rejected' && r.error_message && <div className="ac-req-error">{r.error_message}</div>}
           <div className="ac-req-meta">{d.toLocaleString('ko-KR')}</div>
         </div>
       )}
+    </div>
+  )
+}
+
+function MyReqGrouped({ requests }) {
+  const [openGroup, setOpenGroup] = useState('pending')
+
+  const groups = STATUS_GROUP_ORDER.map((status) => {
+    const meta = REQ_STATUS_META[status] || { label: status, color: '#94a3b8' }
+    const items = requests.filter((r) => r.status === status)
+    const byDate = {}
+    for (const r of items) {
+      const key = localDateKey(r.requested_at)
+      if (!byDate[key]) byDate[key] = []
+      byDate[key].push(r)
+    }
+    const dates = Object.entries(byDate).sort((a, b) => b[0].localeCompare(a[0]))
+    return { status, meta, items, dates }
+  }).filter((g) => g.items.length > 0)
+
+  return (
+    <div className="ac-status-groups">
+      {groups.map((g) => (
+        <div key={g.status} className="ac-sgroup">
+          <div
+            className={`ac-sgroup-head ${openGroup === g.status ? 'is-open' : ''}`}
+            onClick={() => setOpenGroup(openGroup === g.status ? null : g.status)}
+          >
+            <i className="ac-sgroup-dot" style={{ background: g.meta.color }} />
+            <span className="ac-sgroup-label">{g.meta.label}</span>
+            <span className="ac-sgroup-count">{g.items.length}건</span>
+            <span className="ac-expand-icon">{openGroup === g.status ? '▲' : '▼'}</span>
+          </div>
+          {openGroup === g.status && (
+            <div className="ac-sgroup-body">
+              {g.dates.map(([date, items]) => (
+                <div key={date} className="ac-sgroup-date">
+                  <div className="ac-sgroup-date-label">{date}</div>
+                  {items.map((r) => <MyReqRow key={r.id} r={r} />)}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
+
+function MiniCal({ requests, selected, onSelect, onClose }) {
+  const today = new Date()
+  const base = selected ? new Date(selected + 'T00:00:00') : today
+  const [viewDate, setViewDate] = useState(new Date(base.getFullYear(), base.getMonth(), 1))
+
+  const year = viewDate.getFullYear()
+  const month = viewDate.getMonth()
+  const firstDay = new Date(year, month, 1).getDay()
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const todayKey = localDateKey(today)
+
+  const hasData = new Set()
+  for (const r of requests) hasData.add(localDateKey(r.requested_at))
+
+  const cells = []
+  for (let i = 0; i < firstDay; i++) cells.push(null)
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d)
+
+  const pad = (n) => String(n).padStart(2, '0')
+
+  return (
+    <div className="ac-minical">
+      <div className="ac-minical-head">
+        <button className="ac-btn ac-btn-secondary ac-cal-nav" onClick={() => setViewDate(new Date(year, month - 1, 1))}>‹</button>
+        <span className="ac-minical-title">{year}년 {month + 1}월</span>
+        <button className="ac-btn ac-btn-secondary ac-cal-nav" onClick={() => setViewDate(new Date(year, month + 1, 1))}>›</button>
+      </div>
+      <div className="ac-minical-grid">
+        {WEEKDAYS.map((w) => <div key={w} className="ac-minical-wday">{w}</div>)}
+        {cells.map((d, i) => {
+          if (d === null) return <div key={i} className="ac-minical-cell ac-minical-empty" />
+          const key = `${year}-${pad(month + 1)}-${pad(d)}`
+          const has = hasData.has(key)
+          const isToday = key === todayKey
+          const isSel = key === selected
+          return (
+            <div
+              key={i}
+              className={`ac-minical-cell ${has ? 'has-data' : ''} ${isToday ? 'is-today' : ''} ${isSel ? 'is-selected' : ''}`}
+              onClick={() => has && onSelect(key)}
+            >
+              {d}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -400,6 +504,12 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [user, setUser] = useState(null)
+  const [dateFilter, setDateFilter] = useState('')
+  const [calOpen, setCalOpen] = useState(false)
+
+  const filteredRequests = dateFilter
+    ? myRequests.filter((r) => localDateKey(r.requested_at) === dateFilter)
+    : myRequests
 
   const dedupeByResource = (rows) => {
     const seen = new Set()
@@ -413,22 +523,17 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
     setAclOptions(dedupeByResource((data || []).filter((s) => s.resource_type === 'waf_web_acl')))
   }
 
-  // 이 페이지의 리소스 타입 신청만 조회
-  const fetchMyRequests = async (uid) => {
+  const fetchMyRequests = async () => {
     setLoading(true)
-    let q = supabase.from('aws_requests').select('*').eq('resource_type', resourceType)
+    const { data } = await supabase.from('aws_requests').select('*').eq('resource_type', resourceType)
       .order('requested_at', { ascending: false }).limit(50)
-    if (uid) q = q.eq('requester_id', uid)
-    const { data } = await q
     setMyRequests(data || [])
     setLoading(false)
   }
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setUser(data.user)
-      fetchMyRequests(data.user?.id)
-    })
+    supabase.auth.getUser().then(({ data }) => setUser(data.user))
+    fetchMyRequests()
     fetchOptions()
   }, [resourceType])
 
@@ -441,17 +546,52 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
     })
     setSubmitting(false)
     if (error) { alert('신청 실패: ' + error.message); return false }
-    await fetchMyRequests(user?.id)
+    await fetchMyRequests()
     alert('신청되었습니다. 승인자 검토 후 반영됩니다.')
     return true
   }
 
   const meta = PAGE_META[resourceType] || PAGE_META.security_group
 
+  const seenKey = `seen_rejected_${resourceType}`
+  const getSeen = () => { try { return JSON.parse(localStorage.getItem(seenKey) || '[]') } catch { return [] } }
+  const rejectedItems = myRequests.filter((r) => r.status === 'rejected')
+  const unseenRejected = rejectedItems.filter((r) => !getSeen().includes(r.id))
+
+  const dismissOne = (id) => {
+    const seen = getSeen()
+    seen.push(id)
+    localStorage.setItem(seenKey, JSON.stringify(seen))
+    setMyRequests([...myRequests])
+  }
+
+  const dismissAll = () => {
+    localStorage.setItem(seenKey, JSON.stringify(rejectedItems.map((r) => r.id)))
+    setMyRequests([...myRequests])
+  }
+
   return (
     <div className="ac-page">
       <h2 className="ac-title">{meta.title}</h2>
       <p className="ac-sub">{meta.sub} 승인자 검토 후 실제 AWS에 반영됩니다.</p>
+
+      {!loading && unseenRejected.length > 0 && (
+        <div className="ac-reject-banner">
+          <div className="ac-reject-banner-head">
+            <span>거부된 신청 {unseenRejected.length}건</span>
+            {unseenRejected.length > 1 && <button className="ac-btn ac-btn-secondary" style={{ padding: '2px 8px', fontSize: 11 }} onClick={dismissAll}>전체 확인</button>}
+          </div>
+          <div className="ac-reject-banner-list">
+            {unseenRejected.map((r) => (
+              <div key={r.id} className="ac-reject-banner-item">
+                <span className="ac-reject-banner-title">{reqTitle(r)}</span>
+                {r.error_message && <span className="ac-reject-banner-reason">{r.error_message}</span>}
+                <button className="ac-btn ac-btn-secondary" style={{ padding: '2px 6px', fontSize: 10, flexShrink: 0 }} onClick={() => dismissOne(r.id)}>확인</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="ac-grid">
         <div className="ac-card ac-card-wide">
@@ -462,12 +602,17 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
         </div>
 
         <div className="ac-card ac-card-wide ac-card-muted">
-          <div className="ac-card-title">내 신청 현황</div>
-          {loading && <div className="ac-empty">불러오는 중...</div>}
-          {!loading && myRequests.length === 0 && <div className="ac-empty">아직 신청 내역이 없습니다.</div>}
-          <div className="ac-snapshot-list">
-            {myRequests.map((r) => <MyReqRow key={r.id} r={r} />)}
+          <div className="ac-card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ flex: 1 }}>내 신청 현황</span>
+            <button className="ac-btn ac-btn-secondary" style={{ padding: '2px 8px', fontSize: 11 }} onClick={() => setCalOpen((v) => !v)}>
+              {dateFilter || '날짜 선택'}
+            </button>
+            {dateFilter && <button className="ac-btn ac-btn-secondary" style={{ padding: '2px 8px', fontSize: 11 }} onClick={() => setDateFilter('')}>전체</button>}
           </div>
+          {calOpen && <MiniCal requests={myRequests} selected={dateFilter} onSelect={(d) => { setDateFilter(d); setCalOpen(false) }} onClose={() => setCalOpen(false)} />}
+          {loading && <div className="ac-empty">불러오는 중...</div>}
+          {!loading && filteredRequests.length === 0 && <div className="ac-empty">{dateFilter ? '해당 날짜에 신청 내역이 없습니다.' : '아직 신청 내역이 없습니다.'}</div>}
+          {!loading && filteredRequests.length > 0 && <MyReqGrouped requests={filteredRequests} />}
         </div>
       </div>
     </div>

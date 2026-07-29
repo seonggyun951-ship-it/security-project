@@ -112,14 +112,53 @@ function DayDetailModal({ date, items, busyId, onRemove, onClose }) {
   )
 }
 
+const PERIOD_OPTIONS = [
+  { key: 'all', label: '전체' },
+  { key: 'month', label: '월별' },
+  { key: 'week', label: '주별' },
+  { key: 'day', label: '일별' },
+]
+
+function periodRange(mode, offset) {
+  const now = new Date()
+  if (mode === 'month') {
+    const s = new Date(now.getFullYear(), now.getMonth() + offset, 1)
+    const e = new Date(s.getFullYear(), s.getMonth() + 1, 0)
+    return { start: s, end: e, label: `${s.getFullYear()}년 ${s.getMonth() + 1}월` }
+  }
+  if (mode === 'week') {
+    const d = new Date(now)
+    d.setDate(d.getDate() + offset * 7)
+    const day = d.getDay()
+    const s = new Date(d); s.setDate(d.getDate() - day)
+    const e = new Date(s); e.setDate(s.getDate() + 6)
+    const fmt = (dt) => `${dt.getMonth() + 1}/${dt.getDate()}`
+    return { start: s, end: e, label: `${fmt(s)} ~ ${fmt(e)}` }
+  }
+  return null
+}
+
+function inRange(ts, range) {
+  if (!range) return true
+  const d = new Date(ts)
+  const dk = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  const sk = new Date(range.start.getFullYear(), range.start.getMonth(), range.start.getDate())
+  const ek = new Date(range.end.getFullYear(), range.end.getMonth(), range.end.getDate())
+  return dk >= sk && dk <= ek
+}
+
 function HistoryList({ historyRequests, busyId, onRemove }) {
   const today = new Date()
   const todayKey = dateKey(today.getFullYear(), today.getMonth(), today.getDate())
 
   const [category, setCategory] = useState('all')
-  const [dateFilter, setDateFilter] = useState(todayKey)
+  const [period, setPeriod] = useState('all')
+  const [periodOffset, setPeriodOffset] = useState(0)
+  const [dateFilter, setDateFilter] = useState('')
   const [pickerOpen, setPickerOpen] = useState(false)
   const [openDate, setOpenDate] = useState(null)
+
+  const range = (period === 'month' || period === 'week') ? periodRange(period, periodOffset) : null
 
   const countsByDate = {}
   for (const r of historyRequests) {
@@ -127,20 +166,42 @@ function HistoryList({ historyRequests, busyId, onRemove }) {
     countsByDate[key] = (countsByDate[key] || 0) + 1
   }
 
-  const dateFiltered = dateFilter ? historyRequests.filter((r) => localDateKey(r.requested_at) === dateFilter) : historyRequests
-  const filtered = category === 'all' ? dateFiltered : dateFiltered.filter((r) => r.resource_type === category)
+  const periodFiltered = period === 'day' && dateFilter
+    ? historyRequests.filter((r) => localDateKey(r.requested_at) === dateFilter)
+    : period === 'all'
+      ? historyRequests
+      : historyRequests.filter((r) => inRange(r.requested_at, range))
+  const filtered = category === 'all' ? periodFiltered : periodFiltered.filter((r) => r.resource_type === category)
   const grouped = groupByDate(filtered)
-  const counts = { all: dateFiltered.length }
-  for (const r of dateFiltered) counts[r.resource_type] = (counts[r.resource_type] || 0) + 1
+  const counts = { all: periodFiltered.length }
+  for (const r of periodFiltered) counts[r.resource_type] = (counts[r.resource_type] || 0) + 1
+
+  const changePeriod = (p) => { setPeriod(p); setPeriodOffset(0); setDateFilter('') }
 
   return (
     <div>
       <div className="ac-filter-row">
-        <div className="ac-date-picker">
-          <button className="ac-date-trigger" onClick={() => setPickerOpen(true)}>
-             {dateFilter || '전체'}
+        {PERIOD_OPTIONS.map((p) => (
+          <button key={p.key} className={`ac-filter-btn ${period === p.key ? 'active' : ''}`} onClick={() => changePeriod(p.key)}>
+            {p.label}
           </button>
-        </div>
+        ))}
+      </div>
+      <div className="ac-filter-row">
+        {(period === 'month' || period === 'week') && range && (
+          <div className="ac-period-nav">
+            <button className="ac-btn ac-btn-secondary ac-cal-nav" onClick={() => setPeriodOffset(periodOffset - 1)}>‹</button>
+            <span className="ac-period-label">{range.label}</span>
+            <button className="ac-btn ac-btn-secondary ac-cal-nav" onClick={() => setPeriodOffset(periodOffset + 1)}>›</button>
+          </div>
+        )}
+        {period === 'day' && (
+          <div className="ac-date-picker">
+            <button className="ac-date-trigger" onClick={() => setPickerOpen(true)}>
+              {dateFilter || '날짜 선택'}
+            </button>
+          </div>
+        )}
         {pickerOpen && (
           <DatePickerPopup
             countsByDate={countsByDate}
@@ -258,8 +319,14 @@ function RequestQueue() {
   }
 
   const reject = async (id) => {
+    const reason = prompt('거부 사유를 입력해주세요.')
+    if (reason === null) return
     setBusyId(id)
-    await supabase.from('aws_requests').update({ status: 'rejected', reviewed_at: new Date().toISOString() }).eq('id', id).eq('status', 'pending')
+    await supabase.from('aws_requests').update({
+      status: 'rejected',
+      reviewed_at: new Date().toISOString(),
+      error_message: reason.trim() || null,
+    }).eq('id', id).eq('status', 'pending')
     await fetchRequests()
     setBusyId(null)
   }

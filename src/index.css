@@ -467,6 +467,41 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .ac-waf-rules { display: flex; flex-direction: column; gap: 12px; }
 .ac-waf-rule { border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
 .ac-search-input { max-width: 240px; }
+/* 상태별 접힘 그룹 */
+.ac-status-groups { display: flex; flex-direction: column; gap: 6px; }
+.ac-sgroup { border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+.ac-sgroup-head { display: flex; align-items: center; gap: 8px; padding: 10px 14px; cursor: pointer; background: #fafbfc; }
+.ac-sgroup-head:hover { background: #f1f5f9; }
+.ac-sgroup-head.is-open { border-bottom: 1px solid #e2e8f0; }
+.ac-sgroup-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.ac-sgroup-label { font-size: 13px; font-weight: 600; color: #1e293b; }
+.ac-sgroup-count { font-size: 12px; color: #64748b; margin-left: auto; }
+.ac-sgroup-body { padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.ac-sgroup-date { margin-bottom: 2px; }
+.ac-sgroup-date-label { font-size: 11px; font-weight: 600; color: #94a3b8; padding: 4px 8px; letter-spacing: 0.03em; }
+/* 미니 달력 */
+.ac-minical { margin-bottom: 12px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; background: #fff; }
+.ac-minical-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.ac-minical-title { font-size: 13px; font-weight: 600; color: #1e293b; }
+.ac-minical-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; }
+.ac-minical-wday { font-size: 10px; font-weight: 600; color: #94a3b8; padding: 2px 0; }
+.ac-minical-cell { font-size: 12px; padding: 4px 0; border-radius: 4px; color: #94a3b8; cursor: default; }
+.ac-minical-cell.has-data { background: #dbeafe; color: #1e40af; font-weight: 600; cursor: pointer; }
+.ac-minical-cell.has-data:hover { background: #bfdbfe; }
+.ac-minical-cell.is-today { outline: 1.5px solid #0284c7; }
+.ac-minical-cell.is-selected { background: #0284c7; color: #fff; }
+.ac-minical-empty { visibility: hidden; }
+
+/* 거부 알림 */
+.ac-myreq-rejected { border-left: 3px solid #ef4444; }
+.ac-reject-box { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; border-radius: 6px; padding: 8px 12px; font-size: 13px; font-weight: 500; }
+.ac-reject-banner { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; font-size: 13px; }
+.ac-reject-banner-head { display: flex; align-items: center; justify-content: space-between; font-weight: 600; margin-bottom: 8px; }
+.ac-reject-banner-list { display: flex; flex-direction: column; gap: 6px; }
+.ac-reject-banner-item { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #fecaca; border-radius: 6px; padding: 6px 10px; }
+.ac-reject-banner-title { font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ac-reject-banner-reason { color: #b91c1c; font-size: 12px; flex-shrink: 0; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 /* 신청자 화면: 한 줄 요약 + 클릭 시 상세 펼침 */
 .ac-myreq { background: #f1f5f9; border-radius: 8px; overflow: hidden; }
 .ac-myreq-top { display: flex; align-items: center; gap: 10px; padding: 10px 12px; cursor: pointer; }
@@ -570,6 +605,8 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .ac-filter-btn { background: rgba(148,163,184,0.07); border: 1px solid transparent; color: #64748b; border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; transition: color 0.12s, background 0.12s; }
 .ac-filter-btn:hover { color: #475569; background: rgba(148,163,184,0.13); }
 .ac-filter-btn.active { border-color: #0284c7; color: #0284c7; background: rgba(56,189,248,0.1); font-weight: 700; }
+.ac-period-nav { display: flex; align-items: center; gap: 6px; }
+.ac-period-label { font-size: 13px; font-weight: 600; color: #1e293b; min-width: 100px; text-align: center; }
 .ac-date-picker { display: flex; align-items: center; gap: 4px; position: relative; }
 .ac-date-trigger { background: transparent; border: 1px solid #e2e8f0; color: #64748b; border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
 .ac-date-trigger:hover { border-color: #0284c7; color: #0284c7; }
