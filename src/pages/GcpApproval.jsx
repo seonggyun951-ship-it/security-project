@@ -1,21 +1,17 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { ReqCard, REQ_STATUS_META } from '../lib/aws'
-
-const AWS_REQUEST_APPLY_URL = 'https://phqiejtztwhychazikim.supabase.co/functions/v1/aws-request-apply'
+import { GcpReqCard, GCP_REQ_STATUS_META } from '../lib/gcp'
 
 const pad = (n) => String(n).padStart(2, '0')
 const dateKey = (y, m, d) => `${y}-${pad(m + 1)}-${pad(d)}`
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
 
-// DB의 timestamptz는 UTC라, 문자열을 그냥 자르면 한국 시간과 날짜가 어긋난다(UTC+9).
-// 반드시 로컬 시간으로 변환한 뒤 날짜를 뽑을 것.
 function localDateKey(ts) {
   const d = new Date(ts)
   return dateKey(d.getFullYear(), d.getMonth(), d.getDate())
 }
 
-function DatePickerPopup({ countsByDate, selected, onSelect, onViewAll, onClose }) {
+function DatePickerPopup({ countsByDate, selected, onSelect, onClose }) {
   const today = new Date()
   const base = selected ? new Date(selected + 'T00:00:00') : today
   const [viewDate, setViewDate] = useState(new Date(base.getFullYear(), base.getMonth(), 1))
@@ -76,23 +72,21 @@ function groupByDate(items) {
   return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]))
 }
 
-const HISTORY_CATEGORIES = [
+const GCP_CATEGORIES = [
   { key: 'all', label: '전체' },
-  { key: 'security_group', label: ' SG' },
-  { key: 'waf_web_acl', label: ' WAF' },
-  { key: 'iam_user', label: ' IAM' },
+  { key: 'firewall_rule', label: 'Firewall' },
+  { key: 'cloud_armor', label: 'Cloud Armor' },
+  { key: 'service_account', label: 'IAM' },
 ]
 
-// 날짜 요약 줄에 표시할 상태 순서
 const STATUS_ORDER = ['applied', 'rejected', 'failed', 'approved']
 
 function statusSummary(items) {
   const c = {}
   for (const r of items) c[r.status] = (c[r.status] || 0) + 1
-  return STATUS_ORDER.filter((s) => c[s]).map((s) => ({ status: s, count: c[s], meta: REQ_STATUS_META[s] }))
+  return STATUS_ORDER.filter((s) => c[s]).map((s) => ({ status: s, count: c[s], meta: GCP_REQ_STATUS_META[s] }))
 }
 
-// 하루치 처리 내역을 새 창(모달)으로 — 목록을 화면에 펼치지 않기 위해
 function DayDetailModal({ date, items, busyId, onRemove, onClose }) {
   return (
     <div className="ac-datepop-backdrop" onClick={onClose}>
@@ -103,7 +97,7 @@ function DayDetailModal({ date, items, busyId, onRemove, onClose }) {
         </div>
         <div className="ac-modal-body">
           <div className="ac-snapshot-list">
-            {items.map((r) => <ReqCard key={r.id} r={r} busyId={busyId} onRemove={onRemove} />)}
+            {items.map((r) => <GcpReqCard key={r.id} r={r} busyId={busyId} onRemove={onRemove} />)}
           </div>
         </div>
       </div>
@@ -206,18 +200,16 @@ function HistoryList({ historyRequests, busyId, onRemove }) {
             countsByDate={countsByDate}
             selected={dateFilter}
             onSelect={(key) => { setDateFilter(key); setPickerOpen(false) }}
-            onViewAll={() => { setDateFilter(''); setPickerOpen(false) }}
             onClose={() => setPickerOpen(false)}
           />
         )}
-        {HISTORY_CATEGORIES.map((c) => (
+        {GCP_CATEGORIES.map((c) => (
           <button key={c.key} className={`ac-filter-btn ${category === c.key ? 'active' : ''}`} onClick={() => setCategory(c.key)}>
             {c.label} {counts[c.key] || 0}
           </button>
         ))}
       </div>
       {grouped.length === 0 && <div className="ac-empty">해당 항목이 없습니다.</div>}
-      {/* 날짜당 한 줄만 — 건수가 늘어도 화면 길이가 날짜 수만큼만 늘어남 */}
       <div className="ac-daylist">
         {grouped.map(([date, items]) => (
           <div key={date} className="ac-dayrow" onClick={() => setOpenDate(date)}>
@@ -249,70 +241,29 @@ function HistoryList({ historyRequests, busyId, onRemove }) {
   )
 }
 
-// 발급된 액세스키를 한 번만 보여주는 팝업 (DB에는 저장하지 않음 — 닫으면 다시 못 봄)
-function RevealKeyPopup({ result, onClose }) {
-  const copy = (text) => navigator.clipboard?.writeText(text)
-  return (
-    <div className="ac-datepop-backdrop" onClick={onClose}>
-      <div className="ac-datepop" onClick={(e) => e.stopPropagation()}>
-        <div className="ac-cal-title">{result.user_name} 액세스키 발급됨</div>
-        <p className="ac-cred-note">이 화면을 닫으면 Secret Key는 다시 조회할 수 없습니다. 지금 바로 복사해두세요.</p>
-        <div className="ac-form-row">
-          <div className="ac-field">
-            <label className="ac-label">Access Key ID</label>
-            <input className="ac-input" readOnly value={result.access_key_id} onFocus={(e) => e.target.select()} />
-          </div>
-          <button className="ac-btn ac-btn-secondary" onClick={() => copy(result.access_key_id)}>복사</button>
-        </div>
-        <div className="ac-form-row">
-          <div className="ac-field">
-            <label className="ac-label">Secret Access Key</label>
-            <input className="ac-input" readOnly value={result.secret_access_key} onFocus={(e) => e.target.select()} />
-          </div>
-          <button className="ac-btn ac-btn-secondary" onClick={() => copy(result.secret_access_key)}>복사</button>
-        </div>
-        <div className="ac-datepop-actions">
-          <button className="ac-btn" onClick={onClose}>확인했습니다, 닫기</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// 신청 대기/이력 관리 (통합 큐)
 function RequestQueue() {
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState(null)
-  const [revealKey, setRevealKey] = useState(null)
 
   const pendingRequests = requests.filter((r) => r.status === 'pending')
   const historyRequests = requests.filter((r) => r.status !== 'pending')
 
   const fetchRequests = async () => {
     setLoading(true)
-    const { data } = await supabase.from('aws_requests').select('*').order('requested_at', { ascending: false }).limit(100)
+    const { data } = await supabase.from('gcp_requests').select('*').order('requested_at', { ascending: false }).limit(100)
     setRequests(data || [])
     setLoading(false)
   }
 
   useEffect(() => { fetchRequests() }, [])
 
-  const approve = async (id, opts) => {
+  const approve = async (id) => {
     setBusyId(id)
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const res = await fetch(AWS_REQUEST_APPLY_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ request_id: id, issue_key: !!opts?.issueKey }),
-      })
-      const data = await res.json()
-      if (!data.ok) alert('적용 실패: ' + data.error)
-      else if (data.result?.access_key_id && data.result?.secret_access_key) setRevealKey(data.result)
-    } catch (e) {
-      alert('적용 실패: ' + String(e))
-    }
+    await supabase.from('gcp_requests').update({
+      status: 'approved',
+      reviewed_at: new Date().toISOString(),
+    }).eq('id', id).eq('status', 'pending')
     await fetchRequests()
     setBusyId(null)
   }
@@ -321,7 +272,7 @@ function RequestQueue() {
     const reason = prompt('거부 사유를 입력해주세요.')
     if (reason === null) return
     setBusyId(id)
-    await supabase.from('aws_requests').update({
+    await supabase.from('gcp_requests').update({
       status: 'rejected',
       reviewed_at: new Date().toISOString(),
       error_message: reason.trim() || null,
@@ -333,7 +284,7 @@ function RequestQueue() {
   const removeRequest = async (id) => {
     if (!confirm('이 신청을 목록에서 삭제할까요?')) return
     setBusyId(id)
-    const { error } = await supabase.from('aws_requests').delete().eq('id', id)
+    const { error } = await supabase.from('gcp_requests').delete().eq('id', id)
     setBusyId(null)
     if (error) return alert('삭제 실패: ' + error.message)
     await fetchRequests()
@@ -341,7 +292,6 @@ function RequestQueue() {
 
   return (
     <>
-      {revealKey && <RevealKeyPopup result={revealKey} onClose={() => setRevealKey(null)} />}
       <div className={`ac-card ac-card-wide ${pendingRequests.length > 0 ? 'ac-card-alert' : ''}`}>
         <div className="ac-card-title">
           처리 대기중
@@ -351,7 +301,7 @@ function RequestQueue() {
         {!loading && pendingRequests.length === 0 && <div className="ac-empty">대기중인 신청이 없습니다.</div>}
         <div className="ac-snapshot-list">
           {pendingRequests.map((r) => (
-            <ReqCard key={r.id} r={r} busyId={busyId} onApprove={approve} onReject={reject} onRemove={removeRequest} />
+            <GcpApprovalCard key={r.id} r={r} busyId={busyId} onApprove={approve} onReject={reject} onRemove={removeRequest} />
           ))}
         </div>
       </div>
@@ -367,11 +317,54 @@ function RequestQueue() {
   )
 }
 
-export default function CloudAutomation() {
+function GcpApprovalCard({ r, busyId, onApprove, onReject, onRemove }) {
+  const meta = GCP_REQ_STATUS_META[r.status] || { label: r.status, color: '#94a3b8' }
+  const detail = (() => {
+    const p = r.payload || {}
+    if (r.action === 'create_firewall') {
+      return (p.rules || []).map((rule) => {
+        const dir = rule.direction === 'ingress' ? 'IN' : 'OUT'
+        return `${dir} ${rule.protocol} ${rule.port || '*'} ${rule.cidr}`
+      })
+    }
+    if (r.action === 'create_armor_policy') return [`기본 액션: ${p.default_action === 'deny' ? '차단' : '허용'}`]
+    if (r.action === 'add_armor_rules') return (p.rules || []).map((rule) => `${rule.type}: ${rule.cidrs || rule.expression || ''}`)
+    if (r.action === 'create_service_account') return [`계정: ${p.account_id}`, `역할: ${p.role}`]
+    return []
+  })()
+  const busy = busyId === r.id
+
+  return (
+    <div className="ac-req">
+      <div className="ac-req-top">
+        <span className="ac-req-status" style={{ background: meta.color }}>{meta.label}</span>
+        <span className="ac-req-title">{r.action}: {r.title || r.target_id || ''}</span>
+      </div>
+      {detail.map((line, i) => <div key={i} className="ac-req-reason">{line}</div>)}
+      {r.reason && <div className="ac-req-reason">사유: {r.reason}</div>}
+      {r.requester_email && <div className="ac-req-meta">신청자: {r.requester_email}</div>}
+      {r.error_message && <div className="ac-req-error">{r.error_message}</div>}
+      <div className="ac-req-meta">{new Date(r.requested_at).toLocaleString('ko-KR')}</div>
+      {r.status === 'pending' && onApprove && (
+        <div className="ac-req-actions">
+          <button className="ac-btn" disabled={busy} onClick={() => onApprove(r.id)}>{busy ? '처리 중...' : '승인'}</button>
+          <button className="ac-btn ac-btn-secondary" disabled={busy} onClick={() => onReject(r.id)}>거절</button>
+        </div>
+      )}
+      {(r.status === 'failed' || r.status === 'rejected') && onRemove && (
+        <div className="ac-req-actions">
+          <button className="ac-btn ac-btn-secondary" disabled={busy} onClick={() => onRemove(r.id)}>{busy ? '삭제 중...' : '목록에서 삭제'}</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function GcpApproval() {
   return (
     <div className="ac-page">
-      <h2 className="ac-title">관리자 승인</h2>
-      <p className="ac-sub">신청을 검토해 승인하면 실제 AWS에 반영됩니다. 적용 결과 확인은 "AWS 현황" 페이지에서 합니다.</p>
+      <h2 className="ac-title">GCP 관리자 승인</h2>
+      <p className="ac-sub">GCP 리소스 신청을 검토하고 승인합니다. GCP 자동화 연동 시 실제 반영됩니다.</p>
 
       <div className="ac-grid">
         <RequestQueue />

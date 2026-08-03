@@ -13,6 +13,8 @@ import CloudAutomation from './pages/CloudAutomation'
 import AwsRequest from './pages/AwsRequest'
 import AwsStatus from './pages/AwsStatus'
 import PhishingDetect from './pages/PhishingDetect'
+import GcpRequest from './pages/GcpRequest'
+import GcpApproval from './pages/GcpApproval'
 
 export default function App() {
   const [session, setSession] = useState(undefined)
@@ -45,6 +47,10 @@ export default function App() {
             <Route path="/cloud-automation" element={<CloudAutomation />} />
             <Route path="/aws-status" element={<AwsStatus />} />
             <Route path="/phishing" element={<PhishingDetect />} />
+            <Route path="/gcp/firewall" element={<GcpRequest resourceType="firewall_rule" />} />
+            <Route path="/gcp/armor" element={<GcpRequest resourceType="cloud_armor" />} />
+            <Route path="/gcp/iam" element={<GcpRequest resourceType="service_account" />} />
+            <Route path="/gcp/approval" element={<GcpApproval />} />
           </Routes>
         </main>
       </div>

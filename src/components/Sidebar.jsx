@@ -25,6 +25,20 @@ export const NAV_GROUPS = [
     ],
   },
   {
+    label: 'GCP 신청',
+    items: [
+      { title: 'Firewall', path: '/gcp/firewall' },
+      { title: 'Cloud Armor', path: '/gcp/armor' },
+      { title: 'IAM 서비스 계정', path: '/gcp/iam' },
+    ],
+  },
+  {
+    label: 'GCP 관리',
+    items: [
+      { title: '관리자 승인', path: '/gcp/approval' },
+    ],
+  },
+  {
     label: '보안 점검',
     items: [
       { title: '클라우드 설정 점검', path: '/cloud' },
