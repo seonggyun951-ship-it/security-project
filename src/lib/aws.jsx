@@ -1,11 +1,16 @@
 // AWS 자동화 신청/승인 공통 모듈 — 신청자 페이지와 승인자 페이지가 함께 사용
 
 export const RESOURCE_META = {
-  security_group: { label: 'Security Group' },
-  waf_web_acl:    { label: 'WAF Web ACL' },
-  iam_role:       { label: 'IAM Role' },
-  iam_policy:     { label: 'IAM Policy' },
-  iam_user:       { label: 'IAM 읽기전용 계정' },
+  security_group:   { label: 'Security Group' },
+  waf_web_acl:      { label: 'WAF Web ACL' },
+  iam_role:         { label: 'IAM Role' },
+  iam_policy:       { label: 'IAM Policy' },
+  iam_user:         { label: 'IAM 읽기전용 계정' },
+  vpc:              { label: 'VPC' },
+  subnet:           { label: '서브넷' },
+  ec2_instance:     { label: 'EC2 인스턴스' },
+  internet_gateway: { label: 'Internet Gateway' },
+  route_table:      { label: '라우팅 테이블' },
 }
 
 export const ACTION_LABEL = {
@@ -14,6 +19,11 @@ export const ACTION_LABEL = {
   create_acl:           '신규 WAF 생성',
   add_waf_rules:        'WAF 규칙 추가',
   create_readonly_user: '읽기전용 계정 생성',
+  create_vpc:           'VPC 생성',
+  create_subnet:        '서브넷 생성',
+  create_ec2:           'EC2 인스턴스 생성',
+  create_igw:           'Internet Gateway 생성',
+  create_route_table:   '라우팅 테이블 생성',
 }
 
 // 배포된 IAM 정책이 딱 이 두 관리형 정책으로만 AttachUserPolicy 하도록 제한되어 있음
@@ -122,6 +132,22 @@ export function reqDetailLines(r) {
   if (r.action === 'create_readonly_user') {
     const policy = IAM_READONLY_POLICIES.find((x) => x.arn === p.policy_arn)
     return [`계정: ${p.user_name}`, `권한: ${policy ? policy.label : p.policy_arn}`]
+  }
+  if (r.action === 'create_vpc') {
+    return [`CIDR: ${p.cidr_block || '10.0.0.0/16'}`, `DNS 호스트네임: ${p.dns_hostnames !== false ? 'ON' : 'OFF'}`]
+  }
+  if (r.action === 'create_subnet') {
+    return [`VPC: ${p.vpc_id}`, `CIDR: ${p.cidr_block}`, `AZ: ${p.availability_zone}`, `퍼블릭 IP: ${p.public_ip ? 'ON' : 'OFF'}`]
+  }
+  if (r.action === 'create_ec2') {
+    return [`타입: ${p.instance_type || 't3.micro'}`, `서브넷: ${p.subnet_id}`, `SG: ${(p.security_group_ids || []).join(', ')}`]
+  }
+  if (r.action === 'create_igw') {
+    return [`VPC: ${p.vpc_id}`]
+  }
+  if (r.action === 'create_route_table') {
+    const routes = (p.routes || []).map((rt) => `${rt.cidr_block} → ${rt.gateway_id}`)
+    return [`VPC: ${p.vpc_id}`, ...routes, `연결 서브넷: ${(p.subnet_ids || []).join(', ')}`]
   }
   return []
 }

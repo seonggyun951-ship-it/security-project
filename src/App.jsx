@@ -15,6 +15,7 @@ import AwsStatus from './pages/AwsStatus'
 import PhishingDetect from './pages/PhishingDetect'
 import GcpRequest from './pages/GcpRequest'
 import GcpApproval from './pages/GcpApproval'
+import InfraRequest from './pages/InfraRequest'
 
 export default function App() {
   const [session, setSession] = useState(undefined)
@@ -44,6 +45,8 @@ export default function App() {
             <Route path="/request/sg" element={<AwsRequest resourceType="security_group" />} />
             <Route path="/request/waf" element={<AwsRequest resourceType="waf_web_acl" />} />
             <Route path="/request/iam" element={<AwsRequest resourceType="iam_user" />} />
+            <Route path="/request/infra-network" element={<InfraRequest mode="network" />} />
+            <Route path="/request/infra-compute" element={<InfraRequest mode="compute" />} />
             <Route path="/cloud-automation" element={<CloudAutomation />} />
             <Route path="/aws-status" element={<AwsStatus />} />
             <Route path="/phishing" element={<PhishingDetect />} />

@@ -81,6 +81,11 @@ const HISTORY_CATEGORIES = [
   { key: 'security_group', label: ' SG' },
   { key: 'waf_web_acl', label: ' WAF' },
   { key: 'iam_user', label: ' IAM' },
+  { key: 'vpc', label: ' VPC' },
+  { key: 'subnet', label: ' 서브넷' },
+  { key: 'ec2_instance', label: ' EC2' },
+  { key: 'internet_gateway', label: ' IGW' },
+  { key: 'route_table', label: ' RT' },
 ]
 
 // 날짜 요약 줄에 표시할 상태 순서
@@ -298,20 +303,34 @@ function RequestQueue() {
 
   useEffect(() => { fetchRequests() }, [])
 
+  // Terraform 에이전트가 처리할 리소스 타입 — Edge Function 대신 DB 상태만 변경
+  const TERRAFORM_TYPES = ['vpc', 'subnet', 'ec2_instance', 'internet_gateway', 'route_table']
+
   const approve = async (id, opts) => {
     setBusyId(id)
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const res = await fetch(AWS_REQUEST_APPLY_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ request_id: id, issue_key: !!opts?.issueKey }),
-      })
-      const data = await res.json()
-      if (!data.ok) alert('적용 실패: ' + data.error)
-      else if (data.result?.access_key_id && data.result?.secret_access_key) setRevealKey(data.result)
-    } catch (e) {
-      alert('적용 실패: ' + String(e))
+    const req = requests.find((r) => r.id === id)
+
+    if (req && TERRAFORM_TYPES.includes(req.resource_type)) {
+      // Terraform 대상: DB 상태만 approved로 변경 → 로컬 에이전트가 처리
+      await supabase.from('aws_requests').update({
+        status: 'approved',
+        reviewed_at: new Date().toISOString(),
+      }).eq('id', id).eq('status', 'pending')
+    } else {
+      // SG/WAF/IAM: Edge Function으로 즉시 적용
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        const res = await fetch(AWS_REQUEST_APPLY_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+          body: JSON.stringify({ request_id: id, issue_key: !!opts?.issueKey }),
+        })
+        const data = await res.json()
+        if (!data.ok) alert('적용 실패: ' + data.error)
+        else if (data.result?.access_key_id && data.result?.secret_access_key) setRevealKey(data.result)
+      } catch (e) {
+        alert('적용 실패: ' + String(e))
+      }
     }
     await fetchRequests()
     setBusyId(null)

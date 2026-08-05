@@ -15,6 +15,8 @@ export const NAV_GROUPS = [
       { title: 'Security Group', path: '/request/sg' },
       { title: 'WAF', path: '/request/waf' },
       { title: 'IAM 계정', path: '/request/iam' },
+      { title: 'VPC / 서브넷', path: '/request/infra-network' },
+      { title: 'EC2 인스턴스', path: '/request/infra-compute' },
     ],
   },
   {
