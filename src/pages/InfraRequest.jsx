@@ -235,7 +235,7 @@ function IgwForm({ onSubmit, submitting, vpcOptions }) {
   )
 }
 
-function RouteTableForm({ onSubmit, submitting, vpcOptions }) {
+function RouteTableForm({ onSubmit, submitting, vpcOptions, igwOptions }) {
   const [form, setForm] = useState({ name: '', vpc_id: '', gateway_id: '', subnet_ids: '', reason: '' })
   const reset = () => setForm({ name: '', vpc_id: '', gateway_id: '', subnet_ids: '', reason: '' })
 
@@ -272,8 +272,18 @@ function RouteTableForm({ onSubmit, submitting, vpcOptions }) {
       </div>
       <div className="ac-form-row">
         <div className="ac-field">
-          <label className="ac-label">IGW ID (0.0.0.0/0 → IGW 라우트 추가)</label>
-          <input className="ac-input" placeholder="igw-0123abcd (선택)" value={form.gateway_id} onChange={(e) => setForm({ ...form, gateway_id: e.target.value })} />
+          <label className="ac-label">IGW (0.0.0.0/0 → IGW 라우트 추가)</label>
+          {(() => {
+            const filtered = igwOptions.filter((g) => !form.vpc_id || g.vpc_id === form.vpc_id)
+            return filtered.length > 0 ? (
+              <select className="ac-input" value={form.gateway_id} onChange={(e) => setForm({ ...form, gateway_id: e.target.value })}>
+                <option value="">선택 안함</option>
+                {filtered.map((g) => <option key={g.igw_id} value={g.igw_id}>{g.name} ({g.igw_id})</option>)}
+              </select>
+            ) : (
+              <input className="ac-input" placeholder="igw-0123abcd (선택)" value={form.gateway_id} onChange={(e) => setForm({ ...form, gateway_id: e.target.value })} />
+            )
+          })()}
         </div>
         <div className="ac-field">
           <label className="ac-label">연결할 서브넷 IDs (쉼표 구분)</label>
@@ -335,6 +345,7 @@ export default function InfraRequest({ mode = 'network' }) {
   const [submitting, setSubmitting] = useState(false)
   const [user, setUser] = useState(null)
   const [vpcOptions, setVpcOptions] = useState([])
+  const [igwOptions, setIgwOptions] = useState([])
 
   const typeKeys = types.map((t) => t.key)
 
@@ -370,6 +381,15 @@ export default function InfraRequest({ mode = 'network' }) {
       }
     } catch (_) {}
     setVpcOptions([...vpcMap.values()])
+    // IGW: 적용된 IGW 신청에서 가져오기
+    const { data: igwReqs } = await supabase.from('aws_requests')
+      .select('title, payload, result').eq('resource_type', 'internet_gateway').eq('status', 'applied')
+    const igws = (igwReqs || []).filter((r) => r.result?.created_id).map((r) => ({
+      igw_id: r.result.created_id,
+      name: r.title || r.payload?.name || r.result.created_id,
+      vpc_id: r.payload?.vpc_id || '',
+    }))
+    setIgwOptions(igws)
   }
 
   const fetchMyRequests = async () => {
@@ -424,7 +444,7 @@ export default function InfraRequest({ mode = 'network' }) {
               ))}
             </div>
           )}
-          {FormComponent && <FormComponent onSubmit={submitRequest} submitting={submitting} vpcOptions={vpcOptions} />}
+          {FormComponent && <FormComponent onSubmit={submitRequest} submitting={submitting} vpcOptions={vpcOptions} igwOptions={igwOptions} />}
         </div>
 
         <div className="ac-card ac-card-wide ac-card-muted">
