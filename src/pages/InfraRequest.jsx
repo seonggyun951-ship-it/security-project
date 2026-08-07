@@ -102,7 +102,7 @@ function SubnetForm({ onSubmit, submitting, vpcOptions }) {
           {vpcOptions.length > 0 ? (
             <select className="ac-input" value={form.vpc_id} onChange={(e) => setForm({ ...form, vpc_id: e.target.value })}>
               <option value="">VPC 선택...</option>
-              {vpcOptions.map((v) => <option key={v.vpc_id} value={v.vpc_id}>{v.name} ({v.vpc_id}) — {v.cidr}</option>)}
+              {vpcOptions.map((v) => <option key={v.vpc_id} value={v.vpc_id}>{v.name} ({v.vpc_id})</option>)}
             </select>
           ) : (
             <input className="ac-input" placeholder="vpc-0123abcd" value={form.vpc_id} onChange={(e) => setForm({ ...form, vpc_id: e.target.value })} />
@@ -217,7 +217,7 @@ function IgwForm({ onSubmit, submitting, vpcOptions }) {
           {vpcOptions.length > 0 ? (
             <select className="ac-input" value={form.vpc_id} onChange={(e) => setForm({ ...form, vpc_id: e.target.value })}>
               <option value="">VPC 선택...</option>
-              {vpcOptions.map((v) => <option key={v.vpc_id} value={v.vpc_id}>{v.name} ({v.vpc_id}) — {v.cidr}</option>)}
+              {vpcOptions.map((v) => <option key={v.vpc_id} value={v.vpc_id}>{v.name} ({v.vpc_id})</option>)}
             </select>
           ) : (
             <input className="ac-input" placeholder="vpc-0123abcd" value={form.vpc_id} onChange={(e) => setForm({ ...form, vpc_id: e.target.value })} />
@@ -263,7 +263,7 @@ function RouteTableForm({ onSubmit, submitting, vpcOptions }) {
           {vpcOptions.length > 0 ? (
             <select className="ac-input" value={form.vpc_id} onChange={(e) => setForm({ ...form, vpc_id: e.target.value })}>
               <option value="">VPC 선택...</option>
-              {vpcOptions.map((v) => <option key={v.vpc_id} value={v.vpc_id}>{v.name} ({v.vpc_id}) — {v.cidr}</option>)}
+              {vpcOptions.map((v) => <option key={v.vpc_id} value={v.vpc_id}>{v.name} ({v.vpc_id})</option>)}
             </select>
           ) : (
             <input className="ac-input" placeholder="vpc-0123abcd" value={form.vpc_id} onChange={(e) => setForm({ ...form, vpc_id: e.target.value })} />
@@ -339,15 +339,30 @@ export default function InfraRequest({ mode = 'network' }) {
   const typeKeys = types.map((t) => t.key)
 
   const fetchVpcOptions = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const res = await fetch('https://phqiejtztwhychazikim.supabase.co/functions/v1/aws-list-vpcs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-      })
-      const json = await res.json()
-      if (json.ok) setVpcOptions(json.vpcs || [])
-    } catch (_) {}
+    // SG 스냅샷에서 VPC ID 추출 + 적용된 VPC 신청에서 이름 매칭
+    const { data: sgRows } = await supabase.from('aws_resource_snapshots')
+      .select('raw_data').eq('resource_type', 'security_group')
+      .order('collected_at', { ascending: false }).limit(200)
+    const { data: vpcReqs } = await supabase.from('aws_requests')
+      .select('title, payload, result').eq('resource_type', 'vpc').eq('status', 'applied')
+
+    const vpcMap = new Map()
+    // SG에서 VPC ID 추출
+    for (const row of (sgRows || [])) {
+      const id = row.raw_data?.VpcId
+      if (id && !vpcMap.has(id)) {
+        const name = (row.raw_data?.Tags || []).find((t) => t.Key === 'Name')?.Value
+        vpcMap.set(id, { vpc_id: id, name: name || id })
+      }
+    }
+    // 적용된 VPC 신청에서 이름 보강
+    for (const req of (vpcReqs || [])) {
+      const id = req.result?.created_id
+      if (id) {
+        vpcMap.set(id, { vpc_id: id, name: req.title || req.payload?.name || id })
+      }
+    }
+    setVpcOptions([...vpcMap.values()])
   }
 
   const fetchMyRequests = async () => {
