@@ -235,13 +235,18 @@ function IgwForm({ onSubmit, submitting, vpcOptions }) {
   )
 }
 
-function RouteTableForm({ onSubmit, submitting, vpcOptions, igwOptions }) {
-  const [form, setForm] = useState({ name: '', vpc_id: '', gateway_id: '', subnet_ids: '', reason: '' })
-  const reset = () => setForm({ name: '', vpc_id: '', gateway_id: '', subnet_ids: '', reason: '' })
+function RouteTableForm({ onSubmit, submitting, vpcOptions, igwOptions, subnetOptions }) {
+  const [form, setForm] = useState({ name: '', vpc_id: '', gateway_id: '', subnet_ids: [], reason: '' })
+  const reset = () => setForm({ name: '', vpc_id: '', gateway_id: '', subnet_ids: [], reason: '' })
+
+  const toggleSubnet = (sid) => setForm((prev) => ({
+    ...prev,
+    subnet_ids: prev.subnet_ids.includes(sid) ? prev.subnet_ids.filter((s) => s !== sid) : [...prev.subnet_ids, sid],
+  }))
 
   const submit = async () => {
     if (!form.vpc_id.trim()) return alert('VPC ID는 필수입니다')
-    const subnetIds = form.subnet_ids.split(',').map((s) => s.trim()).filter(Boolean)
+    const subnetIds = form.subnet_ids
     const routes = form.gateway_id.trim() ? [{ cidr_block: '0.0.0.0/0', gateway_id: form.gateway_id.trim() }] : []
     const ok = await onSubmit({
       resource_type: 'route_table', action: 'create_route_table', title: form.name.trim() || 'RT',
@@ -286,8 +291,22 @@ function RouteTableForm({ onSubmit, submitting, vpcOptions, igwOptions }) {
           })()}
         </div>
         <div className="ac-field">
-          <label className="ac-label">연결할 서브넷 IDs (쉼표 구분)</label>
-          <input className="ac-input" placeholder="subnet-abc, subnet-def" value={form.subnet_ids} onChange={(e) => setForm({ ...form, subnet_ids: e.target.value })} />
+          <label className="ac-label">연결할 서브넷</label>
+          {(() => {
+            const filtered = subnetOptions.filter((s) => !form.vpc_id || s.vpc_id === form.vpc_id)
+            return filtered.length > 0 ? (
+              <div className="ac-check-list">
+                {filtered.map((s) => (
+                  <label key={s.subnet_id} className={`ac-check ${form.subnet_ids.includes(s.subnet_id) ? 'active' : ''}`}>
+                    <input type="checkbox" checked={form.subnet_ids.includes(s.subnet_id)} onChange={() => toggleSubnet(s.subnet_id)} />
+                    <span>{s.name} ({s.subnet_id})</span>
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <input className="ac-input" placeholder="subnet-abc, subnet-def (쉼표 구분)" value={Array.isArray(form.subnet_ids) ? form.subnet_ids.join(', ') : form.subnet_ids} onChange={(e) => setForm({ ...form, subnet_ids: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} />
+            )
+          })()}
         </div>
       </div>
       <div className="ac-form-row">
@@ -346,6 +365,7 @@ export default function InfraRequest({ mode = 'network' }) {
   const [user, setUser] = useState(null)
   const [vpcOptions, setVpcOptions] = useState([])
   const [igwOptions, setIgwOptions] = useState([])
+  const [subnetOptions, setSubnetOptions] = useState([])
 
   const typeKeys = types.map((t) => t.key)
 
@@ -390,6 +410,15 @@ export default function InfraRequest({ mode = 'network' }) {
       vpc_id: r.payload?.vpc_id || '',
     }))
     setIgwOptions(igws)
+    // 서브넷: 적용된 서브넷 신청에서 가져오기
+    const { data: subnetReqs } = await supabase.from('aws_requests')
+      .select('title, payload, result').eq('resource_type', 'subnet').eq('status', 'applied')
+    const subnets = (subnetReqs || []).filter((r) => r.result?.created_id).map((r) => ({
+      subnet_id: r.result.created_id,
+      name: r.title || r.payload?.name || r.result.created_id,
+      vpc_id: r.payload?.vpc_id || '',
+    }))
+    setSubnetOptions(subnets)
   }
 
   const fetchMyRequests = async () => {
@@ -444,7 +473,7 @@ export default function InfraRequest({ mode = 'network' }) {
               ))}
             </div>
           )}
-          {FormComponent && <FormComponent onSubmit={submitRequest} submitting={submitting} vpcOptions={vpcOptions} igwOptions={igwOptions} />}
+          {FormComponent && <FormComponent onSubmit={submitRequest} submitting={submitting} vpcOptions={vpcOptions} igwOptions={igwOptions} subnetOptions={subnetOptions} />}
         </div>
 
         <div className="ac-card ac-card-wide ac-card-muted">
