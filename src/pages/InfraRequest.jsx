@@ -102,7 +102,7 @@ function SubnetForm({ onSubmit, submitting, vpcOptions }) {
           {vpcOptions.length > 0 ? (
             <select className="ac-input" value={form.vpc_id} onChange={(e) => setForm({ ...form, vpc_id: e.target.value })}>
               <option value="">VPC 선택...</option>
-              {vpcOptions.map((v) => <option key={v.resource_id} value={v.resource_id}>{v.resource_name} ({v.resource_id})</option>)}
+              {vpcOptions.map((v) => <option key={v.vpc_id} value={v.vpc_id}>{v.name} ({v.vpc_id}) — {v.cidr}</option>)}
             </select>
           ) : (
             <input className="ac-input" placeholder="vpc-0123abcd" value={form.vpc_id} onChange={(e) => setForm({ ...form, vpc_id: e.target.value })} />
@@ -217,7 +217,7 @@ function IgwForm({ onSubmit, submitting, vpcOptions }) {
           {vpcOptions.length > 0 ? (
             <select className="ac-input" value={form.vpc_id} onChange={(e) => setForm({ ...form, vpc_id: e.target.value })}>
               <option value="">VPC 선택...</option>
-              {vpcOptions.map((v) => <option key={v.resource_id} value={v.resource_id}>{v.resource_name} ({v.resource_id})</option>)}
+              {vpcOptions.map((v) => <option key={v.vpc_id} value={v.vpc_id}>{v.name} ({v.vpc_id}) — {v.cidr}</option>)}
             </select>
           ) : (
             <input className="ac-input" placeholder="vpc-0123abcd" value={form.vpc_id} onChange={(e) => setForm({ ...form, vpc_id: e.target.value })} />
@@ -263,7 +263,7 @@ function RouteTableForm({ onSubmit, submitting, vpcOptions }) {
           {vpcOptions.length > 0 ? (
             <select className="ac-input" value={form.vpc_id} onChange={(e) => setForm({ ...form, vpc_id: e.target.value })}>
               <option value="">VPC 선택...</option>
-              {vpcOptions.map((v) => <option key={v.resource_id} value={v.resource_id}>{v.resource_name} ({v.resource_id})</option>)}
+              {vpcOptions.map((v) => <option key={v.vpc_id} value={v.vpc_id}>{v.name} ({v.vpc_id}) — {v.cidr}</option>)}
             </select>
           ) : (
             <input className="ac-input" placeholder="vpc-0123abcd" value={form.vpc_id} onChange={(e) => setForm({ ...form, vpc_id: e.target.value })} />
@@ -338,17 +338,16 @@ export default function InfraRequest({ mode = 'network' }) {
 
   const typeKeys = types.map((t) => t.key)
 
-  const dedupeByResource = (rows) => {
-    const seen = new Set()
-    return (rows || []).filter((s) => (seen.has(s.resource_id) ? false : (seen.add(s.resource_id), true)))
-  }
-
   const fetchVpcOptions = async () => {
-    const { data } = await supabase.from('aws_resource_snapshots')
-      .select('resource_id, resource_name, resource_type')
-      .eq('resource_type', 'vpc')
-      .order('collected_at', { ascending: false }).limit(100)
-    setVpcOptions(dedupeByResource(data || []))
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('https://phqiejtztwhychazikim.supabase.co/functions/v1/aws-list-vpcs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+      })
+      const json = await res.json()
+      if (json.ok) setVpcOptions(json.vpcs || [])
+    } catch (_) {}
   }
 
   const fetchMyRequests = async () => {
