@@ -339,29 +339,36 @@ export default function InfraRequest({ mode = 'network' }) {
   const typeKeys = types.map((t) => t.key)
 
   const fetchVpcOptions = async () => {
-    // SG 스냅샷에서 VPC ID 추출 + 적용된 VPC 신청에서 이름 매칭
+    const vpcMap = new Map()
+    // 1) DB: SG 스냅샷에서 VPC ID 추출
     const { data: sgRows } = await supabase.from('aws_resource_snapshots')
       .select('raw_data').eq('resource_type', 'security_group')
       .order('collected_at', { ascending: false }).limit(200)
-    const { data: vpcReqs } = await supabase.from('aws_requests')
-      .select('title, payload, result').eq('resource_type', 'vpc').eq('status', 'applied')
-
-    const vpcMap = new Map()
-    // SG에서 VPC ID 추출
     for (const row of (sgRows || [])) {
       const id = row.raw_data?.VpcId
-      if (id && !vpcMap.has(id)) {
-        const name = (row.raw_data?.Tags || []).find((t) => t.Key === 'Name')?.Value
-        vpcMap.set(id, { vpc_id: id, name: name || id })
-      }
+      if (id && !vpcMap.has(id)) vpcMap.set(id, { vpc_id: id, name: id })
     }
-    // 적용된 VPC 신청에서 이름 보강
+    // 2) DB: 적용된 VPC 신청에서 이름 보강
+    const { data: vpcReqs } = await supabase.from('aws_requests')
+      .select('title, payload, result').eq('resource_type', 'vpc').eq('status', 'applied')
     for (const req of (vpcReqs || [])) {
       const id = req.result?.created_id
-      if (id) {
-        vpcMap.set(id, { vpc_id: id, name: req.title || req.payload?.name || id })
-      }
+      if (id) vpcMap.set(id, { vpc_id: id, name: req.title || req.payload?.name || id })
     }
+    // 3) AWS API: Edge Function으로 실시간 VPC 목록 (추가 반영)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('https://phqiejtztwhychazikim.supabase.co/functions/v1/aws-list-vpcs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+      })
+      const json = await res.json()
+      if (json.ok) {
+        for (const v of (json.vpcs || [])) {
+          vpcMap.set(v.vpc_id, { vpc_id: v.vpc_id, name: v.name || v.vpc_id })
+        }
+      }
+    } catch (_) {}
     setVpcOptions([...vpcMap.values()])
   }
 
