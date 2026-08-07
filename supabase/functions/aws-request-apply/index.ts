@@ -114,6 +114,22 @@ function wafFieldToMatch(r) {
   }
 }
 
+// WAF 일시적 오류 재시도 (WAFUnavailableEntityException 등)
+async function wafRetry(fn, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn()
+    } catch (e) {
+      const msg = String(e)
+      if (i < retries - 1 && (msg.includes('WAFUnavailableEntity') || msg.includes('Retry your request'))) {
+        await new Promise((r) => setTimeout(r, 1000 * (i + 1)))
+        continue
+      }
+      throw e
+    }
+  }
+}
+
 async function handleWaf(waf, req) {
   const p = req.payload || {}
   if (req.action === 'create_acl') {
@@ -124,19 +140,19 @@ async function handleWaf(waf, req) {
       Statement: { ManagedRuleGroupStatement: { VendorName: 'AWS', Name: name } },
       VisibilityConfig: vis(name),
     }))
-    const res = await waf.send(new CreateWebACLCommand({
+    const res = await wafRetry(() => waf.send(new CreateWebACLCommand({
       Name: p.acl_name,
       Scope: 'REGIONAL',
       DefaultAction: p.default_action === 'block' ? { Block: {} } : { Allow: {} },
       Rules: rules,
       VisibilityConfig: vis(p.acl_name || 'webacl'),
-    }))
+    })))
     return { web_acl_id: res.Summary?.Id }
   }
 
   // add_waf_rules — 기존 Web ACL을 읽어 규칙을 합쳐 업데이트
   const aclName = p.web_acl_name || req.title
-  const get = await waf.send(new GetWebACLCommand({ Name: aclName, Id: req.target_id, Scope: 'REGIONAL' }))
+  const get = await wafRetry(() => waf.send(new GetWebACLCommand({ Name: aclName, Id: req.target_id, Scope: 'REGIONAL' })))
   const acl = get.WebACL
   const existing = acl.Rules || []
   let priority = existing.reduce((max, r) => Math.max(max, r.Priority ?? 0), -1)
@@ -145,12 +161,12 @@ async function handleWaf(waf, req) {
   for (const r of (p.rules || [])) {
     priority += 1
     if (r.type === 'ip_block') {
-      const ipset = await waf.send(new CreateIPSetCommand({
+      const ipset = await wafRetry(() => waf.send(new CreateIPSetCommand({
         Name: safeName(`${r.name}-ipset-${Date.now()}`).slice(0, 128),
         Scope: 'REGIONAL',
         IPAddressVersion: 'IPV4',
         Addresses: r.cidrs,
-      }))
+      })))
       newRules.push({
         Name: r.name,
         Priority: priority,
@@ -198,7 +214,7 @@ async function handleWaf(waf, req) {
     }
   }
 
-  await waf.send(new UpdateWebACLCommand({
+  await wafRetry(() => waf.send(new UpdateWebACLCommand({
     Name: aclName,
     Id: req.target_id,
     Scope: 'REGIONAL',
@@ -206,7 +222,7 @@ async function handleWaf(waf, req) {
     Rules: [...existing, ...newRules],
     VisibilityConfig: acl.VisibilityConfig,
     LockToken: get.LockToken,
-  }))
+  })))
   return { web_acl_id: req.target_id }
 }
 
