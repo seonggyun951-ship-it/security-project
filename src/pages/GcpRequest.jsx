@@ -5,7 +5,7 @@ import {
   GCP_REQ_STATUS_META, gcpReqTitle, gcpReqDetailLines,
   emptyFirewallRule, emptyArmorRule,
 } from '../lib/gcp'
-import { notify } from '../lib/discord'
+import { notify, summarizePayload } from '../lib/discord'
 
 function FirewallForm({ onSubmit, submitting }) {
   const [form, setForm] = useState({ name: '', network: 'default', reason: '' })
@@ -323,7 +323,8 @@ export default function GcpRequest({ resourceType = 'firewall_rule' }) {
     await fetchMyRequests()
     const GCP_ACTION_LABEL = { create_firewall: 'Firewall 규칙 생성', create_armor_policy: 'Cloud Armor 정책 생성', add_armor_rules: 'Cloud Armor 규칙 추가', create_service_account: '서비스 계정 생성' }
     const actionLabel = GCP_ACTION_LABEL[req.action] || req.action
-    notify(`📋 **새 GCP 신청**\n${actionLabel}: ${req.title || ''}\n신청자: ${user?.email || '알 수 없음'}${req.reason ? `\n사유: ${req.reason}` : ''}`)
+    const detail = summarizePayload(req.action, req.payload)
+    notify(`📋 **새 GCP 신청**\n${actionLabel}: ${req.title || ''}\n신청자: ${user?.email || '알 수 없음'}${detail ? `\n내용: ${detail}` : ''}${req.reason ? `\n사유: ${req.reason}` : ''}`)
     alert('신청되었습니다. 승인자 검토 후 반영됩니다.')
     return true
   }

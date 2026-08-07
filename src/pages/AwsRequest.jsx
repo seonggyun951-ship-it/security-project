@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { notify } from '../lib/discord'
+import { notify, summarizePayload } from '../lib/discord'
 import {
   WAF_MANAGED_RULE_GROUPS, WAF_FIELDS, WAF_POSITIONS, IAM_READONLY_POLICIES,
   REQ_STATUS_META, ACTION_LABEL, ReqCard, reqTitle, reqDetailLines,
@@ -602,7 +602,8 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
     if (error) { alert('신청 실패: ' + error.message); return false }
     await fetchMyRequests()
     const actionLabel = ACTION_LABEL[req.action] || req.action
-    notify(`📋 **새 신청 접수**\n${actionLabel}: ${req.title || ''}\n신청자: ${user?.email || '알 수 없음'}${req.reason ? `\n사유: ${req.reason}` : ''}`)
+    const detail = summarizePayload(req.action, req.payload)
+    notify(`📋 **새 신청 접수**\n${actionLabel}: ${req.title || ''}\n신청자: ${user?.email || '알 수 없음'}${detail ? `\n내용: ${detail}` : ''}${req.reason ? `\n사유: ${req.reason}` : ''}`)
     alert('신청되었습니다. 승인자 검토 후 반영됩니다.')
     return true
   }
