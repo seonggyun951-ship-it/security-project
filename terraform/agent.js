@@ -31,12 +31,15 @@ const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK || 'https://discordapp.com/a
 
 async function notifyDiscord(message) {
   try {
-    await fetch(DISCORD_WEBHOOK, {
+    const res = await fetch(DISCORD_WEBHOOK, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: message }),
     })
-  } catch (_) {}
+    if (!res.ok) console.error('    Discord 알림 실패:', res.status, await res.text().catch(() => ''))
+  } catch (e) {
+    console.error('    Discord 알림 에러:', e.message)
+  }
 }
 
 const SUPABASE_URL = process.env.SUPABASE_URL
