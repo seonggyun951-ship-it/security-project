@@ -197,11 +197,12 @@ async function processApproved() {
     const plan = runTerraform('plan -no-color -input=false')
     if (!plan.ok) {
       console.log('    plan 실패:', plan.output.slice(0, 200))
-      await supabase.from('aws_requests').update({
+      const { error: dbErr1 } = await supabase.from('aws_requests').update({
         status: 'failed',
         error_message: 'terraform plan 실패: ' + plan.output.slice(0, 500),
         applied_at: new Date().toISOString(),
       }).eq('id', req.id)
+      if (dbErr1) console.error('    DB 상태 업데이트 실패:', dbErr1.message)
       await notifyDiscord(`❌ **Terraform plan 실패**\n${req.resource_type}: ${req.title || req.id}\n${plan.output.slice(0, 200)}`)
       fs.unlinkSync(tfFile) // 실패한 .tf 정리
       continue
@@ -211,13 +212,14 @@ async function processApproved() {
     const apply = runTerraform('apply -auto-approve -no-color -input=false')
     if (!apply.ok) {
       console.log('    apply 실패:', apply.output.slice(0, 200))
-      await supabase.from('aws_requests').update({
+      const { error: dbErr2 } = await supabase.from('aws_requests').update({
         status: 'failed',
         error_message: 'terraform apply 실패: ' + apply.output.slice(0, 500),
         applied_at: new Date().toISOString(),
       }).eq('id', req.id)
+      if (dbErr2) console.error('    DB 상태 업데이트 실패:', dbErr2.message)
       await notifyDiscord(`❌ **Terraform apply 실패**\n${req.resource_type}: ${req.title || req.id}\n${apply.output.slice(0, 200)}`)
-      // 실패해도 .tf 파일은 남겨둠 (디버깅용)
+      fs.unlinkSync(tfFile) // 실패한 .tf 정리 (재시도 방지)
       continue
     }
 
@@ -225,17 +227,18 @@ async function processApproved() {
     let createdId = null
     try {
       const state = runTerraform(`state show aws_${req.resource_type === 'ec2_instance' ? 'instance' : req.resource_type}.req_${req.id.replace(/-/g, '_')} -no-color`)
-      const idMatch = state.output.match(/id\s+=\s+"([^"]+)"/)
+      const idMatch = state.output.match(/^\s+id\s+=\s+"([^"]+)"/m)
       if (idMatch) createdId = idMatch[1]
     } catch (_) {}
 
     console.log('    ✅ 적용 완료', createdId ? `→ ${createdId}` : '')
 
-    await supabase.from('aws_requests').update({
+    const { error: dbErr3 } = await supabase.from('aws_requests').update({
       status: 'applied',
       result: { created_id: createdId, terraform: true },
       applied_at: new Date().toISOString(),
     }).eq('id', req.id)
+    if (dbErr3) console.error('    DB 상태 업데이트 실패:', dbErr3.message)
 
     await notifyDiscord(`🔧 **Terraform 적용 완료**\n${req.resource_type}: ${req.title || req.id}${createdId ? `\n생성 ID: ${createdId}` : ''}`)
   }

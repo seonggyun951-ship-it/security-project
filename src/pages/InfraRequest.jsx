@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { REQ_STATUS_META, ACTION_LABEL, reqTitle, reqDetailLines } from '../lib/aws'
+import { REQ_STATUS_META, ACTION_LABEL, ReqCard, reqTitle, reqDetailLines } from '../lib/aws'
 import { notify, summarizePayload } from '../lib/discord'
 
 const AZ_OPTIONS = [
@@ -29,6 +29,19 @@ const PAGE_META = {
   compute: { title: 'EC2 인스턴스 신청', sub: 'EC2 인스턴스를 신청합니다. 승인 후 자동 적용됩니다.' },
 }
 
+function isValidCidr(cidr) {
+  const m = cidr.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)\/(\d+)$/)
+  if (!m) return false
+  const [, a, b, c, d, mask] = m.map(Number)
+  if ([a, b, c, d].some((o) => o > 255)) return false
+  if (mask < 0 || mask > 32) return false
+  // 네트워크 경계 검사: 호스트 비트가 0이어야 함
+  const ip = ((a << 24) | (b << 16) | (c << 8) | d) >>> 0
+  const hostBits = 32 - mask
+  if (hostBits < 32 && (ip & ((1 << hostBits) - 1)) !== 0) return false
+  return true
+}
+
 function VpcForm({ onSubmit, submitting }) {
   const [form, setForm] = useState({ name: '', cidr_block: '10.0.0.0/16', dns_hostnames: true, reason: '' })
   const reset = () => setForm({ name: '', cidr_block: '10.0.0.0/16', dns_hostnames: true, reason: '' })
@@ -36,6 +49,7 @@ function VpcForm({ onSubmit, submitting }) {
   const submit = async () => {
     if (!form.name.trim()) return alert('VPC 이름은 필수입니다')
     if (!form.cidr_block.trim()) return alert('CIDR 블록은 필수입니다')
+    if (!isValidCidr(form.cidr_block.trim())) return alert('유효하지 않은 CIDR입니다.\n마스크: /0~/32, 네트워크 경계가 맞아야 합니다.\n예: 10.0.0.0/16, 172.16.0.0/12')
     const ok = await onSubmit({
       resource_type: 'vpc', action: 'create_vpc', title: form.name.trim(),
       payload: { name: form.name.trim(), cidr_block: form.cidr_block.trim(), dns_hostnames: form.dns_hostnames },
@@ -82,6 +96,7 @@ function SubnetForm({ onSubmit, submitting, vpcOptions }) {
   const submit = async () => {
     if (!form.vpc_id.trim()) return alert('VPC ID는 필수입니다')
     if (!form.cidr_block.trim()) return alert('CIDR 블록은 필수입니다')
+    if (!isValidCidr(form.cidr_block.trim())) return alert('유효하지 않은 CIDR입니다.\n마스크: /0~/32, 네트워크 경계가 맞아야 합니다.\n예: 10.0.1.0/24, 10.0.0.0/20')
     const ok = await onSubmit({
       resource_type: 'subnet', action: 'create_subnet', title: form.name.trim() || form.cidr_block.trim(),
       payload: { name: form.name.trim(), vpc_id: form.vpc_id.trim(), cidr_block: form.cidr_block.trim(), availability_zone: form.availability_zone, public_ip: form.public_ip },
@@ -328,17 +343,25 @@ const FORM_MAP = {
   route_table: RouteTableForm,
 }
 
+const STATUS_GROUP_ORDER = ['pending', 'approved', 'failed', 'applied', 'rejected']
+const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
+
+function localDateKey(ts) {
+  const d = new Date(ts)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 function MyReqRow({ r }) {
   const [open, setOpen] = useState(false)
-  const meta = REQ_STATUS_META[r.status] || { label: r.status, color: '#94a3b8' }
   const detail = reqDetailLines(r)
   const d = new Date(r.requested_at)
+  const shortDate = `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
   return (
-    <div className="ac-myreq">
+    <div className={`ac-myreq ${r.status === 'rejected' ? 'ac-myreq-rejected' : ''}`}>
       <div className="ac-myreq-top" onClick={() => setOpen((v) => !v)}>
-        <span className="ac-req-status" style={{ background: meta.color, fontSize: 11, padding: '2px 8px', borderRadius: 4 }}>{meta.label}</span>
         <span className="ac-myreq-title">{reqTitle(r)}</span>
+        <span className="ac-myreq-date">{shortDate}</span>
         <span className="ac-expand-icon">{open ? '▲' : '▼'}</span>
       </div>
       {open && (
@@ -347,10 +370,108 @@ function MyReqRow({ r }) {
           {r.reason && <div className="ac-req-reason">사유: {r.reason}</div>}
           {r.result?.created_id && <div className="ac-req-meta">생성 ID: {r.result.created_id}</div>}
           {r.result?.terraform && <div className="ac-req-meta">🔧 Terraform으로 적용됨</div>}
-          {r.error_message && <div className="ac-req-error">{r.error_message}</div>}
+          {r.status === 'rejected' && r.error_message && (
+            <div className="ac-reject-box">거부 사유: {r.error_message}</div>
+          )}
+          {r.status !== 'rejected' && r.error_message && <div className="ac-req-error">{r.error_message}</div>}
           <div className="ac-req-meta">{d.toLocaleString('ko-KR')}</div>
         </div>
       )}
+    </div>
+  )
+}
+
+function MyReqGrouped({ requests }) {
+  const [openGroup, setOpenGroup] = useState('pending')
+
+  const groups = STATUS_GROUP_ORDER.map((status) => {
+    const meta = REQ_STATUS_META[status] || { label: status, color: '#94a3b8' }
+    const items = requests.filter((r) => r.status === status)
+    const byDate = {}
+    for (const r of items) {
+      const key = localDateKey(r.requested_at)
+      if (!byDate[key]) byDate[key] = []
+      byDate[key].push(r)
+    }
+    const dates = Object.entries(byDate).sort((a, b) => b[0].localeCompare(a[0]))
+    return { status, meta, items, dates }
+  }).filter((g) => g.items.length > 0)
+
+  return (
+    <div className="ac-status-groups">
+      {groups.map((g) => (
+        <div key={g.status} className="ac-sgroup">
+          <div
+            className={`ac-sgroup-head ${openGroup === g.status ? 'is-open' : ''}`}
+            onClick={() => setOpenGroup(openGroup === g.status ? null : g.status)}
+          >
+            <i className="ac-sgroup-dot" style={{ background: g.meta.color }} />
+            <span className="ac-sgroup-label">{g.meta.label}</span>
+            <span className="ac-sgroup-count">{g.items.length}건</span>
+            <span className="ac-expand-icon">{openGroup === g.status ? '▲' : '▼'}</span>
+          </div>
+          {openGroup === g.status && (
+            <div className="ac-sgroup-body">
+              {g.dates.map(([date, items]) => (
+                <div key={date} className="ac-sgroup-date">
+                  <div className="ac-sgroup-date-label">{date}</div>
+                  {items.map((r) => <MyReqRow key={r.id} r={r} />)}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function MiniCal({ requests, selected, onSelect }) {
+  const today = new Date()
+  const base = selected ? new Date(selected + 'T00:00:00') : today
+  const [viewDate, setViewDate] = useState(new Date(base.getFullYear(), base.getMonth(), 1))
+
+  const year = viewDate.getFullYear()
+  const month = viewDate.getMonth()
+  const firstDay = new Date(year, month, 1).getDay()
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const todayKey = localDateKey(today)
+
+  const hasData = new Set()
+  for (const r of requests) hasData.add(localDateKey(r.requested_at))
+
+  const cells = []
+  for (let i = 0; i < firstDay; i++) cells.push(null)
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d)
+
+  const pad = (n) => String(n).padStart(2, '0')
+
+  return (
+    <div className="ac-minical">
+      <div className="ac-minical-head">
+        <button className="ac-btn ac-btn-secondary ac-cal-nav" onClick={() => setViewDate(new Date(year, month - 1, 1))}>‹</button>
+        <span className="ac-minical-title">{year}년 {month + 1}월</span>
+        <button className="ac-btn ac-btn-secondary ac-cal-nav" onClick={() => setViewDate(new Date(year, month + 1, 1))}>›</button>
+      </div>
+      <div className="ac-minical-grid">
+        {WEEKDAYS.map((w) => <div key={w} className="ac-minical-wday">{w}</div>)}
+        {cells.map((d, i) => {
+          if (d === null) return <div key={i} className="ac-minical-cell ac-minical-empty" />
+          const key = `${year}-${pad(month + 1)}-${pad(d)}`
+          const has = hasData.has(key)
+          const isToday = key === todayKey
+          const isSel = key === selected
+          return (
+            <div
+              key={i}
+              className={`ac-minical-cell ${has ? 'has-data' : ''} ${isToday ? 'is-today' : ''} ${isSel ? 'is-selected' : ''}`}
+              onClick={() => has && onSelect(key)}
+            >
+              {d}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -366,6 +487,13 @@ export default function InfraRequest({ mode = 'network' }) {
   const [vpcOptions, setVpcOptions] = useState([])
   const [igwOptions, setIgwOptions] = useState([])
   const [subnetOptions, setSubnetOptions] = useState([])
+  const [dateFilter, setDateFilter] = useState('')
+  const [calOpen, setCalOpen] = useState(false)
+  const [detailReq, setDetailReq] = useState(null)
+
+  const filteredRequests = dateFilter
+    ? myRequests.filter((r) => localDateKey(r.requested_at) === dateFilter)
+    : myRequests
 
   const typeKeys = types.map((t) => t.key)
 
@@ -377,7 +505,7 @@ export default function InfraRequest({ mode = 'network' }) {
       .order('collected_at', { ascending: false }).limit(200)
     for (const row of (sgRows || [])) {
       const id = row.raw_data?.VpcId
-      if (id && !vpcMap.has(id)) vpcMap.set(id, { vpc_id: id, name: id })
+      if (id && id.startsWith('vpc-') && !vpcMap.has(id)) vpcMap.set(id, { vpc_id: id, name: id })
     }
     // 2) DB: 적용된 VPC 신청에서 이름 보강
     const { data: vpcReqs } = await supabase.from('aws_requests')
@@ -461,6 +589,33 @@ export default function InfraRequest({ mode = 'network' }) {
       <h2 className="ac-title">{meta.title}</h2>
       <p className="ac-sub">{meta.sub}</p>
 
+      {!loading && (() => {
+        const seenKey = `seen_rejected_infra_${mode}`
+        const getSeen = () => { try { return JSON.parse(localStorage.getItem(seenKey) || '[]') } catch { return [] } }
+        const rejectedItems = myRequests.filter((r) => r.status === 'rejected' || r.status === 'failed')
+        const unseenItems = rejectedItems.filter((r) => !getSeen().includes(r.id))
+        if (unseenItems.length === 0) return null
+        const dismissOne = (id) => { const s = getSeen(); s.push(id); localStorage.setItem(seenKey, JSON.stringify(s)); setMyRequests([...myRequests]) }
+        const dismissAll = () => { localStorage.setItem(seenKey, JSON.stringify(rejectedItems.map((r) => r.id))); setMyRequests([...myRequests]) }
+        return (
+          <div className="ac-reject-banner">
+            <div className="ac-reject-banner-head">
+              <span>거부/실패된 신청 {unseenItems.length}건</span>
+              {unseenItems.length > 1 && <button className="ac-btn ac-btn-secondary" style={{ padding: '2px 8px', fontSize: 11 }} onClick={dismissAll}>전체 확인</button>}
+            </div>
+            <div className="ac-reject-banner-list">
+              {unseenItems.map((r) => (
+                <div key={r.id} className="ac-reject-banner-item" onClick={() => setDetailReq(r)} style={{ cursor: 'pointer' }}>
+                  <span className="ac-reject-banner-title">{reqTitle(r)}</span>
+                  {r.error_message && <span className="ac-reject-banner-reason">{r.error_message.slice(0, 80)}</span>}
+                  <button className="ac-btn ac-btn-secondary" style={{ padding: '2px 6px', fontSize: 10, flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); dismissOne(r.id) }}>확인</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
+
       <div className="ac-grid">
         <div className="ac-card ac-card-wide">
           <div className="ac-card-title">신청서 작성</div>
@@ -477,14 +632,37 @@ export default function InfraRequest({ mode = 'network' }) {
         </div>
 
         <div className="ac-card ac-card-wide ac-card-muted">
-          <div className="ac-card-title">내 신청 현황</div>
-          {loading && <div className="ac-empty">불러오는 중...</div>}
-          {!loading && myRequests.length === 0 && <div className="ac-empty">아직 신청 내역이 없습니다.</div>}
-          <div className="ac-snapshot-list">
-            {myRequests.map((r) => <MyReqRow key={r.id} r={r} />)}
+          <div className="ac-card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ flex: 1 }}>내 신청 현황</span>
+            <button className="ac-btn ac-btn-secondary" style={{ padding: '2px 8px', fontSize: 11 }} onClick={() => setCalOpen((v) => !v)}>
+              {dateFilter || '날짜 선택'}
+            </button>
+            {dateFilter && <button className="ac-btn ac-btn-secondary" style={{ padding: '2px 8px', fontSize: 11 }} onClick={() => setDateFilter('')}>전체</button>}
           </div>
+          {calOpen && <MiniCal requests={myRequests} selected={dateFilter} onSelect={(d) => { setDateFilter(d); setCalOpen(false) }} />}
+          {loading && <div className="ac-empty">불러오는 중...</div>}
+          {!loading && filteredRequests.length === 0 && <div className="ac-empty">{dateFilter ? '해당 날짜에 신청 내역이 없습니다.' : '아직 신청 내역이 없습니다.'}</div>}
+          {!loading && filteredRequests.length > 0 && <MyReqGrouped requests={filteredRequests} />}
         </div>
       </div>
+
+      {detailReq && (
+        <div className="ac-datepop-backdrop" onClick={() => setDetailReq(null)}>
+          <div className="ac-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="ac-modal-head">
+              <span className="ac-modal-title">신청 상세</span>
+              <button className="ac-btn ac-btn-secondary" onClick={() => setDetailReq(null)}>닫기</button>
+            </div>
+            <div className="ac-modal-body">
+              <ReqCard r={detailReq} />
+              {detailReq.error_message && (
+                <div className="ac-reject-box" style={{ marginTop: 12 }}>{detailReq.status === 'rejected' ? '거부 사유' : '에러'}: {detailReq.error_message}</div>
+              )}
+              <button className="ac-btn" style={{ marginTop: 12, width: '100%' }} onClick={() => setDetailReq(null)}>닫기</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
