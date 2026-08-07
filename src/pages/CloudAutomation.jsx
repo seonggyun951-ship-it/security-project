@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { ReqCard, REQ_STATUS_META } from '../lib/aws'
+import { ReqCard, REQ_STATUS_META, ACTION_LABEL } from '../lib/aws'
+import { notify } from '../lib/discord'
 
 const AWS_REQUEST_APPLY_URL = 'https://phqiejtztwhychazikim.supabase.co/functions/v1/aws-request-apply'
 
@@ -310,12 +311,16 @@ function RequestQueue() {
     setBusyId(id)
     const req = requests.find((r) => r.id === id)
 
+    const actionLabel = ACTION_LABEL[req?.action] || req?.action || ''
+    const reqName = req?.title || req?.target_id || ''
+
     if (req && TERRAFORM_TYPES.includes(req.resource_type)) {
       // Terraform 대상: DB 상태만 approved로 변경 → 로컬 에이전트가 처리
       await supabase.from('aws_requests').update({
         status: 'approved',
         reviewed_at: new Date().toISOString(),
       }).eq('id', id).eq('status', 'pending')
+      notify(`✅ **승인 (Terraform 대기)**\n${actionLabel}: ${reqName}\n→ 로컬 에이전트가 자동 적용 예정`)
     } else {
       // SG/WAF/IAM: Edge Function으로 즉시 적용
       try {
@@ -326,10 +331,16 @@ function RequestQueue() {
           body: JSON.stringify({ request_id: id, issue_key: !!opts?.issueKey }),
         })
         const data = await res.json()
-        if (!data.ok) alert('적용 실패: ' + data.error)
-        else if (data.result?.access_key_id && data.result?.secret_access_key) setRevealKey(data.result)
+        if (!data.ok) {
+          alert('적용 실패: ' + data.error)
+          notify(`❌ **적용 실패**\n${actionLabel}: ${reqName}\n오류: ${data.error}`)
+        } else {
+          notify(`✅ **승인 + 적용 완료**\n${actionLabel}: ${reqName}`)
+          if (data.result?.access_key_id && data.result?.secret_access_key) setRevealKey(data.result)
+        }
       } catch (e) {
         alert('적용 실패: ' + String(e))
+        notify(`❌ **적용 실패**\n${actionLabel}: ${reqName}\n오류: ${String(e)}`)
       }
     }
     await fetchRequests()
@@ -340,11 +351,15 @@ function RequestQueue() {
     const reason = prompt('거부 사유를 입력해주세요.')
     if (reason === null) return
     setBusyId(id)
+    const req = requests.find((r) => r.id === id)
+    const actionLabel = ACTION_LABEL[req?.action] || req?.action || ''
+    const reqName = req?.title || req?.target_id || ''
     await supabase.from('aws_requests').update({
       status: 'rejected',
       reviewed_at: new Date().toISOString(),
       error_message: reason.trim() || null,
     }).eq('id', id).eq('status', 'pending')
+    notify(`🚫 **신청 거부**\n${actionLabel}: ${reqName}${reason.trim() ? `\n사유: ${reason.trim()}` : ''}`)
     await fetchRequests()
     setBusyId(null)
   }

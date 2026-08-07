@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { GcpReqCard, GCP_REQ_STATUS_META } from '../lib/gcp'
+import { notify } from '../lib/discord'
 
 const pad = (n) => String(n).padStart(2, '0')
 const dateKey = (y, m, d) => `${y}-${pad(m + 1)}-${pad(d)}`
@@ -260,10 +261,13 @@ function RequestQueue() {
 
   const approve = async (id) => {
     setBusyId(id)
+    const req = requests.find((r) => r.id === id)
+    const reqName = req?.title || req?.target_id || ''
     await supabase.from('gcp_requests').update({
       status: 'approved',
       reviewed_at: new Date().toISOString(),
     }).eq('id', id).eq('status', 'pending')
+    notify(`✅ **GCP 신청 승인**\n${req?.action || ''}: ${reqName}`)
     await fetchRequests()
     setBusyId(null)
   }
@@ -272,11 +276,14 @@ function RequestQueue() {
     const reason = prompt('거부 사유를 입력해주세요.')
     if (reason === null) return
     setBusyId(id)
+    const req = requests.find((r) => r.id === id)
+    const reqName = req?.title || req?.target_id || ''
     await supabase.from('gcp_requests').update({
       status: 'rejected',
       reviewed_at: new Date().toISOString(),
       error_message: reason.trim() || null,
     }).eq('id', id).eq('status', 'pending')
+    notify(`🚫 **GCP 신청 거부**\n${req?.action || ''}: ${reqName}${reason.trim() ? `\n사유: ${reason.trim()}` : ''}`)
     await fetchRequests()
     setBusyId(null)
   }

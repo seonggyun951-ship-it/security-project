@@ -27,6 +27,18 @@ function loadEnv() {
 }
 loadEnv()
 
+const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK || 'https://discordapp.com/api/webhooks/1535279854721966153/Qb6htpTyiTN1QcI0-QBlf2v92C9X7qKuYSSsuIYf8D6lZNq_Ez3r_78n39fD0eix-Dny'
+
+async function notifyDiscord(message) {
+  try {
+    await fetch(DISCORD_WEBHOOK, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: message }),
+    })
+  } catch (_) {}
+}
+
 const SUPABASE_URL = process.env.SUPABASE_URL
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY
 if (!SUPABASE_URL || !SUPABASE_KEY) {
@@ -187,6 +199,7 @@ async function processApproved() {
         error_message: 'terraform plan 실패: ' + plan.output.slice(0, 500),
         applied_at: new Date().toISOString(),
       }).eq('id', req.id)
+      await notifyDiscord(`❌ **Terraform plan 실패**\n${req.resource_type}: ${req.title || req.id}\n${plan.output.slice(0, 200)}`)
       fs.unlinkSync(tfFile) // 실패한 .tf 정리
       continue
     }
@@ -200,6 +213,7 @@ async function processApproved() {
         error_message: 'terraform apply 실패: ' + apply.output.slice(0, 500),
         applied_at: new Date().toISOString(),
       }).eq('id', req.id)
+      await notifyDiscord(`❌ **Terraform apply 실패**\n${req.resource_type}: ${req.title || req.id}\n${apply.output.slice(0, 200)}`)
       // 실패해도 .tf 파일은 남겨둠 (디버깅용)
       continue
     }
@@ -219,6 +233,8 @@ async function processApproved() {
       result: { created_id: createdId, terraform: true },
       applied_at: new Date().toISOString(),
     }).eq('id', req.id)
+
+    await notifyDiscord(`🔧 **Terraform 적용 완료**\n${req.resource_type}: ${req.title || req.id}${createdId ? `\n생성 ID: ${createdId}` : ''}`)
   }
 }
 

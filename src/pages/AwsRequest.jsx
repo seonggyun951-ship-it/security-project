@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { notify } from '../lib/discord'
 import {
   WAF_MANAGED_RULE_GROUPS, WAF_FIELDS, WAF_POSITIONS, IAM_READONLY_POLICIES,
-  REQ_STATUS_META, ReqCard, reqTitle, reqDetailLines,
+  REQ_STATUS_META, ACTION_LABEL, ReqCard, reqTitle, reqDetailLines,
   emptyRule, parsePortRange, normalizeCidr,
   emptyWafRule,
 } from '../lib/aws'
@@ -600,6 +601,8 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
     setSubmitting(false)
     if (error) { alert('신청 실패: ' + error.message); return false }
     await fetchMyRequests()
+    const actionLabel = ACTION_LABEL[req.action] || req.action
+    notify(`📋 **새 신청 접수**\n${actionLabel}: ${req.title || ''}\n신청자: ${user?.email || '알 수 없음'}${req.reason ? `\n사유: ${req.reason}` : ''}`)
     alert('신청되었습니다. 승인자 검토 후 반영됩니다.')
     return true
   }

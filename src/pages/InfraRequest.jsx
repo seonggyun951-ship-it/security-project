@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { REQ_STATUS_META, reqTitle, reqDetailLines } from '../lib/aws'
+import { REQ_STATUS_META, ACTION_LABEL, reqTitle, reqDetailLines } from '../lib/aws'
+import { notify } from '../lib/discord'
 
 const AZ_OPTIONS = [
   { value: 'ap-northeast-2a', label: '2a' },
@@ -340,6 +341,8 @@ export default function InfraRequest({ mode = 'network' }) {
     setSubmitting(false)
     if (error) { alert('신청 실패: ' + error.message); return false }
     await fetchMyRequests()
+    const actionLabel = ACTION_LABEL[req.action] || req.action
+    notify(`📋 **새 인프라 신청**\n${actionLabel}: ${req.title || ''}\n신청자: ${user?.email || '알 수 없음'}${req.reason ? `\n사유: ${req.reason}` : ''}`)
     alert('신청되었습니다. 승인 후 자동 적용됩니다.')
     return true
   }
