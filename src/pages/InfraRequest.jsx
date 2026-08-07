@@ -75,7 +75,7 @@ function VpcForm({ onSubmit, submitting }) {
   )
 }
 
-function SubnetForm({ onSubmit, submitting }) {
+function SubnetForm({ onSubmit, submitting, vpcOptions }) {
   const [form, setForm] = useState({ name: '', vpc_id: '', cidr_block: '', availability_zone: 'ap-northeast-2a', public_ip: true, reason: '' })
   const reset = () => setForm({ name: '', vpc_id: '', cidr_block: '', availability_zone: 'ap-northeast-2a', public_ip: true, reason: '' })
 
@@ -98,8 +98,15 @@ function SubnetForm({ onSubmit, submitting }) {
           <input className="ac-input" placeholder="예: public-subnet-a" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         </div>
         <div className="ac-field">
-          <label className="ac-label">VPC ID</label>
-          <input className="ac-input" placeholder="vpc-0123abcd" value={form.vpc_id} onChange={(e) => setForm({ ...form, vpc_id: e.target.value })} />
+          <label className="ac-label">VPC</label>
+          {vpcOptions.length > 0 ? (
+            <select className="ac-input" value={form.vpc_id} onChange={(e) => setForm({ ...form, vpc_id: e.target.value })}>
+              <option value="">VPC 선택...</option>
+              {vpcOptions.map((v) => <option key={v.resource_id} value={v.resource_id}>{v.resource_name} ({v.resource_id})</option>)}
+            </select>
+          ) : (
+            <input className="ac-input" placeholder="vpc-0123abcd" value={form.vpc_id} onChange={(e) => setForm({ ...form, vpc_id: e.target.value })} />
+          )}
         </div>
       </div>
       <div className="ac-form-row">
@@ -184,7 +191,7 @@ function Ec2Form({ onSubmit, submitting }) {
   )
 }
 
-function IgwForm({ onSubmit, submitting }) {
+function IgwForm({ onSubmit, submitting, vpcOptions }) {
   const [form, setForm] = useState({ name: '', vpc_id: '', reason: '' })
   const reset = () => setForm({ name: '', vpc_id: '', reason: '' })
 
@@ -206,8 +213,15 @@ function IgwForm({ onSubmit, submitting }) {
           <input className="ac-input" placeholder="예: my-igw" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         </div>
         <div className="ac-field">
-          <label className="ac-label">연결할 VPC ID</label>
-          <input className="ac-input" placeholder="vpc-0123abcd" value={form.vpc_id} onChange={(e) => setForm({ ...form, vpc_id: e.target.value })} />
+          <label className="ac-label">연결할 VPC</label>
+          {vpcOptions.length > 0 ? (
+            <select className="ac-input" value={form.vpc_id} onChange={(e) => setForm({ ...form, vpc_id: e.target.value })}>
+              <option value="">VPC 선택...</option>
+              {vpcOptions.map((v) => <option key={v.resource_id} value={v.resource_id}>{v.resource_name} ({v.resource_id})</option>)}
+            </select>
+          ) : (
+            <input className="ac-input" placeholder="vpc-0123abcd" value={form.vpc_id} onChange={(e) => setForm({ ...form, vpc_id: e.target.value })} />
+          )}
         </div>
       </div>
       <div className="ac-form-row">
@@ -221,7 +235,7 @@ function IgwForm({ onSubmit, submitting }) {
   )
 }
 
-function RouteTableForm({ onSubmit, submitting }) {
+function RouteTableForm({ onSubmit, submitting, vpcOptions }) {
   const [form, setForm] = useState({ name: '', vpc_id: '', gateway_id: '', subnet_ids: '', reason: '' })
   const reset = () => setForm({ name: '', vpc_id: '', gateway_id: '', subnet_ids: '', reason: '' })
 
@@ -245,8 +259,15 @@ function RouteTableForm({ onSubmit, submitting }) {
           <input className="ac-input" placeholder="예: public-rt" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         </div>
         <div className="ac-field">
-          <label className="ac-label">VPC ID</label>
-          <input className="ac-input" placeholder="vpc-0123abcd" value={form.vpc_id} onChange={(e) => setForm({ ...form, vpc_id: e.target.value })} />
+          <label className="ac-label">VPC</label>
+          {vpcOptions.length > 0 ? (
+            <select className="ac-input" value={form.vpc_id} onChange={(e) => setForm({ ...form, vpc_id: e.target.value })}>
+              <option value="">VPC 선택...</option>
+              {vpcOptions.map((v) => <option key={v.resource_id} value={v.resource_id}>{v.resource_name} ({v.resource_id})</option>)}
+            </select>
+          ) : (
+            <input className="ac-input" placeholder="vpc-0123abcd" value={form.vpc_id} onChange={(e) => setForm({ ...form, vpc_id: e.target.value })} />
+          )}
         </div>
       </div>
       <div className="ac-form-row">
@@ -313,8 +334,22 @@ export default function InfraRequest({ mode = 'network' }) {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [user, setUser] = useState(null)
+  const [vpcOptions, setVpcOptions] = useState([])
 
   const typeKeys = types.map((t) => t.key)
+
+  const dedupeByResource = (rows) => {
+    const seen = new Set()
+    return (rows || []).filter((s) => (seen.has(s.resource_id) ? false : (seen.add(s.resource_id), true)))
+  }
+
+  const fetchVpcOptions = async () => {
+    const { data } = await supabase.from('aws_resource_snapshots')
+      .select('resource_id, resource_name, resource_type')
+      .eq('resource_type', 'vpc')
+      .order('collected_at', { ascending: false }).limit(100)
+    setVpcOptions(dedupeByResource(data || []))
+  }
 
   const fetchMyRequests = async () => {
     setLoading(true)
@@ -329,6 +364,7 @@ export default function InfraRequest({ mode = 'network' }) {
     setSelected(types[0].key)
     supabase.auth.getUser().then(({ data }) => setUser(data.user))
     fetchMyRequests()
+    fetchVpcOptions()
   }, [mode])
 
   const submitRequest = async (req) => {
@@ -367,7 +403,7 @@ export default function InfraRequest({ mode = 'network' }) {
               ))}
             </div>
           )}
-          {FormComponent && <FormComponent onSubmit={submitRequest} submitting={submitting} />}
+          {FormComponent && <FormComponent onSubmit={submitRequest} submitting={submitting} vpcOptions={vpcOptions} />}
         </div>
 
         <div className="ac-card ac-card-wide ac-card-muted">

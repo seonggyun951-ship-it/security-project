@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { EC2Client, DescribeSecurityGroupsCommand } from 'npm:@aws-sdk/client-ec2@3'
+import { EC2Client, DescribeSecurityGroupsCommand, DescribeVpcsCommand } from 'npm:@aws-sdk/client-ec2@3'
 import { IAMClient, ListRolesCommand, ListPoliciesCommand } from 'npm:@aws-sdk/client-iam@3'
 import { WAFV2Client, ListWebACLsCommand, GetWebACLCommand } from 'npm:@aws-sdk/client-wafv2@3'
 
@@ -43,6 +43,21 @@ async function collectSecurityGroups(ec2) {
     resource_name: sg.GroupName || sg.GroupId,
     region: null,
     raw_data: sg,
+  }))
+}
+
+async function collectVpcs(ec2) {
+  const vpcs = await paginate(
+    (token) => ec2.send(new DescribeVpcsCommand({ NextToken: token })),
+    (res) => res.Vpcs || [],
+    (res) => res.NextToken
+  )
+  return vpcs.map((v) => ({
+    resource_type: 'vpc',
+    resource_id: v.VpcId,
+    resource_name: (v.Tags || []).find((t) => t.Key === 'Name')?.Value || v.VpcId,
+    region: null,
+    raw_data: v,
   }))
 }
 
@@ -123,14 +138,15 @@ serve(async (req) => {
     const iam = new IAMClient({ region, credentials })
     const waf = new WAFV2Client({ region, credentials })
 
-    const [sgResults, roleResults, policyResults, wafResults] = await Promise.all([
+    const [sgResults, vpcResults, roleResults, policyResults, wafResults] = await Promise.all([
       collectSecurityGroups(ec2).catch((e) => { console.error('SG 수집 실패:', e); return [] }),
+      collectVpcs(ec2).catch((e) => { console.error('VPC 수집 실패:', e); return [] }),
       collectIamRoles(iam).catch((e) => { console.error('IAM Role 수집 실패:', e); return [] }),
       collectIamPolicies(iam).catch((e) => { console.error('IAM Policy 수집 실패:', e); return [] }),
       collectWaf(waf, region).catch((e) => { console.error('WAF 수집 실패:', e); return [] }),
     ])
 
-    const rows = [...sgResults, ...roleResults, ...policyResults, ...wafResults]
+    const rows = [...sgResults, ...vpcResults, ...roleResults, ...policyResults, ...wafResults]
 
     const supabase = createClient(Deno.env.get('SUPABASE_URL'), Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'))
 
@@ -158,6 +174,7 @@ serve(async (req) => {
       changed,
       counts: {
         security_group: sgResults.length,
+        vpc: vpcResults.length,
         iam_role: roleResults.length,
         iam_policy: policyResults.length,
         waf_web_acl: wafResults.length,
