@@ -123,6 +123,18 @@ serve(async (req) => {
       })
     }
 
+    // 수집은 AWS 설정 전반(SG 규칙/IAM/WAF)을 읽어 저장하므로 관리자만 실행한다.
+    // 화면에서 메뉴를 감추는 것만으로는 이 함수를 직접 호출하는 걸 막지 못한다.
+    const adminCheck = createClient(Deno.env.get('SUPABASE_URL'), Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'))
+    const { data: adminRow, error: adminErr } = await adminCheck
+      .from('admins').select('user_id').eq('user_id', user.id).maybeSingle()
+    if (adminErr) throw adminErr
+    if (!adminRow) {
+      return new Response(JSON.stringify({ ok: false, error: '관리자만 수집할 수 있습니다' }), {
+        headers: { ...cors, 'Content-Type': 'application/json' }, status: 403
+      })
+    }
+
     const accessKeyId = Deno.env.get('AWS_ACCESS_KEY')
     const secretAccessKey = Deno.env.get('AWS_ACCESS_SECRET_KEY')
     const region = Deno.env.get('AWS_REGION') || 'ap-northeast-2'

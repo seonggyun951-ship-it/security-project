@@ -65,7 +65,7 @@ export default function App() {
             <Route path="/request/infra-network" element={<InfraRequest mode="network" />} />
             <Route path="/request/infra-compute" element={<InfraRequest mode="compute" />} />
             <Route path="/cloud-automation" element={<AdminRoute><CloudAutomation /></AdminRoute>} />
-            <Route path="/aws-status" element={<AwsStatus />} />
+            <Route path="/aws-status" element={<AdminRoute><AwsStatus /></AdminRoute>} />
             <Route path="/phishing" element={<PhishingDetect />} />
             <Route path="/gcp/firewall" element={<GcpRequest resourceType="firewall_rule" />} />
             <Route path="/gcp/armor" element={<GcpRequest resourceType="cloud_armor" />} />

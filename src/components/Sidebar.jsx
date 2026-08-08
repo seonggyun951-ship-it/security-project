@@ -24,7 +24,7 @@ export const NAV_GROUPS = [
     label: 'AWS 관리',
     items: [
       { title: '관리자 승인', path: '/cloud-automation', adminOnly: true },
-      { title: 'AWS 현황', path: '/aws-status' },
+      { title: 'AWS 현황', path: '/aws-status', adminOnly: true },
     ],
   },
   {
