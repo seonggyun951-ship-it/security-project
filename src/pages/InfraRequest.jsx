@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { REQ_STATUS_META, ACTION_LABEL, ReqCard, reqTitle, reqDetailLines } from '../lib/aws'
 import { notify, summarizePayload } from '../lib/discord'
+import { requireUser } from '../lib/auth'
+import { fetchRows, callFunction } from '../lib/db'
+import ErrorBanner from '../components/ErrorBanner'
 
 const AZ_OPTIONS = [
   { value: 'ap-northeast-2a', label: '2a' },
@@ -490,6 +493,8 @@ export default function InfraRequest({ mode = 'network' }) {
   const [dateFilter, setDateFilter] = useState('')
   const [calOpen, setCalOpen] = useState(false)
   const [detailReq, setDetailReq] = useState(null)
+  const [listError, setListError] = useState(null)
+  const [optionsError, setOptionsError] = useState(null)
 
   const filteredRequests = dateFilter
     ? myRequests.filter((r) => localDateKey(r.requested_at) === dateFilter)
@@ -497,64 +502,80 @@ export default function InfraRequest({ mode = 'network' }) {
 
   const typeKeys = types.map((t) => t.key)
 
+  // 적용 완료된 신청에서 { id, 이름, 소속 VPC } 형태의 선택 옵션을 만든다.
+  const optionsFromApplied = (rows, idKey) => rows
+    .filter((r) => r.result?.created_id)
+    .map((r) => ({
+      [idKey]: r.result.created_id,
+      name: r.title || r.payload?.name || r.result.created_id,
+      vpc_id: r.payload?.vpc_id || '',
+    }))
+
   const fetchVpcOptions = async () => {
+    const errors = []
     const vpcMap = new Map()
-    // 1) DB: SG 스냅샷에서 VPC ID 추출
-    const { data: sgRows } = await supabase.from('aws_resource_snapshots')
-      .select('raw_data').eq('resource_type', 'security_group')
-      .order('collected_at', { ascending: false }).limit(200)
-    for (const row of (sgRows || [])) {
+
+    // 1) DB: SG 스냅샷에서 VPC ID 추출.
+    //    raw_data에 acl-, subnet- 같은 다른 ID도 들어있어서 vpc- 접두사로 걸러야 한다.
+    const sg = await fetchRows(
+      supabase.from('aws_resource_snapshots')
+        .select('raw_data').eq('resource_type', 'security_group')
+        .order('collected_at', { ascending: false }).limit(200),
+      'VPC 목록(스냅샷)')
+    if (sg.error) errors.push(sg.error)
+    for (const row of sg.rows) {
       const id = row.raw_data?.VpcId
       if (id && id.startsWith('vpc-') && !vpcMap.has(id)) vpcMap.set(id, { vpc_id: id, name: id })
     }
+
     // 2) DB: 적용된 VPC 신청에서 이름 보강
-    const { data: vpcReqs } = await supabase.from('aws_requests')
-      .select('title, payload, result').eq('resource_type', 'vpc').eq('status', 'applied')
-    for (const req of (vpcReqs || [])) {
+    const vpcReqs = await fetchRows(
+      supabase.from('aws_requests')
+        .select('title, payload, result').eq('resource_type', 'vpc').eq('status', 'applied'),
+      'VPC 목록(신청 이력)')
+    if (vpcReqs.error) errors.push(vpcReqs.error)
+    for (const req of vpcReqs.rows) {
       const id = req.result?.created_id
       if (id) vpcMap.set(id, { vpc_id: id, name: req.title || req.payload?.name || id })
     }
-    // 3) AWS API: Edge Function으로 실시간 VPC 목록 (추가 반영)
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const res = await fetch('https://phqiejtztwhychazikim.supabase.co/functions/v1/aws-list-vpcs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-      })
-      const json = await res.json()
-      if (json.ok) {
-        for (const v of (json.vpcs || [])) {
-          vpcMap.set(v.vpc_id, { vpc_id: v.vpc_id, name: v.name || v.vpc_id })
-        }
+
+    // 3) AWS API 실시간 조회로 덮어쓰기. 실패해도 위 DB 목록으로 동작해야 하므로 치명적 에러로 보지 않는다.
+    const live = await callFunction('aws-list-vpcs')
+    if (live.ok) {
+      for (const v of (live.vpcs || [])) {
+        vpcMap.set(v.vpc_id, { vpc_id: v.vpc_id, name: v.name || v.vpc_id })
       }
-    } catch (_) {}
+    } else {
+      console.warn('AWS 실시간 VPC 조회 실패, DB 목록만 사용:', live.error)
+    }
     setVpcOptions([...vpcMap.values()])
-    // IGW: 적용된 IGW 신청에서 가져오기
-    const { data: igwReqs } = await supabase.from('aws_requests')
-      .select('title, payload, result').eq('resource_type', 'internet_gateway').eq('status', 'applied')
-    const igws = (igwReqs || []).filter((r) => r.result?.created_id).map((r) => ({
-      igw_id: r.result.created_id,
-      name: r.title || r.payload?.name || r.result.created_id,
-      vpc_id: r.payload?.vpc_id || '',
-    }))
-    setIgwOptions(igws)
-    // 서브넷: 적용된 서브넷 신청에서 가져오기
-    const { data: subnetReqs } = await supabase.from('aws_requests')
-      .select('title, payload, result').eq('resource_type', 'subnet').eq('status', 'applied')
-    const subnets = (subnetReqs || []).filter((r) => r.result?.created_id).map((r) => ({
-      subnet_id: r.result.created_id,
-      name: r.title || r.payload?.name || r.result.created_id,
-      vpc_id: r.payload?.vpc_id || '',
-    }))
-    setSubnetOptions(subnets)
+
+    const igw = await fetchRows(
+      supabase.from('aws_requests')
+        .select('title, payload, result').eq('resource_type', 'internet_gateway').eq('status', 'applied'),
+      'IGW 목록')
+    if (igw.error) errors.push(igw.error)
+    setIgwOptions(optionsFromApplied(igw.rows, 'igw_id'))
+
+    const subnet = await fetchRows(
+      supabase.from('aws_requests')
+        .select('title, payload, result').eq('resource_type', 'subnet').eq('status', 'applied'),
+      '서브넷 목록')
+    if (subnet.error) errors.push(subnet.error)
+    setSubnetOptions(optionsFromApplied(subnet.rows, 'subnet_id'))
+
+    setOptionsError(errors.length ? errors.join(' / ') : null)
   }
 
   const fetchMyRequests = async () => {
     setLoading(true)
-    const { data } = await supabase.from('aws_requests').select('*')
-      .in('resource_type', typeKeys)
-      .order('requested_at', { ascending: false }).limit(50)
-    setMyRequests(data || [])
+    const { rows, error } = await fetchRows(
+      supabase.from('aws_requests').select('*')
+        .in('resource_type', typeKeys)
+        .order('requested_at', { ascending: false }).limit(50),
+      '신청 현황')
+    setMyRequests(rows)
+    setListError(error)
     setLoading(false)
   }
 
@@ -567,17 +588,24 @@ export default function InfraRequest({ mode = 'network' }) {
 
   const submitRequest = async (req) => {
     setSubmitting(true)
+    let me
+    try {
+      me = await requireUser()
+    } catch (e) {
+      setSubmitting(false); alert(e.message); return false
+    }
     const { error } = await supabase.from('aws_requests').insert({
       ...req,
-      requester_id: user?.id || null,
-      requester_email: user?.email || null,
+      status: 'pending',
+      requester_id: me.id,
+      requester_email: me.email,
     })
     setSubmitting(false)
     if (error) { alert('신청 실패: ' + error.message); return false }
     await fetchMyRequests()
     const actionLabel = ACTION_LABEL[req.action] || req.action
     const detail = summarizePayload(req.action, req.payload)
-    notify(`📋 **새 인프라 신청**\n${actionLabel}: ${req.title || ''}\n신청자: ${user?.email || '알 수 없음'}${detail ? `\n내용: ${detail}` : ''}${req.reason ? `\n사유: ${req.reason}` : ''}`)
+    notify(`📋 **새 인프라 신청**\n${actionLabel}: ${req.title || ''}\n신청자: ${me.email}${detail ? `\n내용: ${detail}` : ''}${req.reason ? `\n사유: ${req.reason}` : ''}`)
     alert('신청되었습니다. 승인 후 자동 적용됩니다.')
     return true
   }
@@ -588,6 +616,9 @@ export default function InfraRequest({ mode = 'network' }) {
     <div className="ac-page">
       <h2 className="ac-title">{meta.title}</h2>
       <p className="ac-sub">{meta.sub}</p>
+
+      <ErrorBanner message={optionsError} onRetry={fetchVpcOptions} />
+      <ErrorBanner message={listError} onRetry={fetchMyRequests} />
 
       {!loading && (() => {
         const seenKey = `seen_rejected_infra_${mode}`

@@ -252,10 +252,16 @@ serve(async (req) => {
     const { data: { user }, error: authError } = await userClient.auth.getUser(token)
     if (authError || !user) return json({ ok: false, error: '로그인이 필요합니다' }, 401)
 
+    const supabase = createClient(Deno.env.get('SUPABASE_URL'), Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'))
+
+    // 승인은 관리자만. 프론트에서 메뉴를 감추는 것만으로는 이 함수를 직접 호출하는 걸 막지 못한다.
+    const { data: adminRow, error: adminErr } = await supabase
+      .from('admins').select('user_id').eq('user_id', user.id).maybeSingle()
+    if (adminErr) throw adminErr
+    if (!adminRow) return json({ ok: false, error: '관리자만 승인할 수 있습니다' }, 403)
+
     const { request_id, issue_key } = await req.json()
     if (!request_id) throw new Error('request_id가 필요합니다')
-
-    const supabase = createClient(Deno.env.get('SUPABASE_URL'), Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'))
 
     // pending -> approved로 원자적 전환 (동시 승인 중복 적용 방지)
     const { data: claimed, error: claimErr } = await supabase

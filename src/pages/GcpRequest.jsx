@@ -6,6 +6,9 @@ import {
   emptyFirewallRule, emptyArmorRule,
 } from '../lib/gcp'
 import { notify, summarizePayload } from '../lib/discord'
+import { requireUser } from '../lib/auth'
+import { fetchRows } from '../lib/db'
+import ErrorBanner from '../components/ErrorBanner'
 
 function FirewallForm({ onSubmit, submitting }) {
   const [form, setForm] = useState({ name: '', network: 'default', reason: '' })
@@ -297,12 +300,16 @@ export default function GcpRequest({ resourceType = 'firewall_rule' }) {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [user, setUser] = useState(null)
+  const [loadError, setLoadError] = useState(null)
 
   const fetchMyRequests = async () => {
     setLoading(true)
-    const { data } = await supabase.from('gcp_requests').select('*').eq('resource_type', resourceType)
-      .order('requested_at', { ascending: false }).limit(50)
-    setMyRequests(data || [])
+    const { rows, error } = await fetchRows(
+      supabase.from('gcp_requests').select('*').eq('resource_type', resourceType)
+        .order('requested_at', { ascending: false }).limit(50),
+      'GCP 신청 현황')
+    setMyRequests(rows)
+    setLoadError(error)
     setLoading(false)
   }
 
@@ -313,10 +320,17 @@ export default function GcpRequest({ resourceType = 'firewall_rule' }) {
 
   const submitRequest = async (req) => {
     setSubmitting(true)
+    let me
+    try {
+      me = await requireUser()
+    } catch (e) {
+      setSubmitting(false); alert(e.message); return false
+    }
     const { error } = await supabase.from('gcp_requests').insert({
       ...req,
-      requester_id: user?.id || null,
-      requester_email: user?.email || null,
+      status: 'pending',
+      requester_id: me.id,
+      requester_email: me.email,
     })
     setSubmitting(false)
     if (error) { alert('신청 실패: ' + error.message); return false }
@@ -324,7 +338,7 @@ export default function GcpRequest({ resourceType = 'firewall_rule' }) {
     const GCP_ACTION_LABEL = { create_firewall: 'Firewall 규칙 생성', create_armor_policy: 'Cloud Armor 정책 생성', add_armor_rules: 'Cloud Armor 규칙 추가', create_service_account: '서비스 계정 생성' }
     const actionLabel = GCP_ACTION_LABEL[req.action] || req.action
     const detail = summarizePayload(req.action, req.payload)
-    notify(`📋 **새 GCP 신청**\n${actionLabel}: ${req.title || ''}\n신청자: ${user?.email || '알 수 없음'}${detail ? `\n내용: ${detail}` : ''}${req.reason ? `\n사유: ${req.reason}` : ''}`)
+    notify(`📋 **새 GCP 신청**\n${actionLabel}: ${req.title || ''}\n신청자: ${me.email}${detail ? `\n내용: ${detail}` : ''}${req.reason ? `\n사유: ${req.reason}` : ''}`)
     alert('신청되었습니다. 승인자 검토 후 반영됩니다.')
     return true
   }
@@ -335,6 +349,8 @@ export default function GcpRequest({ resourceType = 'firewall_rule' }) {
     <div className="ac-page">
       <h2 className="ac-title">{meta.title}</h2>
       <p className="ac-sub">{meta.sub} 승인자 검토 후 실제 GCP에 반영됩니다.</p>
+
+      <ErrorBanner message={loadError} onRetry={fetchMyRequests} />
 
       <div className="ac-grid">
         <div className="ac-card ac-card-wide">

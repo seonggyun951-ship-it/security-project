@@ -67,7 +67,15 @@ function analyzeS3(data) {
           findings.push({ severity: 'high', title: '버킷 정책에 퍼블릭 Principal 허용', detail: `Statement "${stmt.Sid || 'unnamed'}" — Principal: *`, why: '버킷 정책에서 모든 사용자(Principal: *)에게 허용하면 인증 없이 버킷에 접근 가능합니다.' })
         }
       })
-    } catch {}
+    } catch (e) {
+      // 파싱 실패를 조용히 넘기면 "정책에 문제 없음"으로 보인다. 점검하지 못했다는 사실을 드러내야 한다.
+      findings.push({
+        severity: 'medium',
+        title: '버킷 정책을 해석하지 못했습니다',
+        detail: `JSON 파싱 실패: ${e.message}`,
+        why: '정책을 읽지 못해 퍼블릭 접근 허용 여부를 점검하지 못했습니다. 정책 원문을 직접 확인해주세요.',
+      })
+    }
   }
 
   if (!data.ServerSideEncryptionConfiguration) {

@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { RESOURCE_META, ReqCard } from '../lib/aws'
+import { fetchRows } from '../lib/db'
+import ErrorBanner from '../components/ErrorBanner'
 
 // 리소스별 최신 스냅샷만 남기고, 변경 이력이 있는 리소스 수를 센다
 function countChangedResources(snapshots) {
@@ -76,27 +78,38 @@ export default function Home() {
     return new Date(t.getFullYear(), t.getMonth(), 1)
   })
   const [detail, setDetail] = useState(null) // { date, items, loading }
+  const [loadError, setLoadError] = useState(null)
 
-  useEffect(() => {
-    const load = async () => {
-      const [reqRes, snapRes] = await Promise.all([
-        supabase.from('aws_requests').select('id, status, resource_type, requested_at, reviewed_at, applied_at'),
-        supabase.from('aws_resource_snapshots').select('resource_type, resource_id, collected_at').order('collected_at', { ascending: false }).limit(200),
-      ])
-      setRows(reqRes.data || [])
-      setSnapshots(snapRes.data || [])
-      setLoading(false)
-    }
-    load()
-  }, [])
+  const load = async () => {
+    setLoading(true)
+    const [reqRes, snapRes] = await Promise.all([
+      fetchRows(
+        supabase.from('aws_requests')
+          .select('id, status, resource_type, requested_at, reviewed_at, applied_at'),
+        '신청 통계'),
+      fetchRows(
+        supabase.from('aws_resource_snapshots')
+          .select('resource_type, resource_id, collected_at')
+          .order('collected_at', { ascending: false }).limit(200),
+        '리소스 스냅샷'),
+    ])
+    setRows(reqRes.rows)
+    setSnapshots(snapRes.rows)
+    setLoadError(reqRes.error || snapRes.error)
+    setLoading(false)
+  }
+
+  useEffect(() => { load() }, [])
 
   // 막대를 눌렀을 때만 그날 신청 상세를 조회한다 (미리 다 받아두지 않음)
   const openDay = async (dateStr, ids) => {
     if (ids.length === 0) return
     setDetail({ date: dateStr, items: [], loading: true })
-    const { data } = await supabase.from('aws_requests').select('*')
-      .in('id', ids).order('requested_at', { ascending: false })
-    setDetail({ date: dateStr, items: data || [], loading: false })
+    const { rows, error } = await fetchRows(
+      supabase.from('aws_requests').select('*')
+        .in('id', ids).order('requested_at', { ascending: false }),
+      '신청 상세')
+    setDetail({ date: dateStr, items: rows, loading: false, error })
   }
 
   const pendingCount = rows.filter((r) => r.status === 'pending').length
@@ -139,6 +152,8 @@ export default function Home() {
           ? `마지막 수집: ${new Date(lastCollected).toLocaleString('ko-KR')}`
           : '아직 수집 이력이 없습니다.'}
       </p>
+
+      <ErrorBanner message={loadError} onRetry={load} />
 
       <div className="dash-stats">
         <StatCard

@@ -16,6 +16,23 @@ import PhishingDetect from './pages/PhishingDetect'
 import GcpRequest from './pages/GcpRequest'
 import GcpApproval from './pages/GcpApproval'
 import InfraRequest from './pages/InfraRequest'
+import { useIsAdmin } from './lib/auth'
+
+// 관리자 전용 라우트 — 사이드바에서 감춰도 URL을 직접 치면 들어와지므로 여기서도 막는다.
+// (최종 차단은 RLS와 Edge Function이 하고, 이건 화면상 안내용)
+function AdminRoute({ children }) {
+  const isAdmin = useIsAdmin()
+  if (isAdmin === null) return <div className="ac-page"><div className="ac-empty">권한 확인 중...</div></div>
+  if (!isAdmin) {
+    return (
+      <div className="ac-page">
+        <h2 className="ac-title">접근 권한 없음</h2>
+        <p className="ac-sub">이 페이지는 관리자만 사용할 수 있습니다.</p>
+      </div>
+    )
+  }
+  return children
+}
 
 export default function App() {
   const [session, setSession] = useState(undefined)
@@ -47,13 +64,13 @@ export default function App() {
             <Route path="/request/iam" element={<AwsRequest resourceType="iam_user" />} />
             <Route path="/request/infra-network" element={<InfraRequest mode="network" />} />
             <Route path="/request/infra-compute" element={<InfraRequest mode="compute" />} />
-            <Route path="/cloud-automation" element={<CloudAutomation />} />
+            <Route path="/cloud-automation" element={<AdminRoute><CloudAutomation /></AdminRoute>} />
             <Route path="/aws-status" element={<AwsStatus />} />
             <Route path="/phishing" element={<PhishingDetect />} />
             <Route path="/gcp/firewall" element={<GcpRequest resourceType="firewall_rule" />} />
             <Route path="/gcp/armor" element={<GcpRequest resourceType="cloud_armor" />} />
             <Route path="/gcp/iam" element={<GcpRequest resourceType="service_account" />} />
-            <Route path="/gcp/approval" element={<GcpApproval />} />
+            <Route path="/gcp/approval" element={<AdminRoute><GcpApproval /></AdminRoute>} />
           </Routes>
         </main>
       </div>

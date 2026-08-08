@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { GcpReqCard, GCP_REQ_STATUS_META } from '../lib/gcp'
 import { notify } from '../lib/discord'
+import { fetchRows, runWrite } from '../lib/db'
+import ErrorBanner from '../components/ErrorBanner'
 
 const pad = (n) => String(n).padStart(2, '0')
 const dateKey = (y, m, d) => `${y}-${pad(m + 1)}-${pad(d)}`
@@ -246,14 +248,18 @@ function RequestQueue() {
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState(null)
+  const [loadError, setLoadError] = useState(null)
 
   const pendingRequests = requests.filter((r) => r.status === 'pending')
   const historyRequests = requests.filter((r) => r.status !== 'pending')
 
   const fetchRequests = async () => {
     setLoading(true)
-    const { data } = await supabase.from('gcp_requests').select('*').order('requested_at', { ascending: false }).limit(100)
-    setRequests(data || [])
+    const { rows, error } = await fetchRows(
+      supabase.from('gcp_requests').select('*').order('requested_at', { ascending: false }).limit(100),
+      'GCP 신청 목록')
+    setRequests(rows)
+    setLoadError(error)
     setLoading(false)
   }
 
@@ -263,11 +269,16 @@ function RequestQueue() {
     setBusyId(id)
     const req = requests.find((r) => r.id === id)
     const reqName = req?.title || req?.target_id || ''
-    await supabase.from('gcp_requests').update({
-      status: 'approved',
-      reviewed_at: new Date().toISOString(),
-    }).eq('id', id).eq('status', 'pending')
-    notify(`✅ **GCP 신청 승인**\n${req?.action || ''}: ${reqName}`)
+    const { ok, error } = await runWrite(
+      supabase.from('gcp_requests')
+        .update({ status: 'approved', reviewed_at: new Date().toISOString() })
+        .eq('id', id).eq('status', 'pending').select(),
+      'GCP 승인')
+    if (!ok) {
+      alert(error)
+    } else {
+      notify(`✅ **GCP 신청 승인**\n${req?.action || ''}: ${reqName}`)
+    }
     await fetchRequests()
     setBusyId(null)
   }
@@ -278,12 +289,18 @@ function RequestQueue() {
     setBusyId(id)
     const req = requests.find((r) => r.id === id)
     const reqName = req?.title || req?.target_id || ''
-    await supabase.from('gcp_requests').update({
-      status: 'rejected',
-      reviewed_at: new Date().toISOString(),
-      error_message: reason.trim() || null,
-    }).eq('id', id).eq('status', 'pending')
-    notify(`🚫 **GCP 신청 거부**\n${req?.action || ''}: ${reqName}${reason.trim() ? `\n사유: ${reason.trim()}` : ''}`)
+    const { ok, error } = await runWrite(
+      supabase.from('gcp_requests').update({
+        status: 'rejected',
+        reviewed_at: new Date().toISOString(),
+        error_message: reason.trim() || null,
+      }).eq('id', id).eq('status', 'pending').select(),
+      'GCP 거부')
+    if (!ok) {
+      alert(error)
+    } else {
+      notify(`🚫 **GCP 신청 거부**\n${req?.action || ''}: ${reqName}${reason.trim() ? `\n사유: ${reason.trim()}` : ''}`)
+    }
     await fetchRequests()
     setBusyId(null)
   }
@@ -291,14 +308,16 @@ function RequestQueue() {
   const removeRequest = async (id) => {
     if (!confirm('이 신청을 목록에서 삭제할까요?')) return
     setBusyId(id)
-    const { error } = await supabase.from('gcp_requests').delete().eq('id', id)
+    const { ok, error } = await runWrite(
+      supabase.from('gcp_requests').delete().eq('id', id).select(), 'GCP 삭제')
     setBusyId(null)
-    if (error) return alert('삭제 실패: ' + error.message)
+    if (!ok) return alert(error)
     await fetchRequests()
   }
 
   return (
     <>
+      <ErrorBanner message={loadError} onRetry={fetchRequests} />
       <div className={`ac-card ac-card-wide ${pendingRequests.length > 0 ? 'ac-card-alert' : ''}`}>
         <div className="ac-card-title">
           처리 대기중

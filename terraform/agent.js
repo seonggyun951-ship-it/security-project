@@ -223,13 +223,28 @@ async function processApproved() {
       continue
     }
 
-    // state에서 생성된 리소스 ID 추출
+    // state에서 생성된 리소스 ID 추출.
+    // 정규식이 느슨하면 availability_zone_id 같은 다른 '*_id' 필드가 먼저 잡힌다(실제로 서브넷 ID 자리에
+    // apne2-az1이 저장돼서 라우팅 테이블 연결이 깨진 적 있음). 줄 시작의 id 필드만 매칭한다.
     let createdId = null
+    const resName = `aws_${req.resource_type === 'ec2_instance' ? 'instance' : req.resource_type}.req_${req.id.replace(/-/g, '_')}`
     try {
-      const state = runTerraform(`state show aws_${req.resource_type === 'ec2_instance' ? 'instance' : req.resource_type}.req_${req.id.replace(/-/g, '_')} -no-color`)
-      const idMatch = state.output.match(/^\s+id\s+=\s+"([^"]+)"/m)
-      if (idMatch) createdId = idMatch[1]
-    } catch (_) {}
+      const state = runTerraform(`state show ${resName} -no-color`)
+      if (!state.ok) {
+        console.error('    state show 실패:', state.output.slice(0, 200))
+      } else {
+        const idMatch = state.output.match(/^\s+id\s+=\s+"([^"]+)"/m)
+        if (idMatch) createdId = idMatch[1]
+        else console.error('    state에서 id를 찾지 못함:', resName)
+      }
+    } catch (e) {
+      console.error('    ID 추출 에러:', e.message)
+    }
+    if (!createdId) {
+      // ID가 없으면 이후 서브넷/IGW 드롭다운에 이 리소스가 안 뜬다. 반드시 눈에 띄게 알린다.
+      console.error(`    ⚠️ 생성 ID를 확인하지 못했습니다 (${resName}) — 드롭다운 목록에 표시되지 않습니다`)
+      await notifyDiscord(`⚠️ **적용은 됐지만 ID 확인 실패**\n${req.resource_type}: ${req.title || req.id}\n드롭다운 목록에 안 뜰 수 있습니다`)
+    }
 
     console.log('    ✅ 적용 완료', createdId ? `→ ${createdId}` : '')
 

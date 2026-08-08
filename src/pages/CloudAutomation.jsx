@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { ReqCard, REQ_STATUS_META, ACTION_LABEL } from '../lib/aws'
 import { notify } from '../lib/discord'
-
-const AWS_REQUEST_APPLY_URL = 'https://phqiejtztwhychazikim.supabase.co/functions/v1/aws-request-apply'
+import { fetchRows, runWrite, callFunction } from '../lib/db'
+import ErrorBanner from '../components/ErrorBanner'
 
 const pad = (n) => String(n).padStart(2, '0')
 const dateKey = (y, m, d) => `${y}-${pad(m + 1)}-${pad(d)}`
@@ -291,14 +291,18 @@ function RequestQueue() {
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState(null)
   const [revealKey, setRevealKey] = useState(null)
+  const [loadError, setLoadError] = useState(null)
 
   const pendingRequests = requests.filter((r) => r.status === 'pending')
   const historyRequests = requests.filter((r) => r.status !== 'pending')
 
   const fetchRequests = async () => {
     setLoading(true)
-    const { data } = await supabase.from('aws_requests').select('*').order('requested_at', { ascending: false }).limit(100)
-    setRequests(data || [])
+    const { rows, error } = await fetchRows(
+      supabase.from('aws_requests').select('*').order('requested_at', { ascending: false }).limit(100),
+      '신청 목록')
+    setRequests(rows)
+    setLoadError(error)
     setLoading(false)
   }
 
@@ -315,32 +319,27 @@ function RequestQueue() {
     const reqName = req?.title || req?.target_id || ''
 
     if (req && TERRAFORM_TYPES.includes(req.resource_type)) {
-      // Terraform 대상: DB 상태만 approved로 변경 → 로컬 에이전트가 처리
-      await supabase.from('aws_requests').update({
-        status: 'approved',
-        reviewed_at: new Date().toISOString(),
-      }).eq('id', id).eq('status', 'pending')
-      notify(`✅ **승인 (Terraform 대기)**\n${actionLabel}: ${reqName}\n→ 로컬 에이전트가 자동 적용 예정`)
+      // Terraform 대상: DB 상태만 approved로 변경 → 로컬 에이전트가 처리.
+      // RLS로 관리자만 update 가능하므로 실패할 수 있다. 조용히 넘기면 승인된 줄 착각한다.
+      const { ok, error } = await runWrite(
+        supabase.from('aws_requests')
+          .update({ status: 'approved', reviewed_at: new Date().toISOString() })
+          .eq('id', id).eq('status', 'pending').select(),
+        '승인')
+      if (!ok) {
+        alert(error)
+      } else {
+        notify(`✅ **승인 (Terraform 대기)**\n${actionLabel}: ${reqName}\n→ 로컬 에이전트가 자동 적용 예정`)
+      }
     } else {
       // SG/WAF/IAM: Edge Function으로 즉시 적용
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        const res = await fetch(AWS_REQUEST_APPLY_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-          body: JSON.stringify({ request_id: id, issue_key: !!opts?.issueKey }),
-        })
-        const data = await res.json()
-        if (!data.ok) {
-          alert('적용 실패: ' + data.error)
-          notify(`❌ **적용 실패**\n${actionLabel}: ${reqName}\n오류: ${data.error}`)
-        } else {
-          notify(`✅ **승인 + 적용 완료**\n${actionLabel}: ${reqName}`)
-          if (data.result?.access_key_id && data.result?.secret_access_key) setRevealKey(data.result)
-        }
-      } catch (e) {
-        alert('적용 실패: ' + String(e))
-        notify(`❌ **적용 실패**\n${actionLabel}: ${reqName}\n오류: ${String(e)}`)
+      const data = await callFunction('aws-request-apply', { request_id: id, issue_key: !!opts?.issueKey })
+      if (!data.ok) {
+        alert('적용 실패: ' + data.error)
+        notify(`❌ **적용 실패**\n${actionLabel}: ${reqName}\n오류: ${data.error}`)
+      } else {
+        notify(`✅ **승인 + 적용 완료**\n${actionLabel}: ${reqName}`)
+        if (data.result?.access_key_id && data.result?.secret_access_key) setRevealKey(data.result)
       }
     }
     await fetchRequests()
@@ -354,12 +353,18 @@ function RequestQueue() {
     const req = requests.find((r) => r.id === id)
     const actionLabel = ACTION_LABEL[req?.action] || req?.action || ''
     const reqName = req?.title || req?.target_id || ''
-    await supabase.from('aws_requests').update({
-      status: 'rejected',
-      reviewed_at: new Date().toISOString(),
-      error_message: reason.trim() || null,
-    }).eq('id', id).eq('status', 'pending')
-    notify(`🚫 **신청 거부**\n${actionLabel}: ${reqName}${reason.trim() ? `\n사유: ${reason.trim()}` : ''}`)
+    const { ok, error } = await runWrite(
+      supabase.from('aws_requests').update({
+        status: 'rejected',
+        reviewed_at: new Date().toISOString(),
+        error_message: reason.trim() || null,
+      }).eq('id', id).eq('status', 'pending').select(),
+      '거부')
+    if (!ok) {
+      alert(error)
+    } else {
+      notify(`🚫 **신청 거부**\n${actionLabel}: ${reqName}${reason.trim() ? `\n사유: ${reason.trim()}` : ''}`)
+    }
     await fetchRequests()
     setBusyId(null)
   }
@@ -367,15 +372,17 @@ function RequestQueue() {
   const removeRequest = async (id) => {
     if (!confirm('이 신청을 목록에서 삭제할까요?')) return
     setBusyId(id)
-    const { error } = await supabase.from('aws_requests').delete().eq('id', id)
+    const { ok, error } = await runWrite(
+      supabase.from('aws_requests').delete().eq('id', id).select(), '삭제')
     setBusyId(null)
-    if (error) return alert('삭제 실패: ' + error.message)
+    if (!ok) return alert(error)
     await fetchRequests()
   }
 
   return (
     <>
       {revealKey && <RevealKeyPopup result={revealKey} onClose={() => setRevealKey(null)} />}
+      <ErrorBanner message={loadError} onRetry={fetchRequests} />
       <div className={`ac-card ac-card-wide ${pendingRequests.length > 0 ? 'ac-card-alert' : ''}`}>
         <div className="ac-card-title">
           처리 대기중

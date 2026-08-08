@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { RESOURCE_META } from '../lib/aws'
-
-const AWS_COLLECT_URL = 'https://phqiejtztwhychazikim.supabase.co/functions/v1/aws-collect'
+import { fetchRows, callFunction } from '../lib/db'
+import ErrorBanner from '../components/ErrorBanner'
 
 // 두 줄 배열의 LCS 기반 라인 diff
 function diffLines(oldLines, newLines) {
@@ -60,6 +60,7 @@ export default function AwsStatus() {
   const [collectResult, setCollectResult] = useState(null)
   const [snapshots, setSnapshots] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(null)
   const [expanded, setExpanded] = useState(() => new Set())
   const [expandedHistory, setExpandedHistory] = useState(() => new Set())
   const [filter, setFilter] = useState('all')
@@ -68,8 +69,12 @@ export default function AwsStatus() {
 
   const fetchSnapshots = async () => {
     setLoading(true)
-    const { data } = await supabase.from('aws_resource_snapshots').select('*').order('collected_at', { ascending: false }).limit(100)
-    setSnapshots(data || [])
+    const { rows, error } = await fetchRows(
+      supabase.from('aws_resource_snapshots').select('*')
+        .order('collected_at', { ascending: false }).limit(100),
+      '리소스 스냅샷')
+    setSnapshots(rows)
+    setLoadError(error)
     setLoading(false)
   }
 
@@ -78,19 +83,9 @@ export default function AwsStatus() {
   const runCollect = async () => {
     setCollecting(true)
     setCollectResult(null)
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const res = await fetch(AWS_COLLECT_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-        body: JSON.stringify({}),
-      })
-      const data = await res.json()
-      setCollectResult(data)
-      if (data.ok) await fetchSnapshots()
-    } catch (e) {
-      setCollectResult({ ok: false, error: String(e) })
-    }
+    const data = await callFunction('aws-collect')
+    setCollectResult(data)
+    if (data.ok) await fetchSnapshots()
     setCollecting(false)
   }
 
@@ -123,6 +118,8 @@ export default function AwsStatus() {
     <div className="ac-page">
       <h2 className="ac-title">AWS 현황</h2>
       <p className="ac-sub">AWS에 실제로 적용된 설정을 수집해서 변경 이력을 추적합니다.</p>
+
+      <ErrorBanner message={loadError} onRetry={fetchSnapshots} />
 
       <div className="ac-grid">
       <details className="ac-card ac-card-muted">

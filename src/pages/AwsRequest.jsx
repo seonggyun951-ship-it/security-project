@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { notify, summarizePayload } from '../lib/discord'
+import { requireUser } from '../lib/auth'
+import { fetchRows } from '../lib/db'
+import ErrorBanner from '../components/ErrorBanner'
 import {
   WAF_MANAGED_RULE_GROUPS, WAF_FIELDS, WAF_POSITIONS, IAM_READONLY_POLICIES,
   REQ_STATUS_META, ACTION_LABEL, ReqCard, reqTitle, reqDetailLines,
@@ -560,6 +563,8 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
   const [dateFilter, setDateFilter] = useState('')
   const [calOpen, setCalOpen] = useState(false)
   const [detailReq, setDetailReq] = useState(null)
+  const [listError, setListError] = useState(null)
+  const [optionsError, setOptionsError] = useState(null)
 
   const filteredRequests = dateFilter
     ? myRequests.filter((r) => localDateKey(r.requested_at) === dateFilter)
@@ -571,17 +576,24 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
   }
 
   const fetchOptions = async () => {
-    const { data } = await supabase.from('aws_resource_snapshots')
-      .select('resource_id, resource_name, resource_type').order('collected_at', { ascending: false }).limit(400)
-    setSgOptions(dedupeByResource((data || []).filter((s) => s.resource_type === 'security_group')))
-    setAclOptions(dedupeByResource((data || []).filter((s) => s.resource_type === 'waf_web_acl')))
+    const { rows, error } = await fetchRows(
+      supabase.from('aws_resource_snapshots')
+        .select('resource_id, resource_name, resource_type')
+        .order('collected_at', { ascending: false }).limit(400),
+      '리소스 목록')
+    setSgOptions(dedupeByResource(rows.filter((s) => s.resource_type === 'security_group')))
+    setAclOptions(dedupeByResource(rows.filter((s) => s.resource_type === 'waf_web_acl')))
+    setOptionsError(error)
   }
 
   const fetchMyRequests = async () => {
     setLoading(true)
-    const { data } = await supabase.from('aws_requests').select('*').eq('resource_type', resourceType)
-      .order('requested_at', { ascending: false }).limit(50)
-    setMyRequests(data || [])
+    const { rows, error } = await fetchRows(
+      supabase.from('aws_requests').select('*').eq('resource_type', resourceType)
+        .order('requested_at', { ascending: false }).limit(50),
+      '신청 현황')
+    setMyRequests(rows)
+    setListError(error)
     setLoading(false)
   }
 
@@ -593,17 +605,24 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
 
   const submitRequest = async (req) => {
     setSubmitting(true)
+    let me
+    try {
+      me = await requireUser()
+    } catch (e) {
+      setSubmitting(false); alert(e.message); return false
+    }
     const { error } = await supabase.from('aws_requests').insert({
       ...req,
-      requester_id: user?.id || null,
-      requester_email: user?.email || null,
+      status: 'pending',
+      requester_id: me.id,
+      requester_email: me.email,
     })
     setSubmitting(false)
     if (error) { alert('신청 실패: ' + error.message); return false }
     await fetchMyRequests()
     const actionLabel = ACTION_LABEL[req.action] || req.action
     const detail = summarizePayload(req.action, req.payload)
-    notify(`📋 **새 신청 접수**\n${actionLabel}: ${req.title || ''}\n신청자: ${user?.email || '알 수 없음'}${detail ? `\n내용: ${detail}` : ''}${req.reason ? `\n사유: ${req.reason}` : ''}`)
+    notify(`📋 **새 신청 접수**\n${actionLabel}: ${req.title || ''}\n신청자: ${me.email}${detail ? `\n내용: ${detail}` : ''}${req.reason ? `\n사유: ${req.reason}` : ''}`)
     alert('신청되었습니다. 승인자 검토 후 반영됩니다.')
     return true
   }
@@ -631,6 +650,9 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
     <div className="ac-page">
       <h2 className="ac-title">{meta.title}</h2>
       <p className="ac-sub">{meta.sub} 승인자 검토 후 실제 AWS에 반영됩니다.</p>
+
+      <ErrorBanner message={optionsError} onRetry={fetchOptions} />
+      <ErrorBanner message={listError} onRetry={fetchMyRequests} />
 
       {!loading && unseenRejected.length > 0 && (
         <div className="ac-reject-banner">

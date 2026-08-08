@@ -1,14 +1,19 @@
 const WEBHOOK_URL = 'https://discordapp.com/api/webhooks/1535279854721966153/Qb6htpTyiTN1QcI0-QBlf2v92C9X7qKuYSSsuIYf8D6lZNq_Ez3r_78n39fD0eix-Dny'
 
+// 알림 실패가 본 기능(신청/승인)을 막으면 안 되므로 throw하지 않는다.
+// 다만 조용히 삼키면 "알림이 안 온다"는 제보를 받았을 때 원인을 알 수 없으므로 콘솔에는 반드시 남긴다.
 export async function notify(message) {
   try {
-    await fetch(WEBHOOK_URL, {
+    const res = await fetch(WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: message }),
     })
-  } catch (_) {
-    // 알림 실패해도 본 기능에 영향 없도록
+    if (!res.ok) {
+      console.error('Discord 알림 실패:', res.status, await res.text().catch(() => ''))
+    }
+  } catch (e) {
+    console.error('Discord 알림 에러:', e?.message || e)
   }
 }
 

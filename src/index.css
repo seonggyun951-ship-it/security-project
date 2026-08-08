@@ -492,6 +492,11 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .ac-minical-cell.is-selected { background: #0284c7; color: #fff; }
 .ac-minical-empty { visibility: hidden; }
 
+/* 조회/처리 실패 배너 */
+.ac-error-banner { display: flex; align-items: center; gap: 12px; background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: 13px; }
+.ac-error-banner-text { flex: 1; word-break: break-word; }
+.ac-error-banner-btn { flex-shrink: 0; padding: 2px 10px; font-size: 12px; }
+
 /* 거부 알림 */
 .ac-myreq-rejected { border-left: 3px solid #ef4444; }
 .ac-reject-box { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; border-radius: 6px; padding: 8px 12px; font-size: 13px; font-weight: 500; }
