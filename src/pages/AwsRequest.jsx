@@ -4,6 +4,7 @@ import { notify, summarizePayload } from '../lib/discord'
 import { requireUser } from '../lib/auth'
 import { fetchRows } from '../lib/db'
 import ErrorBanner from '../components/ErrorBanner'
+import { WEEKDAYS, dateKey, localDateKey, todayKey, monthCells } from '../lib/date'
 import {
   WAF_MANAGED_RULE_GROUPS, WAF_FIELDS, WAF_POSITIONS, IAM_READONLY_POLICIES,
   REQ_STATUS_META, ACTION_LABEL, ReqCard, reqTitle, reqDetailLines,
@@ -416,10 +417,6 @@ function IamUserForm({ onSubmit, submitting }) {
 
 const STATUS_GROUP_ORDER = ['pending', 'failed', 'applied', 'rejected']
 
-function localDateKey(ts) {
-  const d = new Date(ts)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
 
 function MyReqRow({ r }) {
   const [open, setOpen] = useState(false)
@@ -494,8 +491,6 @@ function MyReqGrouped({ requests }) {
   )
 }
 
-const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
-
 function MiniCal({ requests, selected, onSelect, onClose }) {
   const today = new Date()
   const base = selected ? new Date(selected + 'T00:00:00') : today
@@ -503,18 +498,11 @@ function MiniCal({ requests, selected, onSelect, onClose }) {
 
   const year = viewDate.getFullYear()
   const month = viewDate.getMonth()
-  const firstDay = new Date(year, month, 1).getDay()
-  const daysInMonth = new Date(year, month + 1, 0).getDate()
-  const todayKey = localDateKey(today)
+  const cells = monthCells(year, month)
+  const tKey = todayKey()
 
   const hasData = new Set()
   for (const r of requests) hasData.add(localDateKey(r.requested_at))
-
-  const cells = []
-  for (let i = 0; i < firstDay; i++) cells.push(null)
-  for (let d = 1; d <= daysInMonth; d++) cells.push(d)
-
-  const pad = (n) => String(n).padStart(2, '0')
 
   return (
     <div className="ac-minical">
@@ -527,9 +515,9 @@ function MiniCal({ requests, selected, onSelect, onClose }) {
         {WEEKDAYS.map((w) => <div key={w} className="ac-minical-wday">{w}</div>)}
         {cells.map((d, i) => {
           if (d === null) return <div key={i} className="ac-minical-cell ac-minical-empty" />
-          const key = `${year}-${pad(month + 1)}-${pad(d)}`
+          const key = dateKey(year, month, d)
           const has = hasData.has(key)
-          const isToday = key === todayKey
+          const isToday = key === tKey
           const isSel = key === selected
           return (
             <div
@@ -559,7 +547,6 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
   const [myRequests, setMyRequests] = useState([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
-  const [user, setUser] = useState(null)
   const [dateFilter, setDateFilter] = useState('')
   const [calOpen, setCalOpen] = useState(false)
   const [detailReq, setDetailReq] = useState(null)
@@ -598,7 +585,6 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
   }
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUser(data.user))
     fetchMyRequests()
     fetchOptions()
   }, [resourceType])

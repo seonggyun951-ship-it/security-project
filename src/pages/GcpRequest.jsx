@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import {
   GCP_PROTOCOLS, GCP_ARMOR_RULE_TYPES, GCP_IAM_ROLES,
-  GCP_REQ_STATUS_META, gcpReqTitle, gcpReqDetailLines,
+  gcpReqTitle, gcpReqDetailLines,
   emptyFirewallRule, emptyArmorRule,
 } from '../lib/gcp'
 import { notify, summarizePayload } from '../lib/discord'
@@ -299,7 +299,6 @@ export default function GcpRequest({ resourceType = 'firewall_rule' }) {
   const [myRequests, setMyRequests] = useState([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
-  const [user, setUser] = useState(null)
   const [loadError, setLoadError] = useState(null)
 
   const fetchMyRequests = async () => {
@@ -314,7 +313,6 @@ export default function GcpRequest({ resourceType = 'firewall_rule' }) {
   }
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUser(data.user))
     fetchMyRequests()
   }, [resourceType])
 

@@ -4,15 +4,10 @@ import { GcpReqCard, GCP_REQ_STATUS_META } from '../lib/gcp'
 import { notify } from '../lib/discord'
 import { fetchRows, runWrite } from '../lib/db'
 import ErrorBanner from '../components/ErrorBanner'
-
-const pad = (n) => String(n).padStart(2, '0')
-const dateKey = (y, m, d) => `${y}-${pad(m + 1)}-${pad(d)}`
-const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
-
-function localDateKey(ts) {
-  const d = new Date(ts)
-  return dateKey(d.getFullYear(), d.getMonth(), d.getDate())
-}
+import {
+  WEEKDAYS, dateKey, localDateKey, todayKey, monthCells,
+  groupByDate, countsByDate, PERIOD_OPTIONS, periodRange, inRange,
+} from '../lib/date'
 
 function DatePickerPopup({ countsByDate, selected, onSelect, onClose }) {
   const today = new Date()
@@ -21,13 +16,8 @@ function DatePickerPopup({ countsByDate, selected, onSelect, onClose }) {
 
   const year = viewDate.getFullYear()
   const month = viewDate.getMonth()
-  const firstDayOfWeek = new Date(year, month, 1).getDay()
-  const daysInMonth = new Date(year, month + 1, 0).getDate()
-  const todayKey = dateKey(today.getFullYear(), today.getMonth(), today.getDate())
-
-  const cells = []
-  for (let i = 0; i < firstDayOfWeek; i++) cells.push(null)
-  for (let d = 1; d <= daysInMonth; d++) cells.push(d)
+  const cells = monthCells(year, month)
+  const tKey = todayKey()
 
   return (
     <div className="ac-datepop-backdrop" onClick={onClose}>
@@ -43,7 +33,7 @@ function DatePickerPopup({ countsByDate, selected, onSelect, onClose }) {
             if (d === null) return <div key={i} className="ac-cal-cell ac-cal-empty" />
             const key = dateKey(year, month, d)
             const count = countsByDate[key] || 0
-            const isToday = key === todayKey
+            const isToday = key === tKey
             const isSelected = key === selected
             return (
               <div
@@ -63,16 +53,6 @@ function DatePickerPopup({ countsByDate, selected, onSelect, onClose }) {
       </div>
     </div>
   )
-}
-
-function groupByDate(items) {
-  const groups = {}
-  for (const item of items) {
-    const date = localDateKey(item.requested_at)
-    if (!groups[date]) groups[date] = []
-    groups[date].push(item)
-  }
-  return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]))
 }
 
 const GCP_CATEGORIES = [
@@ -108,59 +88,18 @@ function DayDetailModal({ date, items, busyId, onRemove, onClose }) {
   )
 }
 
-const PERIOD_OPTIONS = [
-  { key: 'day', label: '일별' },
-  { key: 'week', label: '주별' },
-  { key: 'month', label: '월별' },
-  { key: 'all', label: '전체' },
-]
-
-function periodRange(mode, offset) {
-  const now = new Date()
-  if (mode === 'month') {
-    const s = new Date(now.getFullYear(), now.getMonth() + offset, 1)
-    const e = new Date(s.getFullYear(), s.getMonth() + 1, 0)
-    return { start: s, end: e, label: `${s.getFullYear()}년 ${s.getMonth() + 1}월` }
-  }
-  if (mode === 'week') {
-    const d = new Date(now)
-    d.setDate(d.getDate() + offset * 7)
-    const day = d.getDay()
-    const s = new Date(d); s.setDate(d.getDate() - day)
-    const e = new Date(s); e.setDate(s.getDate() + 6)
-    const fmt = (dt) => `${dt.getMonth() + 1}/${dt.getDate()}`
-    return { start: s, end: e, label: `${fmt(s)} ~ ${fmt(e)}` }
-  }
-  return null
-}
-
-function inRange(ts, range) {
-  if (!range) return true
-  const d = new Date(ts)
-  const dk = new Date(d.getFullYear(), d.getMonth(), d.getDate())
-  const sk = new Date(range.start.getFullYear(), range.start.getMonth(), range.start.getDate())
-  const ek = new Date(range.end.getFullYear(), range.end.getMonth(), range.end.getDate())
-  return dk >= sk && dk <= ek
-}
-
 function HistoryList({ historyRequests, busyId, onRemove }) {
-  const today = new Date()
-  const todayKey = dateKey(today.getFullYear(), today.getMonth(), today.getDate())
+  const tKey = todayKey()
 
   const [category, setCategory] = useState('all')
   const [period, setPeriod] = useState('day')
   const [periodOffset, setPeriodOffset] = useState(0)
-  const [dateFilter, setDateFilter] = useState(todayKey)
+  const [dateFilter, setDateFilter] = useState(tKey)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [openDate, setOpenDate] = useState(null)
 
   const range = (period === 'month' || period === 'week') ? periodRange(period, periodOffset) : null
-
-  const countsByDate = {}
-  for (const r of historyRequests) {
-    const key = localDateKey(r.requested_at)
-    countsByDate[key] = (countsByDate[key] || 0) + 1
-  }
+  const dayCounts = countsByDate(historyRequests)
 
   const periodFiltered = period === 'day' && dateFilter
     ? historyRequests.filter((r) => localDateKey(r.requested_at) === dateFilter)
@@ -172,7 +111,7 @@ function HistoryList({ historyRequests, busyId, onRemove }) {
   const counts = { all: periodFiltered.length }
   for (const r of periodFiltered) counts[r.resource_type] = (counts[r.resource_type] || 0) + 1
 
-  const changePeriod = (p) => { setPeriod(p); setPeriodOffset(0); setDateFilter(p === 'day' ? todayKey : '') }
+  const changePeriod = (p) => { setPeriod(p); setPeriodOffset(0); setDateFilter(p === 'day' ? tKey : '') }
 
   return (
     <div>
@@ -200,7 +139,7 @@ function HistoryList({ historyRequests, busyId, onRemove }) {
         )}
         {pickerOpen && (
           <DatePickerPopup
-            countsByDate={countsByDate}
+            countsByDate={dayCounts}
             selected={dateFilter}
             onSelect={(key) => { setDateFilter(key); setPickerOpen(false) }}
             onClose={() => setPickerOpen(false)}

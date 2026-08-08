@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { RESOURCE_META, ReqCard } from '../lib/aws'
 import { fetchRows } from '../lib/db'
 import ErrorBanner from '../components/ErrorBanner'
+import { dateKey, localDateKey, todayKey } from '../lib/date'
 
 // 리소스별 최신 스냅샷만 남기고, 변경 이력이 있는 리소스 수를 센다
 function countChangedResources(snapshots) {
@@ -24,15 +25,6 @@ function StatCard({ label, value, unit, tone, onClick }) {
       </div>
     </div>
   )
-}
-
-const pad = (n) => String(n).padStart(2, '0')
-const dateKey = (y, m, d) => `${y}-${pad(m + 1)}-${pad(d)}`
-
-// DB의 timestamptz는 UTC라 문자열을 자르면 한국 날짜와 어긋난다. 로컬로 변환 후 날짜를 뽑는다.
-function localDateKey(ts) {
-  const d = new Date(ts)
-  return dateKey(d.getFullYear(), d.getMonth(), d.getDate())
 }
 
 // 막대 구분 — 그날 무슨 일이 일어났는지 기준
@@ -122,7 +114,7 @@ export default function Home() {
   const year = viewMonth.getFullYear()
   const month = viewMonth.getMonth()
   const daysInMonth = new Date(year, month + 1, 0).getDate()
-  const todayKey = localDateKey(new Date())
+  const tKey = todayKey()
 
   const bars = []
   for (let d = 1; d <= daysInMonth; d++) {
@@ -201,7 +193,7 @@ export default function Home() {
               {bars.map((b) => (
                 <div
                   key={b.key}
-                  className={`dash-bar-col ${b.total > 0 ? 'has-data' : ''} ${b.key === todayKey ? 'is-today' : ''}`}
+                  className={`dash-bar-col ${b.total > 0 ? 'has-data' : ''} ${b.key === tKey ? 'is-today' : ''}`}
                   onClick={() => openDay(b.key, b.ids)}
                   title={b.total > 0
                     ? `${month + 1}/${b.day} — ${SERIES.filter((s) => b[s.key] > 0).map((s) => `${s.label} ${b[s.key]}`).join(', ')}`
