@@ -246,9 +246,8 @@ async function processApproved() {
       console.error('    ID 추출 에러:', e.message)
     }
     if (!createdId) {
-      // ID가 없으면 이후 서브넷/IGW 드롭다운에 이 리소스가 안 뜬다. 반드시 눈에 띄게 알린다.
+      // ID가 없으면 이후 서브넷/IGW 드롭다운에 이 리소스가 안 뜬다.
       console.error(`    ⚠️ 생성 ID를 확인하지 못했습니다 (${resName}) — 드롭다운 목록에 표시되지 않습니다`)
-      await notifyDiscord(`⚠️ **적용은 됐지만 ID 확인 실패**\n${req.resource_type}: ${req.title || req.id}\n드롭다운 목록에 안 뜰 수 있습니다`)
     }
 
     console.log('    ✅ 적용 완료', createdId ? `→ ${createdId}` : '')
@@ -260,7 +259,29 @@ async function processApproved() {
     }).eq('id', req.id)
     if (dbErr3) console.error('    DB 상태 업데이트 실패:', dbErr3.message)
 
-    await notifyDiscord(`🔧 **Terraform 적용 완료**\n${req.resource_type}: ${req.title || req.id}${createdId ? `\n생성 ID: ${createdId}` : ''}`)
+    // 적용 1건당 알림 1건. ID 확인 실패는 별도 알림이 아니라 이 안에 표시한다.
+    const idLine = createdId
+      ? `\n생성 ID: ${createdId}`
+      : '\n⚠️ 생성 ID 확인 실패 — 드롭다운 목록에 안 뜰 수 있습니다'
+    await notifyDiscord(`🔧 **Terraform 적용 완료**\n${req.resource_type}: ${req.title || req.id}${idLine}`)
+  }
+}
+
+// terraform plan+apply는 폴링 간격(기본 15초)보다 오래 걸린다.
+// setInterval은 이전 실행을 기다리지 않으므로, 그대로 두면 첫 실행이 DB를 applied로 바꾸기 전에
+// 다음 폴링이 같은 approved 건을 집어 두 번 적용하고 알림도 두 번 간다(실제로 발생함).
+// 실행 중에는 새 폴링을 건너뛴다.
+let running = false
+
+async function tick() {
+  if (running) return
+  running = true
+  try {
+    await processApproved()
+  } catch (e) {
+    console.error('폴링 처리 중 예외:', e.message)
+  } finally {
+    running = false
   }
 }
 
@@ -272,6 +293,6 @@ console.log(`   폴링 간격: ${POLL_INTERVAL / 1000}초`)
 console.log(`   작업 디렉토리: ${__dirname}`)
 console.log('   Ctrl+C로 종료\n')
 
-// 즉시 1회 실행 후 인터벌
-await processApproved()
-setInterval(processApproved, POLL_INTERVAL)
+// 즉시 1회 실행 후 인터벌 (tick이 중복 실행을 막는다)
+await tick()
+setInterval(tick, POLL_INTERVAL)
