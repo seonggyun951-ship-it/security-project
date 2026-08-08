@@ -44,16 +44,17 @@ export default function InfraRequest({ mode = 'network' }) {
     const errors = []
     const vpcMap = new Map()
 
-    // 1) DB: SG 스냅샷에서 VPC ID 추출.
-    //    raw_data에 acl-, subnet- 같은 다른 ID도 들어있어서 vpc- 접두사로 걸러야 한다.
+    // 1) DB: SG 스냅샷에 딸린 VPC ID 추출.
+    //    원본 테이블(raw_data)은 SG 규칙 전문이 들어있어 관리자 전용이다.
+    //    일반 사용자는 필요한 컬럼만 뽑아둔 aws_resource_options 뷰를 통해 읽는다.
     const sg = await fetchRows(
-      supabase.from('aws_resource_snapshots')
-        .select('raw_data').eq('resource_type', 'security_group')
+      supabase.from('aws_resource_options')
+        .select('vpc_id').eq('resource_type', 'security_group')
         .order('collected_at', { ascending: false }).limit(200),
       'VPC 목록(스냅샷)')
     if (sg.error) errors.push(sg.error)
     for (const row of sg.rows) {
-      const id = row.raw_data?.VpcId
+      const id = row.vpc_id
       if (id && id.startsWith('vpc-') && !vpcMap.has(id)) vpcMap.set(id, { vpc_id: id, name: id })
     }
 

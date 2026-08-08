@@ -80,7 +80,7 @@ export default function Home() {
           .select('id, status, resource_type, requested_at, reviewed_at, applied_at'),
         '신청 통계'),
       fetchRows(
-        supabase.from('aws_resource_snapshots')
+        supabase.from('aws_resource_options')
           .select('resource_type, resource_id, collected_at')
           .order('collected_at', { ascending: false }).limit(200),
         '리소스 스냅샷'),

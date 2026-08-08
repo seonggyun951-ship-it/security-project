@@ -39,7 +39,7 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
 
   const fetchOptions = async () => {
     const { rows, error } = await fetchRows(
-      supabase.from('aws_resource_snapshots')
+      supabase.from('aws_resource_options')
         .select('resource_id, resource_name, resource_type')
         .order('collected_at', { ascending: false }).limit(400),
       '리소스 목록')

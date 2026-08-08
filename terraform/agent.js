@@ -27,9 +27,14 @@ function loadEnv() {
 }
 loadEnv()
 
-const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK || 'https://discordapp.com/api/webhooks/1535279854721966153/Qb6htpTyiTN1QcI0-QBlf2v92C9X7qKuYSSsuIYf8D6lZNq_Ez3r_78n39fD0eix-Dny'
+// 웹훅 URL은 .env에만 둔다 (저장소가 공개라 소스에 하드코딩하면 그대로 노출된다).
+const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK
+if (!DISCORD_WEBHOOK) {
+  console.warn('⚠️ DISCORD_WEBHOOK 미설정 — Terraform 알림이 전송되지 않습니다 (.env 확인)')
+}
 
 async function notifyDiscord(message) {
+  if (!DISCORD_WEBHOOK) return
   try {
     const res = await fetch(DISCORD_WEBHOOK, {
       method: 'POST',

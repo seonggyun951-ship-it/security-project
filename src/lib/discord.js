@@ -1,20 +1,15 @@
-const WEBHOOK_URL = 'https://discordapp.com/api/webhooks/1535279854721966153/Qb6htpTyiTN1QcI0-QBlf2v92C9X7qKuYSSsuIYf8D6lZNq_Ez3r_78n39fD0eix-Dny'
+import { callFunction } from './db'
 
+// 웹훅 URL은 프론트에 두지 않는다.
+// 이 앱은 GitHub Pages(정적 사이트)로 배포되고 소스도 공개 저장소라,
+// 번들에 URL을 넣으면 누구나 꺼내서 채널에 글을 쓸 수 있다.
+// URL은 Supabase 시크릿(DISCORD_WEBHOOK)에만 두고 notify-discord 함수를 거친다.
+//
 // 알림 실패가 본 기능(신청/승인)을 막으면 안 되므로 throw하지 않는다.
 // 다만 조용히 삼키면 "알림이 안 온다"는 제보를 받았을 때 원인을 알 수 없으므로 콘솔에는 반드시 남긴다.
 export async function notify(message) {
-  try {
-    const res = await fetch(WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: message }),
-    })
-    if (!res.ok) {
-      console.error('Discord 알림 실패:', res.status, await res.text().catch(() => ''))
-    }
-  } catch (e) {
-    console.error('Discord 알림 에러:', e?.message || e)
-  }
+  const res = await callFunction('notify-discord', { content: message })
+  if (!res.ok) console.error('Discord 알림 실패:', res.error)
 }
 
 /** 신청 payload에서 핵심 내용 한줄 요약 */
