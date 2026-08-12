@@ -388,8 +388,7 @@ function RequestQueue() {
             )}
 
             {!loading && view !== 'history' && shown.length > 0 && (
-              <ReqTable requests={shown} busyId={busyId} isSuper={isSuper === true}
-                selectedId={openReq?.id} onApprove={approve} onReject={reject} onOpen={setOpenReq} />
+              <ReqTable requests={shown} selectedId={openReq?.id} onOpen={setOpenReq} />
             )}
           </div>
         </section>

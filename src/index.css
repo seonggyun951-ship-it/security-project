@@ -582,11 +582,11 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
    카드 대신 표를 쓰는 이유: 열이 맞아야 세로로 훑을 수 있다.
    좁은 화면에서는 가로 스크롤로 넘긴다 (본문이 밀리지 않도록). */
 .rt-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); box-shadow: var(--shadow); }
-.rt { width: 100%; min-width: 560px; border-collapse: collapse; table-layout: fixed; }
-.rt th:nth-child(1), .rt td:nth-child(1) { width: 92px; }
-.rt th:nth-child(3), .rt td:nth-child(3) { width: 34%; }
-.rt th:nth-child(4), .rt td:nth-child(4) { width: 62px; }
-.rt th:nth-child(5), .rt td:nth-child(5) { width: 150px; }
+/* 4열 고정. 처리 버튼을 뺐으므로 가로 스크롤이 생길 일이 없다. */
+.rt { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.rt th:nth-child(1), .rt td:nth-child(1) { width: 96px; }
+.rt th:nth-child(3), .rt td:nth-child(3) { width: 40%; }
+.rt th:nth-child(4), .rt td:nth-child(4) { width: 64px; }
 .rt th {
   text-align: left; padding: 9px 12px; font-size: 11px; font-weight: 600;
   letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3);
@@ -609,8 +609,6 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .rt-right { text-align: right; }
 .rt-age { font-family: var(--mono); font-size: 12px; color: var(--ink-2); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .rt-age.is-aged { color: var(--wait); font-weight: 700; }
-.rt-act { text-align: right; white-space: nowrap; }
-.rt-btn { padding: 5px 10px; font-size: 12px; border-radius: var(--r-sm); margin-left: 4px; }
 .rt-hold { font-size: 11px; color: var(--ink-3); }
 
 /* ===== 신청자 껍데기 — 상단 탭 + 좁은 본문 ===== */
@@ -660,7 +658,7 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 /* ===== 상세 드로어 =====
    상주하지 않고 필요할 때만 오른쪽에서 덮는다.
    뒤의 표는 흐려질 뿐 사라지지 않아, 닫으면 보던 자리 그대로다. */
-.rt-click td { cursor: pointer; }
+.rt-click { cursor: pointer; }
 .rt tr.rt-sel td { background: var(--accent-soft); }
 .rt tr.rt-sel td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 
