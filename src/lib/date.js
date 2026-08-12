@@ -17,6 +17,26 @@ export function localDateKey(ts) {
 
 export const todayKey = () => localDateKey(new Date())
 
+// "3일" "6시간" "12분" — 승인 대기가 얼마나 묵었는지.
+// 관리자가 목록에서 가장 먼저 묻는 질문이라 절대 시각보다 이게 앞에 온다.
+export function elapsedLabel(ts) {
+  const ms = Date.now() - new Date(ts).getTime()
+  if (ms < 0) return '방금'
+  const min = Math.floor(ms / 60000)
+  if (min < 1) return '방금'
+  if (min < 60) return `${min}분`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr}시간`
+  const day = Math.floor(hr / 24)
+  if (day < 30) return `${day}일`
+  return `${Math.floor(day / 30)}개월`
+}
+
+// 오래 묵은 신청은 눈에 띄어야 한다 (기본 2일)
+export function isAged(ts, days = 2) {
+  return Date.now() - new Date(ts).getTime() > days * 86400000
+}
+
 // 달력 그리드 셀. 1일이 시작되는 요일만큼 앞을 null로 채운다.
 export function monthCells(year, month) {
   const firstDayOfWeek = new Date(year, month, 1).getDay()

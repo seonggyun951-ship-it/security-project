@@ -551,6 +551,35 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .ac-btn-danger { background: var(--fail); border-color: var(--fail); color: var(--panel); }
 .ac-btn-danger:hover:not(:disabled) { background: var(--fail); border-color: var(--fail); }
 
+/* ===== 승인 대기 표 =====
+   카드 대신 표를 쓰는 이유: 열이 맞아야 세로로 훑을 수 있다.
+   좁은 화면에서는 가로 스크롤로 넘긴다 (본문이 밀리지 않도록). */
+.rt-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); box-shadow: var(--shadow); }
+.rt { width: 100%; min-width: 720px; border-collapse: collapse; }
+.rt th {
+  text-align: left; padding: 9px 12px; font-size: 11px; font-weight: 600;
+  letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3);
+  border-bottom: 1px solid var(--line); white-space: nowrap;
+}
+.rt td { padding: 10px 12px; border-bottom: 1px solid var(--line-2); vertical-align: middle; }
+.rt tr:last-child td { border-bottom: none; }
+.rt tbody tr:hover td { background: var(--soft); }
+/* 위험·지연은 행 왼쪽 띠로 — 읽지 않아도 먼저 눈에 걸리게 */
+.rt tr.rt-risk td:first-child { box-shadow: inset 3px 0 0 var(--fail); }
+.rt tr.rt-aged td:first-child { box-shadow: inset 3px 0 0 var(--wait); }
+
+.rt-chip { display: inline-block; color: #fff; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: var(--r-sm); white-space: nowrap; }
+.rt-title { font-size: 13px; font-weight: 650; color: var(--ink); }
+.rt-who { font-family: var(--mono); font-size: 11px; color: var(--ink-3); margin-top: 1px; }
+/* 기술값은 모노스페이스 — CIDR·포트·리소스 ID를 세로로 비교할 수 있게 */
+.rt-val { font-family: var(--mono); font-size: 12px; color: var(--ink-2); max-width: 260px; }
+.rt-right { text-align: right; }
+.rt-age { font-family: var(--mono); font-size: 12px; color: var(--ink-2); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rt-age.is-aged { color: var(--wait); font-weight: 700; }
+.rt-act { text-align: right; white-space: nowrap; }
+.rt-btn { padding: 5px 10px; font-size: 12px; border-radius: var(--r-sm); margin-left: 4px; }
+.rt-hold { font-size: 11px; color: var(--ink-3); }
+
 /* 승인 전 주의 표시 — 막지는 않고 판단 재료만 제공 */
 .ac-req-warn { background: var(--wait-bg); border: 1px solid var(--wait-line); color: var(--wait); border-radius: var(--r-sm); padding: 6px 10px; font-size: 12.5px; font-weight: 600; margin: 4px 0; }
 

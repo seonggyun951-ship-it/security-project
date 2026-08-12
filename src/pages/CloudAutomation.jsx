@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { ReqCard, REQ_STATUS_META, ACTION_LABEL, isDeleteAction } from '../lib/aws'
+import { ReqCard, ReqTable, REQ_STATUS_META, ACTION_LABEL, isDeleteAction } from '../lib/aws'
 import { notify } from '../lib/discord'
 import { fetchRows, runWrite, callFunction } from '../lib/db'
 import { approverLine, useIsSuperAdmin } from '../lib/auth'
@@ -347,11 +347,10 @@ function RequestQueue() {
         </div>
         {loading && <div className="ac-empty">불러오는 중...</div>}
         {!loading && pendingRequests.length === 0 && <div className="ac-empty">대기중인 신청이 없습니다.</div>}
-        <div className="ac-snapshot-list">
-          {pendingRequests.map((r) => (
-            <ReqCard key={r.id} r={r} busyId={busyId} isSuper={isSuper === true} onApprove={approve} onReject={reject} onRemove={removeRequest} />
-          ))}
-        </div>
+        {!loading && pendingRequests.length > 0 && (
+          <ReqTable requests={pendingRequests} busyId={busyId} isSuper={isSuper === true}
+            onApprove={approve} onReject={reject} />
+        )}
       </div>
 
       <div className="ac-card ac-card-wide ac-card-muted">
