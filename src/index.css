@@ -8,31 +8,45 @@
    장식용 강조색은 두지 않는다. 색은 상태와 위험도에만 쓰고,
    주 버튼과 활성 상태는 먹색으로 처리한다. */
 :root {
-  /* 바탕 · 글자 */
-  --bg:      #fbfaf8;  /* 페이지 바탕 */
+  /* 바탕 · 글자
+     바탕을 흰색보다 한 단계 낮춰서 흰 카드가 떠 보이게 한다.
+     밝은 바탕에 흰 카드를 얹으면 경계가 테두리에만 의존해 평면적으로 보인다. */
+  --bg:      #eceef1;  /* 페이지 바탕 */
   --panel:   #ffffff;  /* 카드 면 */
-  --soft:    #f4f2ee;  /* 옅은 면 — 사이드바, 코드 블록 */
-  --ink:     #16161a;  /* 본문 진하게 */
-  --ink-2:   #4c4d55;  /* 보조 텍스트 */
-  --ink-3:   #8a8981;  /* 흐릿한 텍스트 */
-  --line:    #e6e3dd;  /* 테두리 */
-  --line-2:  #efede8;  /* 더 옅은 구분선 */
+  --soft:    #f5f6f8;  /* 옅은 면 — 코드 블록, 보조 영역 */
+  --ink:     #0f131a;  /* 본문 진하게 */
+  --ink-2:   #464e5b;  /* 보조 텍스트 */
+  --ink-3:   #78808e;  /* 흐릿한 텍스트 */
+  --line:    #d4d8de;  /* 테두리 */
+  --line-2:  #e4e7eb;  /* 더 옅은 구분선 */
 
-  /* 조작 — 강조색 대신 먹색 */
-  --accent:   #1a1a1f;
-  --accent-2: #3a3a44;  /* hover */
-  --accent-soft: rgba(26,26,31,.06);
+  /* 사이드바 — 화면에서 가장 큰 색 면이라 여기가 인상을 좌우한다 */
+  --side:        #20262f;
+  --side-ink:    #a3acbb;
+  --side-brand:  #f0f3f7;
+  --side-dim:    #6b7482;
+  --side-on:     rgba(255,255,255,.10);
+  --side-on-ink: #ffffff;
+  --side-line:   #2b323d;
+
+  /* 조작 — 강청색. 상태색(주황·빨강·초록)과 부딪히지 않는 계열로 골랐다 */
+  --accent:   #3a5f8f;
+  --accent-2: #2d4b73;  /* hover */
+  --accent-soft: rgba(58,95,143,.10);
 
   /* 의미색 */
-  --wait:  #9a5b12; --wait-bg:  #f8efe0; --wait-line: #ecd9b4;
-  --super: #5b3fa8; --super-bg: #efeafa;
-  --done:  #2b6b45; --done-bg:  #e8f1eb;
-  --fail:  #a33232; --fail-bg:  #f8eaea; --fail-line: #eccfcf;
-  --off:   #6f6d66; --off-bg:   #f1efea;
+  --wait:  #8f5510; --wait-bg:  #f7eddd; --wait-line: #e8d3ac;
+  --super: #553a9e; --super-bg: #ebe5f8;
+  --done:  #236240; --done-bg:  #e4efe8;
+  --fail:  #9c2d2d; --fail-bg:  #f7e6e6; --fail-line: #e9c9c9;
+  --off:   #6b7280; --off-bg:   #eef0f3;
 
   /* 모서리 — 두 가지만 쓴다 */
   --r:    8px;  /* 카드 · 패널 · 입력 */
   --r-sm: 5px;  /* 버튼 · 배지 · 칩 */
+
+  /* 깊이 — 아주 얕게. 바탕이 회색이라 이 정도로도 카드가 떠 보인다 */
+  --shadow: 0 1px 2px rgba(15,19,26,.05), 0 1px 3px rgba(15,19,26,.04);
 
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'D2Coding', monospace;
 }
@@ -66,8 +80,8 @@ body {
 .sb {
   width: 232px;
   flex-shrink: 0;
-  background: var(--panel);
-  border-right: 1px solid var(--line);
+  background: var(--side);
+  border-right: 1px solid var(--side-line);
   padding: 20px 12px;
   display: flex;
   flex-direction: column;
@@ -75,28 +89,28 @@ body {
   top: 0;
   height: 100vh;
 }
-.sb-brand { font-size: 16px; font-weight: 800; color: var(--ink); padding: 4px 10px 20px; }
+.sb-brand { font-size: 16px; font-weight: 800; color: var(--side-brand); padding: 4px 10px 20px; }
 .sb-nav { flex: 1; display: flex; flex-direction: column; gap: 18px; overflow-y: auto; }
 .sb-group { display: flex; flex-direction: column; gap: 2px; }
 .sb-group-label {
-  font-size: 11px; font-weight: 800; color: var(--ink);
-  letter-spacing: 0.02em;
+  font-size: 11px; font-weight: 700; color: var(--side-dim);
+  letter-spacing: 0.08em; text-transform: uppercase;
   padding: 0 10px 6px;
 }
 .sb-link {
   display: flex; align-items: center; gap: 10px;
-  padding: 9px 10px; border-radius: var(--r);
-  color: var(--ink-2); font-size: 13px; text-decoration: none;
+  padding: 9px 10px; border-radius: var(--r-sm);
+  color: var(--side-ink); font-size: 13px; text-decoration: none;
   transition: background 0.12s, color 0.12s;
 }
-.sb-link:hover { background: rgba(148,163,184,0.08); color: var(--ink-2); }
-.sb-link.is-active { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+.sb-link:hover { background: rgba(255,255,255,.06); color: var(--side-on-ink); }
+.sb-link.is-active { background: var(--side-on); color: var(--side-on-ink); font-weight: 700; }
 .sb-link-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 /* 대기중 건수 — 숫자만 갱신되고 페이지는 다시 그리지 않는다 */
-.sb-badge { flex-shrink: 0; background: var(--wait); color: var(--panel); font-size: 11px; font-weight: 800; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; font-variant-numeric: tabular-nums; }
+.sb-badge { flex-shrink: 0; background: var(--wait); color: #fff; font-size: 11px; font-weight: 800; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; font-variant-numeric: tabular-nums; }
 .sb-logout {
-  margin-top: 16px; background: transparent; border: 1px solid var(--line);
-  color: var(--ink-2); border-radius: var(--r); padding: 8px 12px;
+  margin-top: 16px; background: transparent; border: 1px solid var(--side-line);
+  color: var(--side-dim); border-radius: var(--r-sm); padding: 8px 12px;
   font-size: 12px; cursor: pointer;
 }
 .sb-logout:hover { border-color: var(--fail); color: var(--fail); }
@@ -471,7 +485,7 @@ body {
 .ac-grid { display: grid; grid-template-columns: 1fr; gap: 16px; align-items: start; }
 .ac-grid > .ac-card { margin-bottom: 0; }
 .ac-card-wide { grid-column: 1 / -1; }
-.ac-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 18px; margin-bottom: 16px; }
+.ac-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 18px; margin-bottom: 16px; box-shadow: var(--shadow); }
 .ac-card-title { font-size: 15px; font-weight: 700; color: var(--ink); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
 /* 지금 처리할 일이 있는 카드 — 화면의 주인공 */
 .ac-card-alert { border-color: var(--wait); box-shadow: 0 0 0 1px rgba(245,158,11,0.15); }
