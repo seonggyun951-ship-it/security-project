@@ -63,13 +63,23 @@ export const NAV_GROUPS = [
   },
 ]
 
-// 승인 화면은 목록과 상세를 나란히 놓느라 폭이 필요해서 사이드바를 아이콘만 남긴다.
-const RAIL_PATHS = ['/cloud-automation', '/gcp/approval']
+// 접힘 상태는 사용자가 직접 정한다. 화면을 옮겨도 유지되도록 저장해둔다.
+const RAIL_KEY = 'sb_rail'
 
 export default function Sidebar({ onLogout }) {
   const [open, setOpen] = useState(false)
+  const [rail, setRail] = useState(() => {
+    try { return localStorage.getItem(RAIL_KEY) === '1' } catch { return false }
+  })
   const location = useLocation()
-  const rail = RAIL_PATHS.includes(location.pathname)
+
+  const toggleRail = () => {
+    setRail((v) => {
+      const next = !v
+      try { localStorage.setItem(RAIL_KEY, next ? '1' : '0') } catch { /* 저장 실패해도 동작엔 지장 없음 */ }
+      return next
+    })
+  }
   const isAdmin = useIsAdmin()
   const isSuper = useIsSuperAdmin()
   // 관리자만 대기 건수를 센다. 신청자는 승인 메뉴 자체가 없다.
@@ -96,7 +106,13 @@ export default function Sidebar({ onLogout }) {
       {open && <div className="sb-backdrop" onClick={() => setOpen(false)} />}
 
       <aside className={`sb ${open ? 'is-open' : ''} ${rail ? 'is-rail' : ''}`}>
-        <div className="sb-brand">{rail ? 'S' : 'Security Dashboard'}</div>
+        <div className="sb-top">
+          <span className="sb-brand">{rail ? 'S' : 'Security Dashboard'}</span>
+          <button className="sb-rail-btn" onClick={toggleRail}
+            title={rail ? '메뉴 펼치기' : '메뉴 접기'} aria-label={rail ? '메뉴 펼치기' : '메뉴 접기'}>
+            {rail ? '»' : '«'}
+          </button>
+        </div>
 
         <nav className="sb-nav">
           {groups.map((group) => (

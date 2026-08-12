@@ -342,9 +342,10 @@ function RequestQueue() {
     <>
       {revealKey && <RevealKeyPopup result={revealKey} onClose={() => setRevealKey(null)} />}
       <ErrorBanner message={loadError} onRetry={fetchRequests} />
-      {/* 목록과 검토 패널을 나란히 — 고르고 판단하고 다음으로 넘어가는 흐름이 끊기지 않게 */}
+      {/* 목록과 검토 패널을 나란히 — 고르고 판단하고 다음으로 넘어가는 흐름이 끊기지 않게.
+          ac-card-wide(grid-column: 1/-1)를 쓰면 목록이 2칸을 다 먹어 패널이 아래로 밀린다. */}
       <div className="ap-split">
-        <div className={`ac-card ac-card-wide ${pendingRequests.length > 0 ? 'ac-card-alert' : ''}`} style={{ marginBottom: 0 }}>
+        <div className={`ac-card ${pendingRequests.length > 0 ? 'ac-card-alert' : ''}`} style={{ marginBottom: 0, minWidth: 0 }}>
           <div className="ac-card-title">
             처리 대기중
             {pendingRequests.length > 0 && <span className="ac-count-badge">{pendingRequests.length}</span>}
@@ -374,7 +375,8 @@ function RequestQueue() {
 
 export default function CloudAutomation() {
   return (
-    <div className="ac-page">
+    // 목록과 검토 패널을 나란히 놓으려면 폭이 필요해서 ac-page 폭 제한을 쓰지 않는다
+    <div className="ac-page ac-page-wide">
       <h2 className="ac-title">관리자 승인</h2>
       <p className="ac-sub">신청을 검토해 승인하면 실제 AWS에 반영됩니다. 적용 결과 확인은 "AWS 현황" 페이지에서 합니다.</p>
 
