@@ -492,6 +492,13 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .ac-minical-cell.is-selected { background: #0284c7; color: #fff; }
 .ac-minical-empty { visibility: hidden; }
 
+/* 신청자 시작 화면 */
+.rh-links { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.rh-link { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 14px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; color: #0f172a; text-decoration: none; font-size: 14px; font-weight: 600; transition: border-color .12s, background .12s; }
+.rh-link:hover { border-color: #94a3b8; background: #ffffff; }
+.rh-link-arrow { color: #94a3b8; font-size: 13px; flex-shrink: 0; }
+.rh-link:hover .rh-link-arrow { color: #0f172a; }
+
 /* 조회/처리 실패 배너 */
 .ac-error-banner { display: flex; align-items: center; gap: 12px; background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: 13px; }
 .ac-error-banner-text { flex: 1; word-break: break-word; }

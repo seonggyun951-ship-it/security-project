@@ -7,7 +7,10 @@ export const NAV_GROUPS = [
   {
     label: '개요',
     items: [
-      { title: '대시보드', path: '/' },
+      // 같은 '/' 경로지만 보는 사람에 따라 다른 화면이 뜬다(App.jsx RootPage).
+      // 관리자는 전체 현황 대시보드, 신청자는 신청 종류 선택 화면.
+      { title: '대시보드', path: '/', adminOnly: true },
+      { title: '홈', path: '/', requesterOnly: true },
     ],
   },
   {
@@ -61,9 +64,15 @@ export default function Sidebar({ onLogout }) {
   // 모바일에서 메뉴 선택 후 자동으로 닫기
   useEffect(() => { setOpen(false) }, [location.pathname])
 
-  // 관리자 전용 메뉴는 확인 완료 후 관리자에게만 노출 (확인 중에는 감춤)
+  // 권한 확인이 끝나기 전(isAdmin === null)에는 어느 쪽 전용 메뉴도 보여주지 않는다.
+  // 잠깐이라도 관리자 메뉴가 스쳐 보이거나, 메뉴가 두 번 바뀌는 걸 막기 위함.
+  const visible = (item) => {
+    if (item.adminOnly) return isAdmin === true
+    if (item.requesterOnly) return isAdmin === false
+    return true
+  }
   const groups = NAV_GROUPS
-    .map((g) => ({ ...g, items: g.items.filter((i) => !i.adminOnly || isAdmin === true) }))
+    .map((g) => ({ ...g, items: g.items.filter(visible) }))
     .filter((g) => g.items.length > 0)
 
   return (

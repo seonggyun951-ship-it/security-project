@@ -16,6 +16,7 @@ import PhishingDetect from './pages/PhishingDetect'
 import GcpRequest from './pages/GcpRequest'
 import GcpApproval from './pages/GcpApproval'
 import InfraRequest from './pages/InfraRequest'
+import RequesterHome from './pages/RequesterHome'
 import { useIsAdmin } from './lib/auth'
 
 // 관리자 전용 라우트 — 사이드바에서 감춰도 URL을 직접 치면 들어와지므로 여기서도 막는다.
@@ -32,6 +33,14 @@ function AdminRoute({ children }) {
     )
   }
   return children
+}
+
+// 시작 화면 분기 — 관리자는 전체 현황 대시보드, 신청자는 신청 종류를 고르는 화면.
+// 대시보드는 전체 신청 통계와 리소스 현황을 담고 있어 신청자에게는 노출하지 않는다.
+function RootPage() {
+  const isAdmin = useIsAdmin()
+  if (isAdmin === null) return <div className="ac-page"><div className="ac-empty">불러오는 중...</div></div>
+  return isAdmin ? <Home /> : <RequesterHome />
 }
 
 export default function App() {
@@ -54,7 +63,7 @@ export default function App() {
         <Sidebar onLogout={logout} />
         <main className="shell-main">
           <Routes>
-            <Route path="/" element={<Home />} />
+            <Route path="/" element={<RootPage />} />
             <Route path="/vuln" element={<VulnScan />} />
             <Route path="/log" element={<LogAnalysis />} />
             <Route path="/privacy" element={<PrivacyCheck />} />
