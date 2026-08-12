@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { ReqTable, ReqDrawer, ACTION_LABEL, isDeleteAction, reqRisk } from '../lib/aws'
+import { ReqTable, ReqDrawer, ACTION_LABEL, REQ_STATUS_META, isDeleteAction, reqRisk } from '../lib/aws'
+import { elapsedLabel } from '../lib/date'
 import { notify } from '../lib/discord'
 import { fetchRows, runWrite, callFunction } from '../lib/db'
 import { approverLine, useIsSuperAdmin } from '../lib/auth'
@@ -46,6 +48,7 @@ function RequestQueue() {
   const [loadError, setLoadError] = useState(null)
   const [openReq, setOpenReq] = useState(null) // 검토 패널에 열린 신청
   const [view, setView] = useState('pending')  // 'pending' | 'risk'
+  const [recent, setRecent] = useState([])     // 방금 처리한 것 확인용 (전체는 '승인 이력')
   const isSuper = useIsSuperAdmin()
 
   // awaiting_super(1차 승인된 삭제)는 최고 관리자만 처리할 수 있다.
@@ -57,14 +60,23 @@ function RequestQueue() {
     pendingChanged() // 사이드바 대기 배지도 같이 맞춘다 (페이지는 새로고침하지 않음)
     setOpenReq(null) // 처리가 끝나면 드로어를 닫는다 (사라진 신청이 열려 있으면 안 됨)
     setLoading(true)
-    // 처리 대기중인 것만 가져온다. 지나간 건은 '승인 이력' 화면이 따로 조회한다.
-    const { rows, error } = await fetchRows(
-      supabase.from('aws_requests').select('*')
-        .in('status', ['pending', 'awaiting_super'])
-        .order('requested_at', { ascending: false }).limit(200),
-      '신청 목록')
-    setRequests(rows)
-    setLoadError(error)
+    // 처리 대기중인 것과, 방금 뭘 처리했는지 확인할 최근 이력만 가져온다.
+    // 전체 이력은 '승인 이력' 화면이 따로 조회한다.
+    const [open, done] = await Promise.all([
+      fetchRows(
+        supabase.from('aws_requests').select('*')
+          .in('status', ['pending', 'awaiting_super'])
+          .order('requested_at', { ascending: false }).limit(200),
+        '신청 목록'),
+      fetchRows(
+        supabase.from('aws_requests').select('*')
+          .in('status', ['applied', 'rejected', 'failed', 'cancelled'])
+          .order('reviewed_at', { ascending: false, nullsFirst: false }).limit(10),
+        '최근 처리'),
+    ])
+    setRequests(open.rows)
+    setRecent(done.rows)
+    setLoadError(open.error)
     setLoading(false)
   }
 
@@ -161,7 +173,7 @@ function RequestQueue() {
             <div className="ap-h2">
               대기 {pendingRequests.length}건
               {riskyRequests.length > 0 && (
-                <> · <span style={{ color: 'var(--fail)', fontWeight: 700 }}>위험 {riskyRequests.length}건</span>
+                <> · <span style={{ color: 'var(--fail)', fontWeight: 700 }}>검토필요 {riskyRequests.length}건</span>
                   <span className="ap-hint">삭제 신청이거나 전체 개방(0.0.0.0/0)</span></>
               )}
             </div>
@@ -173,7 +185,7 @@ function RequestQueue() {
               대기 {pendingRequests.length}
             </button>
             <button className={`ap-chip ${view === 'risk' ? 'on' : ''}`} onClick={() => setView('risk')}>
-              위험 {riskyRequests.length}
+              검토필요 {riskyRequests.length}
             </button>
           </div>
 
@@ -183,12 +195,37 @@ function RequestQueue() {
 
             {!loading && shown.length === 0 && (
               <div className="ac-empty">
-                {view === 'risk' ? '위험으로 분류된 신청이 없습니다.' : '대기중인 신청이 없습니다.'}
+                {view === 'risk' ? '검토가 필요한 신청이 없습니다.' : '대기중인 신청이 없습니다.'}
               </div>
             )}
 
             {!loading && shown.length > 0 && (
               <ReqTable requests={shown} selectedId={openReq?.id} onOpen={setOpenReq} />
+            )}
+
+            {/* 방금 뭘 처리했는지 바로 확인할 수 있게 최근 것만 붙인다.
+                전체 이력은 '승인 이력' 화면으로 간다. */}
+            {!loading && recent.length > 0 && (
+              <div className="ap-recent">
+                <div className="ap-recent-head">
+                  <span>최근 처리</span>
+                  <Link to="/approval-history" className="ap-recent-more">전체 보기 →</Link>
+                </div>
+                {recent.map((r) => {
+                  const meta = REQ_STATUS_META[r.status] || { label: r.status, color: 'var(--ink-3)' }
+                  return (
+                    <button key={r.id}
+                      className={`ap-recent-row ${openReq?.id === r.id ? 'on' : ''}`}
+                      onClick={() => setOpenReq(r)}>
+                      <span className="rt-chip" style={{ background: meta.bg, color: meta.color }}>{meta.label}</span>
+                      <span className="ap-recent-title">
+                        {ACTION_LABEL[r.action] || r.action} · {r.title || r.target_id || ''}
+                      </span>
+                      <span className="ap-recent-age">{elapsedLabel(r.reviewed_at || r.requested_at)}</span>
+                    </button>
+                  )
+                })}
+              </div>
             )}
           </div>
         </section>
