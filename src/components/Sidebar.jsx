@@ -1,6 +1,6 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import { useIsAdmin } from '../lib/auth'
+import { useIsAdmin, useIsSuperAdmin } from '../lib/auth'
 
 // 사이드바 메뉴 — 그룹 단위로 흐름이 보이게 구성
 export const NAV_GROUPS = [
@@ -45,6 +45,12 @@ export const NAV_GROUPS = [
     ],
   },
   {
+    label: '설정',
+    items: [
+      { title: '계정 관리', path: '/admin/users', superOnly: true },
+    ],
+  },
+  {
     label: '보안 점검',
     items: [
       { title: '클라우드 설정 점검', path: '/cloud' },
@@ -60,6 +66,7 @@ export default function Sidebar({ onLogout }) {
   const [open, setOpen] = useState(false)
   const location = useLocation()
   const isAdmin = useIsAdmin()
+  const isSuper = useIsSuperAdmin()
 
   // 모바일에서 메뉴 선택 후 자동으로 닫기
   useEffect(() => { setOpen(false) }, [location.pathname])
@@ -67,6 +74,7 @@ export default function Sidebar({ onLogout }) {
   // 권한 확인이 끝나기 전(isAdmin === null)에는 어느 쪽 전용 메뉴도 보여주지 않는다.
   // 잠깐이라도 관리자 메뉴가 스쳐 보이거나, 메뉴가 두 번 바뀌는 걸 막기 위함.
   const visible = (item) => {
+    if (item.superOnly) return isSuper === true
     if (item.adminOnly) return isAdmin === true
     if (item.requesterOnly) return isAdmin === false
     return true

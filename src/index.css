@@ -492,6 +492,20 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .ac-minical-cell.is-selected { background: #0284c7; color: #fff; }
 .ac-minical-empty { visibility: hidden; }
 
+/* 계정 관리 */
+.au-list { display: flex; flex-direction: column; gap: 8px; }
+.au-row { border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; background: #ffffff; }
+.au-main { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.au-email { font-size: 14px; font-weight: 700; color: #0f172a; word-break: break-all; }
+.au-role { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
+.au-role-super { background: #4338ca; color: #ffffff; }
+.au-role-admin { background: #e0e7ff; color: #3730a3; }
+.au-role-user { background: #f1f5f9; color: #64748b; }
+.au-self { font-size: 11px; color: #94a3b8; }
+.au-meta { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+.au-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.au-actions .ac-btn { padding: 4px 10px; font-size: 12px; }
+
 /* 신청자 시작 화면 */
 .rh-links { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
 .rh-link { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 14px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; color: #0f172a; text-decoration: none; font-size: 14px; font-weight: 600; transition: border-color .12s, background .12s; }

@@ -13,32 +13,46 @@ export async function requireUser() {
 // 각자 조회하면 같은 쿼리가 여러 번 나가고 메뉴가 늦게 뜨므로, 진행 중인 조회를 공유한다.
 let adminCheck = null
 
-async function fetchIsAdmin() {
+const NOT_ADMIN = { isAdmin: false, isSuper: false }
+
+async function fetchAdminInfo() {
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return false
+  if (!user) return NOT_ADMIN
   const { data, error } = await supabase
-    .from('admins').select('user_id').eq('user_id', user.id).maybeSingle()
+    .from('admins').select('user_id, is_super').eq('user_id', user.id).maybeSingle()
   if (error) {
     console.error('관리자 확인 실패:', error.message)
-    return false
+    return NOT_ADMIN
   }
-  return !!data
+  return { isAdmin: !!data, isSuper: !!data?.is_super }
 }
 
 // 로그인/로그아웃 시 캐시를 버린다. 계정이 바뀌었는데 이전 권한이 남으면 안 된다.
 supabase.auth.onAuthStateChange(() => { adminCheck = null })
 
-// 관리자 여부. null = 확인 중, true/false = 확인 완료.
-// admins 테이블은 본인 행만 select 가능하도록 RLS가 걸려 있다.
-export function useIsAdmin() {
-  const [isAdmin, setIsAdmin] = useState(null)
+function useAdminInfo() {
+  const [info, setInfo] = useState(null)
 
   useEffect(() => {
     let alive = true
-    adminCheck ??= fetchIsAdmin()
-    adminCheck.then((v) => { if (alive) setIsAdmin(v) })
+    adminCheck ??= fetchAdminInfo()
+    adminCheck.then((v) => { if (alive) setInfo(v) })
     return () => { alive = false }
   }, [])
 
-  return isAdmin
+  return info
+}
+
+// 관리자 여부. null = 확인 중, true/false = 확인 완료.
+// admins 테이블은 본인 행만 select 가능하도록 RLS가 걸려 있다.
+export function useIsAdmin() {
+  const info = useAdminInfo()
+  return info === null ? null : info.isAdmin
+}
+
+// 최고 관리자 여부. 계정 생성/삭제와 관리자 권한 변경을 할 수 있다.
+// 화면 노출 판단용이고, 실제 차단은 admin-users 함수가 한다.
+export function useIsSuperAdmin() {
+  const info = useAdminInfo()
+  return info === null ? null : info.isSuper
 }
