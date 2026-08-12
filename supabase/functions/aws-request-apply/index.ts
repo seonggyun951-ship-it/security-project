@@ -130,8 +130,19 @@ async function wafRetry(fn, retries = 3) {
   }
 }
 
-async function handleWaf(waf, req) {
+// WAFv2 스코프
+//   REGIONAL   : ALB, API Gateway, AppSync 등. 리소스가 있는 리전에서 호출한다.
+//   CLOUDFRONT : CloudFront 배포용. 리소스 위치와 무관하게 반드시 us-east-1에서 호출해야 한다.
+// 스코프에 맞지 않는 리전으로 호출하면 만들어지지 않으므로 클라이언트를 따로 만든다.
+const CLOUDFRONT_REGION = 'us-east-1'
+const wafScopeOf = (p) => (p?.scope === 'CLOUDFRONT' ? 'CLOUDFRONT' : 'REGIONAL')
+const wafRegionFor = (scope, defaultRegion) => (scope === 'CLOUDFRONT' ? CLOUDFRONT_REGION : defaultRegion)
+
+async function handleWaf(req, credentials, defaultRegion) {
   const p = req.payload || {}
+  const Scope = wafScopeOf(p)
+  const waf = new WAFV2Client({ region: wafRegionFor(Scope, defaultRegion), credentials })
+
   if (req.action === 'create_acl') {
     const rules = (p.managed_rule_groups || []).map((name, i) => ({
       Name: name,
@@ -142,7 +153,7 @@ async function handleWaf(waf, req) {
     }))
     const res = await wafRetry(() => waf.send(new CreateWebACLCommand({
       Name: p.acl_name,
-      Scope: 'REGIONAL',
+      Scope,
       DefaultAction: p.default_action === 'block' ? { Block: {} } : { Allow: {} },
       Rules: rules,
       VisibilityConfig: vis(p.acl_name || 'webacl'),
@@ -152,7 +163,7 @@ async function handleWaf(waf, req) {
 
   // add_waf_rules — 기존 Web ACL을 읽어 규칙을 합쳐 업데이트
   const aclName = p.web_acl_name || req.title
-  const get = await wafRetry(() => waf.send(new GetWebACLCommand({ Name: aclName, Id: req.target_id, Scope: 'REGIONAL' })))
+  const get = await wafRetry(() => waf.send(new GetWebACLCommand({ Name: aclName, Id: req.target_id, Scope })))
   const acl = get.WebACL
   const existing = acl.Rules || []
   let priority = existing.reduce((max, r) => Math.max(max, r.Priority ?? 0), -1)
@@ -163,7 +174,7 @@ async function handleWaf(waf, req) {
     if (r.type === 'ip_block') {
       const ipset = await wafRetry(() => waf.send(new CreateIPSetCommand({
         Name: safeName(`${r.name}-ipset-${Date.now()}`).slice(0, 128),
-        Scope: 'REGIONAL',
+        Scope,
         IPAddressVersion: 'IPV4',
         Addresses: r.cidrs,
       })))
@@ -217,7 +228,7 @@ async function handleWaf(waf, req) {
   await wafRetry(() => waf.send(new UpdateWebACLCommand({
     Name: aclName,
     Id: req.target_id,
-    Scope: 'REGIONAL',
+    Scope,
     DefaultAction: acl.DefaultAction,
     Rules: [...existing, ...newRules],
     VisibilityConfig: acl.VisibilityConfig,
@@ -291,7 +302,7 @@ serve(async (req) => {
       if (claimed.resource_type === 'security_group') {
         result = await handleSg(new EC2Client({ region, credentials }), claimed)
       } else if (claimed.resource_type === 'waf_web_acl') {
-        result = await handleWaf(new WAFV2Client({ region, credentials }), claimed)
+        result = await handleWaf(claimed, credentials, region)
       } else if (claimed.resource_type === 'iam_user') {
         result = await handleIam(new IAMClient({ region, credentials }), claimed, !!issue_key)
       } else {

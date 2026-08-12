@@ -182,7 +182,7 @@ export function WafForm({ aclOptions, onSubmit, submitting }) {
   const removeWafRule = (i) => setWafRules((prev) => prev.filter((_, idx) => idx !== i))
 
   const reset = () => {
-    setForm({ acl_name: '', default_action: 'allow', target_id: '', reason: '' })
+    setForm({ acl_name: '', default_action: 'allow', scope: 'REGIONAL', target_id: '', reason: '' })
     setGroups([])
     setWafRules([emptyWafRule()])
   }
@@ -202,7 +202,12 @@ export function WafForm({ aclOptions, onSubmit, submitting }) {
       const ok = await onSubmit({
         resource_type: 'waf_web_acl', action: 'create_acl',
         title: form.acl_name.trim(), target_id: null,
-        payload: { acl_name: form.acl_name.trim(), default_action: form.default_action, managed_rule_groups: groups },
+        payload: {
+          acl_name: form.acl_name.trim(),
+          default_action: form.default_action,
+          scope: form.scope,
+          managed_rule_groups: groups,
+        },
         reason: form.reason.trim() || null,
       })
       if (ok) reset()
@@ -234,7 +239,13 @@ export function WafForm({ aclOptions, onSubmit, submitting }) {
       resource_type: 'waf_web_acl', action: 'add_waf_rules',
       title: selected?.resource_name || form.target_id.trim(),
       target_id: form.target_id.trim(),
-      payload: { web_acl_name: selected?.resource_name || null, rules: clean },
+      // 스코프는 사용자가 고르는 게 아니라 대상 ACL이 이미 가진 값이다.
+      // 수집 시 CLOUDFRONT ACL은 region에 'CLOUDFRONT'로 표시해둔다.
+      payload: {
+        web_acl_name: selected?.resource_name || null,
+        scope: selected?.region === 'CLOUDFRONT' ? 'CLOUDFRONT' : 'REGIONAL',
+        rules: clean,
+      },
       reason: form.reason.trim() || null,
     })
     if (ok) reset()
@@ -262,6 +273,20 @@ export function WafForm({ aclOptions, onSubmit, submitting }) {
               </select>
             </div>
           </div>
+          <div className="ac-form-row">
+            <div className="ac-field">
+              <label className="ac-label">적용 범위 (Scope)</label>
+              <select className="ac-input" value={form.scope} onChange={(e) => setForm({ ...form, scope: e.target.value })}>
+                <option value="REGIONAL">리전 (ALB, API Gateway, AppSync)</option>
+                <option value="CLOUDFRONT">글로벌 (CloudFront)</option>
+              </select>
+              <p className="ac-sub" style={{ marginTop: 6, marginBottom: 0 }}>
+                {form.scope === 'CLOUDFRONT'
+                  ? 'CloudFront용 Web ACL은 us-east-1에 생성됩니다. CloudFront 배포에만 연결할 수 있습니다.'
+                  : '현재 리전에 생성됩니다. CloudFront에는 연결할 수 없습니다.'}
+              </p>
+            </div>
+          </div>
           <div className="ac-card-title" style={{ fontSize: 13, marginTop: 16 }}>관리형 규칙 그룹 (선택)</div>
           <div className="ac-check-list">
             {WAF_MANAGED_RULE_GROUPS.map((g) => (
@@ -279,7 +304,11 @@ export function WafForm({ aclOptions, onSubmit, submitting }) {
               <label className="ac-label">대상 Web ACL</label>
               <select className="ac-input" value={form.target_id} onChange={(e) => setForm({ ...form, target_id: e.target.value })}>
                 <option value="">선택...</option>
-                {aclOptions.map((a) => <option key={a.resource_id} value={a.resource_id}>{a.resource_name}</option>)}
+                {aclOptions.map((a) => (
+                  <option key={a.resource_id} value={a.resource_id}>
+                    {a.resource_name} {a.region === 'CLOUDFRONT' ? '(글로벌)' : '(리전)'}
+                  </option>
+                ))}
               </select>
             </div>
           </div>

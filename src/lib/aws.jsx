@@ -124,7 +124,11 @@ export function reqDetailLines(r) {
       const g = WAF_MANAGED_RULE_GROUPS.find((x) => x.name === n)
       return g ? g.label : n
     })
-    return [`관리형 규칙: ${names.join(', ') || '없음'}`, `기본 액션: ${p.default_action === 'block' ? '차단' : '허용'}`]
+    return [
+      `적용 범위: ${p.scope === 'CLOUDFRONT' ? '글로벌 (CloudFront)' : '리전'}`,
+      `관리형 규칙: ${names.join(', ') || '없음'}`,
+      `기본 액션: ${p.default_action === 'block' ? '차단' : '허용'}`,
+    ]
   }
   if (r.action === 'add_waf_rules') {
     return (p.rules || []).map(wafRuleLabel)

@@ -91,17 +91,21 @@ async function collectIamPolicies(iam) {
   }))
 }
 
-// WAF는 REGIONAL 스코프만 수집 (CLOUDFRONT는 us-east-1 고정 호출이 필요해 추후 별도 처리)
-async function collectWaf(waf, region) {
-  const { WebACLs } = await waf.send(new ListWebACLsCommand({ Scope: 'REGIONAL' }))
+// WAFv2는 스코프별로 API 엔드포인트가 다르다.
+//   REGIONAL   : 해당 리전에서 조회
+//   CLOUDFRONT : 반드시 us-east-1에서 조회 (리소스 위치와 무관)
+// 한쪽을 빼먹으면 신청 화면의 Web ACL 목록에 그 스코프가 통째로 안 나온다.
+// region 컬럼에 스코프를 구분해 넣어두면, 규칙 추가 시 어떤 스코프로 호출할지 알 수 있다.
+async function collectWafScope(waf, scope, region) {
+  const { WebACLs } = await waf.send(new ListWebACLsCommand({ Scope: scope }))
   const results = []
   for (const acl of WebACLs || []) {
-    const detail = await waf.send(new GetWebACLCommand({ Scope: 'REGIONAL', Id: acl.Id, Name: acl.Name }))
+    const detail = await waf.send(new GetWebACLCommand({ Scope: scope, Id: acl.Id, Name: acl.Name }))
     results.push({
       resource_type: 'waf_web_acl',
       resource_id: acl.Id,
       resource_name: acl.Name,
-      region,
+      region: scope === 'CLOUDFRONT' ? 'CLOUDFRONT' : region,
       raw_data: detail.WebACL,
     })
   }
@@ -149,14 +153,18 @@ serve(async (req) => {
     const ec2 = new EC2Client({ region, credentials })
     const iam = new IAMClient({ region, credentials })
     const waf = new WAFV2Client({ region, credentials })
+    // CLOUDFRONT 스코프는 us-east-1 엔드포인트로만 조회된다.
+    const wafGlobal = new WAFV2Client({ region: 'us-east-1', credentials })
 
-    const [sgResults, vpcResults, roleResults, policyResults, wafResults] = await Promise.all([
+    const [sgResults, vpcResults, roleResults, policyResults, wafRegional, wafCloudfront] = await Promise.all([
       collectSecurityGroups(ec2).catch((e) => { console.error('SG 수집 실패:', e); return [] }),
       collectVpcs(ec2).catch((e) => { console.error('VPC 수집 실패:', e); return [] }),
       collectIamRoles(iam).catch((e) => { console.error('IAM Role 수집 실패:', e); return [] }),
       collectIamPolicies(iam).catch((e) => { console.error('IAM Policy 수집 실패:', e); return [] }),
-      collectWaf(waf, region).catch((e) => { console.error('WAF 수집 실패:', e); return [] }),
+      collectWafScope(waf, 'REGIONAL', region).catch((e) => { console.error('WAF(REGIONAL) 수집 실패:', e); return [] }),
+      collectWafScope(wafGlobal, 'CLOUDFRONT', region).catch((e) => { console.error('WAF(CLOUDFRONT) 수집 실패:', e); return [] }),
     ])
+    const wafResults = [...wafRegional, ...wafCloudfront]
 
     const rows = [...sgResults, ...vpcResults, ...roleResults, ...policyResults, ...wafResults]
 

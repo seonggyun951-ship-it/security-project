@@ -28,7 +28,8 @@ export function summarizePayload(action, payload) {
   // WAF
   if (action === 'create_acl') {
     const groups = (p.managed_rule_groups || []).length
-    return `기본: ${p.default_action === 'block' ? '차단' : '허용'}, 관리형 규칙 ${groups}개`
+    const scope = p.scope === 'CLOUDFRONT' ? '글로벌' : '리전'
+    return `${scope}, 기본: ${p.default_action === 'block' ? '차단' : '허용'}, 관리형 규칙 ${groups}개`
   }
   if (action === 'add_waf_rules') {
     const rules = p.rules || []
