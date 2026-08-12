@@ -582,7 +582,11 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
    카드 대신 표를 쓰는 이유: 열이 맞아야 세로로 훑을 수 있다.
    좁은 화면에서는 가로 스크롤로 넘긴다 (본문이 밀리지 않도록). */
 .rt-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); box-shadow: var(--shadow); }
-.rt { width: 100%; min-width: 640px; border-collapse: collapse; }
+.rt { width: 100%; min-width: 560px; border-collapse: collapse; table-layout: fixed; }
+.rt th:nth-child(1), .rt td:nth-child(1) { width: 92px; }
+.rt th:nth-child(3), .rt td:nth-child(3) { width: 34%; }
+.rt th:nth-child(4), .rt td:nth-child(4) { width: 62px; }
+.rt th:nth-child(5), .rt td:nth-child(5) { width: 150px; }
 .rt th {
   text-align: left; padding: 9px 12px; font-size: 11px; font-weight: 600;
   letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3);
@@ -596,10 +600,12 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .rt tr.rt-aged td:first-child { box-shadow: inset 3px 0 0 var(--wait); }
 
 .rt-chip { display: inline-block; color: #fff; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: var(--r-sm); white-space: nowrap; }
-.rt-title { font-size: 13px; font-weight: 650; color: var(--ink); }
-.rt-who { font-family: var(--mono); font-size: 11px; color: var(--ink-3); margin-top: 1px; }
+.rt-title { font-size: 13px; font-weight: 650; color: var(--ink); word-break: break-word; }
+.rt-who { font-family: var(--mono); font-size: 11px; color: var(--ink-3); margin-top: 1px; word-break: break-all; }
 /* 기술값은 모노스페이스 — CIDR·포트·리소스 ID를 세로로 비교할 수 있게 */
-.rt-val { font-family: var(--mono); font-size: 12px; color: var(--ink-2); max-width: 260px; }
+/* 열 폭이 고정이라 긴 값은 줄바꿈으로 흘린다 (잘려서 안 보이면 판단을 못 한다) */
+/* 열 폭이 고정이라 긴 값은 줄바꿈으로 흘린다 (잘려서 안 보이면 판단을 못 한다) */
+.rt-val { font-family: var(--mono); font-size: 12px; color: var(--ink-2); word-break: break-word; line-height: 1.5; }
 .rt-right { text-align: right; }
 .rt-age { font-family: var(--mono); font-size: 12px; color: var(--ink-2); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .rt-age.is-aged { color: var(--wait); font-weight: 700; }
@@ -659,8 +665,9 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .rt tr.rt-sel td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 
 /* 목록 | 검토 패널 2단. 패널은 상주하고 목록을 덮지 않는다 */
-.ac-page-wide { max-width: none; }
-.ap-split { display: grid; grid-template-columns: minmax(0, 1fr) 22rem; gap: 14px; align-items: start; }
+/* ac-grid가 넓은 화면에서 2열이 되므로, 분할 영역은 두 칸을 다 차지해야 한다.
+   안 그러면 목록이 절반 폭에 갇혀 짜부라진다. */
+.ap-split { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) 22rem; gap: 14px; align-items: start; }
 .ap-split > * { min-width: 0; }
 .rv { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); display: flex; flex-direction: column; position: sticky; top: 20px; max-height: calc(100vh - 60px); }
 .rv-empty { align-items: center; justify-content: center; padding: 40px 20px; text-align: center; color: var(--ink-3); font-size: 13px; line-height: 1.7; min-height: 200px; }
@@ -807,8 +814,24 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
   .ac-req-top { flex-wrap: nowrap; }
 }
 
+/* 큰 모니터에서 양옆이 과하게 비지 않도록 한 단계 더 넓힌다.
+   글줄이 너무 길어지면 읽기 나빠지므로 무한정 늘리지는 않는다. */
+@media (min-width: 1500px) {
+  .ac-page { max-width: 1320px; }
+}
+
 @media (min-width: 900px) {
   .ac-grid { grid-template-columns: 1fr 1fr; }
+}
+
+/* 승인 화면은 목록과 검토 패널을 나란히 놓느라 폭이 필요하다.
+   위 미디어쿼리보다 뒤에 와야 max-width 제한을 실제로 푼다. */
+.ac-page-wide { max-width: 1600px; }
+
+/* 화면이 넓어지면 검토 패널도 같이 넓힌다.
+   고정 폭으로 두면 큰 모니터에서 목록만 늘어나고 패널이 상대적으로 초라해진다. */
+@media (min-width: 1400px) {
+  .ap-split { grid-template-columns: minmax(0, 1fr) 26rem; gap: 18px; }
 }
 
 @media (max-width: 640px) {
