@@ -280,7 +280,11 @@ function RequestQueue() {
         alert('적용 실패: ' + data.error)
         notify(`❌ **적용 실패**\n${actionLabel}: ${reqName}${by}\n오류: ${data.error}`)
       } else {
-        notify(`✅ **승인 + 적용 완료**\n${actionLabel}: ${reqName}${by}`)
+        // IAM은 신청자가 요청한 것과 다르게 승인할 수 있으므로, 실제 처리 결과를 남긴다.
+        const keyLine = req?.resource_type === 'iam_user'
+          ? `\n액세스 키: ${opts?.issueKey ? '발급함' : '발급 안 함'}`
+          : ''
+        notify(`✅ **승인 + 적용 완료**\n${actionLabel}: ${reqName}${by}${keyLine}`)
         if (data.result?.access_key_id && data.result?.secret_access_key) setRevealKey(data.result)
       }
     }

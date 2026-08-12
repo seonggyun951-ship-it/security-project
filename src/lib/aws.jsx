@@ -135,7 +135,11 @@ export function reqDetailLines(r) {
   }
   if (r.action === 'create_readonly_user') {
     const policy = IAM_READONLY_POLICIES.find((x) => x.arn === p.policy_arn)
-    return [`계정: ${p.user_name}`, `권한: ${policy ? policy.label : p.policy_arn}`]
+    return [
+      `계정: ${p.user_name}`,
+      `권한: ${policy ? policy.label : p.policy_arn}`,
+      `액세스 키: ${p.issue_key ? '발급 요청함' : '요청 안 함 (콘솔 로그인만)'}`,
+    ]
   }
   if (r.action === 'create_vpc') {
     return [`CIDR: ${p.cidr_block || '10.0.0.0/16'}`, `DNS 호스트네임: ${p.dns_hostnames !== false ? 'ON' : 'OFF'}`]
@@ -191,10 +195,28 @@ export function ReqCard({ r, busyId, onApprove, onReject, onRemove }) {
       {r.requester_email && <div className="ac-req-meta">신청자: {r.requester_email}</div>}
       {r.error_message && <div className="ac-req-error">{r.error_message}</div>}
       <div className="ac-req-meta">{new Date(r.requested_at).toLocaleString('ko-KR')}</div>
+      {/* 키 발급은 신청자가 요청한 대로를 기본(강조) 버튼으로 두되, 최종 결정은 승인자가 한다. */}
       {r.status === 'pending' && onApprove && r.resource_type === 'iam_user' && (
         <div className="ac-req-actions">
-          <button className="ac-btn" disabled={busy} onClick={() => onApprove(r.id, { issueKey: true })}>{busy ? '처리 중...' : '승인 (키 발급)'}</button>
-          <button className="ac-btn ac-btn-secondary" disabled={busy} onClick={() => onApprove(r.id, { issueKey: false })}>승인 (키 없이)</button>
+          {r.payload?.issue_key ? (
+            <>
+              <button className="ac-btn" disabled={busy} onClick={() => onApprove(r.id, { issueKey: true })}>
+                {busy ? '처리 중...' : '승인 (키 발급) — 신청대로'}
+              </button>
+              <button className="ac-btn ac-btn-secondary" disabled={busy} onClick={() => onApprove(r.id, { issueKey: false })}>
+                키 없이 승인
+              </button>
+            </>
+          ) : (
+            <>
+              <button className="ac-btn" disabled={busy} onClick={() => onApprove(r.id, { issueKey: false })}>
+                {busy ? '처리 중...' : '승인 (키 없이) — 신청대로'}
+              </button>
+              <button className="ac-btn ac-btn-secondary" disabled={busy} onClick={() => onApprove(r.id, { issueKey: true })}>
+                키까지 발급해서 승인
+              </button>
+            </>
+          )}
           <button className="ac-btn ac-btn-secondary" disabled={busy} onClick={() => onReject(r.id)}>거절</button>
         </div>
       )}

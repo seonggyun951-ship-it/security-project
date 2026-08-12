@@ -42,7 +42,9 @@ export function summarizePayload(action, payload) {
     }).join(', ')
   }
   // IAM
-  if (action === 'create_readonly_user') return `계정: ${p.user_name || ''}`
+  if (action === 'create_readonly_user') {
+    return `계정: ${p.user_name || ''}, 액세스 키: ${p.issue_key ? '발급 요청' : '요청 안 함'}`
+  }
   // VPC
   if (action === 'create_vpc') return `CIDR: ${p.cidr_block || ''}`
   // Subnet

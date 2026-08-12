@@ -399,9 +399,9 @@ export function WafForm({ aclOptions, onSubmit, submitting }) {
 }
 
 export function IamUserForm({ onSubmit, submitting }) {
-  const [form, setForm] = useState({ user_name: '', policy_arn: IAM_READONLY_POLICIES[0].arn, reason: '' })
+  const [form, setForm] = useState({ user_name: '', policy_arn: IAM_READONLY_POLICIES[0].arn, issue_key: false, reason: '' })
 
-  const reset = () => setForm({ user_name: '', policy_arn: IAM_READONLY_POLICIES[0].arn, reason: '' })
+  const reset = () => setForm({ user_name: '', policy_arn: IAM_READONLY_POLICIES[0].arn, issue_key: false, reason: '' })
 
   const submit = async () => {
     const userName = form.user_name.trim()
@@ -412,7 +412,8 @@ export function IamUserForm({ onSubmit, submitting }) {
     const ok = await onSubmit({
       resource_type: 'iam_user', action: 'create_readonly_user',
       title: userName, target_id: null,
-      payload: { user_name: userName, policy_arn: form.policy_arn },
+      // 신청자의 희망일 뿐이고, 실제 발급 여부는 승인자가 버튼으로 최종 결정한다.
+      payload: { user_name: userName, policy_arn: form.policy_arn, issue_key: form.issue_key },
       reason: form.reason.trim(),
     })
     if (ok) reset()
@@ -431,6 +432,20 @@ export function IamUserForm({ onSubmit, submitting }) {
           <select className="ac-input" value={form.policy_arn} onChange={(e) => setForm({ ...form, policy_arn: e.target.value })}>
             {IAM_READONLY_POLICIES.map((p) => <option key={p.arn} value={p.arn}>{p.label}</option>)}
           </select>
+        </div>
+      </div>
+      <div className="ac-form-row">
+        <div className="ac-field">
+          <label className="ac-label">
+            <input type="checkbox" checked={form.issue_key} style={{ marginRight: 6 }}
+              onChange={(e) => setForm({ ...form, issue_key: e.target.checked })} />
+            액세스 키 발급도 함께 요청
+          </label>
+          <p className="ac-sub" style={{ marginTop: 6, marginBottom: 0 }}>
+            {form.issue_key
+              ? 'CLI·SDK로 접근할 때 필요합니다. Secret Key는 발급 직후 한 번만 표시됩니다.'
+              : '콘솔 로그인만 필요하면 체크하지 않아도 됩니다. 나중에 다시 신청할 수 있습니다.'}
+          </p>
         </div>
       </div>
       <div className="ac-form-row">
