@@ -284,7 +284,7 @@ function RequestQueue() {
         notify(`❌ **적용 실패**\n${actionLabel}: ${reqName}${by}\n오류: ${data.error}`)
       } else if (data.staged) {
         // 삭제 신청을 일반 관리자가 승인한 경우 — 실제 삭제는 아직 일어나지 않았다.
-        alert('1차 승인되었습니다. 최고 관리자가 최종 승인해야 실제로 삭제됩니다.')
+        alert('1차 승인되었습니다. 2차 승인 후 삭제됩니다.')
         notify(`🕓 **삭제 1차 승인**\n${actionLabel}: ${reqName}${by}\n→ 최고 관리자 최종 승인 대기 중`)
       } else {
         // IAM은 신청자가 요청한 것과 다르게 승인할 수 있으므로, 실제 처리 결과를 남긴다.
