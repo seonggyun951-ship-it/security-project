@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { ACTION_LABEL, ReqCard, reqTitle } from '../lib/aws'
 import { notify, summarizePayload } from '../lib/discord'
-import { requireUser } from '../lib/auth'
+import { requireUser, currentUserId } from '../lib/auth'
 import { fetchRows, callFunction } from '../lib/db'
 import ErrorBanner from '../components/ErrorBanner'
 import { MyReqGrouped, MiniCal } from '../components/RequestHistory'
@@ -99,9 +99,12 @@ export default function InfraRequest({ mode = 'network' }) {
 
   const fetchMyRequests = async () => {
     setLoading(true)
+    // 본인이 낸 신청만 보여준다. 관리자는 RLS상 전체가 보이므로 여기서 걸러야 한다.
+    const uid = await currentUserId()
+    if (!uid) { setMyRequests([]); setLoading(false); return }
     const { rows, error } = await fetchRows(
       supabase.from('aws_requests').select('*')
-        .in('resource_type', typeKeys)
+        .in('resource_type', typeKeys).eq('requester_id', uid)
         .order('requested_at', { ascending: false }).limit(50),
       '신청 현황')
     setMyRequests(rows)

@@ -27,6 +27,14 @@ export async function approverLine(label = '승인자') {
   }
 }
 
+// 현재 로그인한 사용자 id. 없으면 null.
+// '내 신청 현황'을 본인 것으로 거르는 데 쓴다.
+// 관리자는 RLS상 전체 신청이 보이므로 프론트에서도 걸러야 남의 신청이 섞이지 않는다.
+export async function currentUserId() {
+  const { data: { session } } = await supabase.auth.getSession()
+  return session?.user?.id || null
+}
+
 const NOT_ADMIN = { isAdmin: false, isSuper: false }
 
 async function fetchAdminInfo() {

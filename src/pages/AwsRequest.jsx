@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { notify, summarizePayload } from '../lib/discord'
-import { requireUser } from '../lib/auth'
+import { requireUser, currentUserId } from '../lib/auth'
 import { fetchRows } from '../lib/db'
 import ErrorBanner from '../components/ErrorBanner'
 import { MyReqGrouped, MiniCal } from '../components/RequestHistory'
@@ -50,8 +50,12 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
 
   const fetchMyRequests = async () => {
     setLoading(true)
+    // 본인이 낸 신청만 보여준다. 관리자는 RLS상 전체가 보이므로 여기서 걸러야 한다.
+    const uid = await currentUserId()
+    if (!uid) { setMyRequests([]); setLoading(false); return }
     const { rows, error } = await fetchRows(
-      supabase.from('aws_requests').select('*').eq('resource_type', resourceType)
+      supabase.from('aws_requests').select('*')
+        .eq('resource_type', resourceType).eq('requester_id', uid)
         .order('requested_at', { ascending: false }).limit(50),
       '신청 현황')
     setMyRequests(rows)
