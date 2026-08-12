@@ -27,7 +27,9 @@ function useDeletableRequests(resourceType, createActions, deleteAction) {
     const [applied, deletes] = await Promise.all([
       fetchRows(
         supabase.from('aws_requests')
-          .select('id, title, action, payload, result, requested_at, requester_email')
+          // target_id는 add_rules 신청의 대상 SG, add_waf_rules의 대상 ACL이 들어있다.
+          // 빠뜨리면 삭제 신청이 대상을 못 찾는다.
+          .select('id, title, action, target_id, payload, result, requested_at, requester_email')
           .eq('resource_type', resourceType)
           .in('action', createActions)
           .eq('status', 'applied')
