@@ -233,8 +233,9 @@ function RequestQueue() {
   const [loadError, setLoadError] = useState(null)
   const isSuper = useIsSuperAdmin()
 
-  // awaiting_super(1차 승인된 삭제)도 아직 처리가 남았으므로 대기 목록에 둔다.
-  const OPEN = ['pending', 'awaiting_super']
+  // awaiting_super(1차 승인된 삭제)는 최고 관리자만 처리할 수 있다.
+  // 1차 승인을 마친 일반 관리자에게는 더 할 일이 없으므로 대기 목록에서 빼고 이력으로 넘긴다.
+  const OPEN = isSuper === true ? ['pending', 'awaiting_super'] : ['pending']
   const pendingRequests = requests.filter((r) => OPEN.includes(r.status))
   const historyRequests = requests.filter((r) => !OPEN.includes(r.status))
 

@@ -15,17 +15,20 @@ export function pendingChanged() {
   window.dispatchEvent(new Event(EVENT))
 }
 
-export function usePendingCounts(enabled) {
+// isSuper: 최고 관리자만 awaiting_super(1차 승인된 삭제)를 처리할 수 있으므로 그때만 함께 센다.
+// 일반 관리자에게는 자기가 처리할 수 없는 건이 배지에 남으면 안 된다.
+export function usePendingCounts(enabled, isSuper = false) {
   const [counts, setCounts] = useState({ aws: 0, gcp: 0 })
 
   useEffect(() => {
     if (!enabled) return
     let alive = true
+    const statuses = isSuper ? ['pending', 'awaiting_super'] : ['pending']
 
     const load = async () => {
       const [aws, gcp] = await Promise.all([
-        supabase.from('aws_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
-        supabase.from('gcp_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+        supabase.from('aws_requests').select('id', { count: 'exact', head: true }).in('status', statuses),
+        supabase.from('gcp_requests').select('id', { count: 'exact', head: true }).in('status', statuses),
       ])
       if (!alive) return
       if (aws.error) console.error('대기 건수 조회 실패(AWS):', aws.error.message)
@@ -46,7 +49,7 @@ export function usePendingCounts(enabled) {
       window.removeEventListener('focus', onFocus)
       window.removeEventListener(EVENT, load)
     }
-  }, [enabled])
+  }, [enabled, isSuper])
 
   return counts
 }

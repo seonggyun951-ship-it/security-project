@@ -69,7 +69,7 @@ export default function Sidebar({ onLogout }) {
   const isAdmin = useIsAdmin()
   const isSuper = useIsSuperAdmin()
   // 관리자만 대기 건수를 센다. 신청자는 승인 메뉴 자체가 없다.
-  const pending = usePendingCounts(isAdmin === true)
+  const pending = usePendingCounts(isAdmin === true, isSuper === true)
 
   // 모바일에서 메뉴 선택 후 자동으로 닫기
   useEffect(() => { setOpen(false) }, [location.pathname])
