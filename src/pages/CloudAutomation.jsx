@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { ReqTable, ReqDrawer, ACTION_LABEL, REQ_STATUS_META, isDeleteAction, reqRisk } from '../lib/aws'
-import { elapsedLabel } from '../lib/date'
+import { ReqTable, ReqDrawer, ACTION_LABEL, isDeleteAction, reqRisk } from '../lib/aws'
 import { notify } from '../lib/discord'
 import { fetchRows, runWrite, callFunction } from '../lib/db'
 import { approverLine, useIsSuperAdmin } from '../lib/auth'
@@ -158,7 +157,9 @@ function RequestQueue() {
 
   // 위험한 건만 추려 보기 — 삭제 신청이나 전체 개방처럼 먼저 봐야 하는 것들
   const riskyRequests = pendingRequests.filter((r) => reqRisk(r) === 'risk')
-  const shown = view === 'risk' ? riskyRequests : pendingRequests
+  const shown = view === 'risk' ? riskyRequests
+    : view === 'recent' ? recent
+      : pendingRequests
 
   return (
     <>
@@ -179,13 +180,16 @@ function RequestQueue() {
             </div>
           </div>
 
-          {/* 이력은 '승인 이력' 메뉴로 분리했다. 여기는 처리할 것만 다룬다. */}
+          {/* 전체 이력은 '승인 이력' 메뉴로. 여기 '처리됨'은 최근 것만 보여준다. */}
           <div className="ap-chips">
             <button className={`ap-chip ${view === 'pending' ? 'on' : ''}`} onClick={() => setView('pending')}>
               대기 {pendingRequests.length}
             </button>
             <button className={`ap-chip ${view === 'risk' ? 'on' : ''}`} onClick={() => setView('risk')}>
               검토필요 {riskyRequests.length}
+            </button>
+            <button className={`ap-chip ${view === 'recent' ? 'on' : ''}`} onClick={() => setView('recent')}>
+              처리됨 {recent.length}
             </button>
           </div>
 
@@ -195,7 +199,9 @@ function RequestQueue() {
 
             {!loading && shown.length === 0 && (
               <div className="ac-empty">
-                {view === 'risk' ? '검토가 필요한 신청이 없습니다.' : '대기중인 신청이 없습니다.'}
+                {view === 'risk' ? '검토가 필요한 신청이 없습니다.'
+                  : view === 'recent' ? '처리한 신청이 없습니다.'
+                    : '대기중인 신청이 없습니다.'}
               </div>
             )}
 
@@ -203,28 +209,10 @@ function RequestQueue() {
               <ReqTable requests={shown} selectedId={openReq?.id} onOpen={setOpenReq} />
             )}
 
-            {/* 방금 뭘 처리했는지 바로 확인할 수 있게 최근 것만 붙인다.
-                전체 이력은 '승인 이력' 화면으로 간다. */}
-            {!loading && recent.length > 0 && (
-              <div className="ap-recent">
-                <div className="ap-recent-head">
-                  <span>최근 처리</span>
-                  <Link to="/approval-history" className="ap-recent-more">전체 보기 →</Link>
-                </div>
-                {recent.map((r) => {
-                  const meta = REQ_STATUS_META[r.status] || { label: r.status, color: 'var(--ink-3)' }
-                  return (
-                    <button key={r.id}
-                      className={`ap-recent-row ${openReq?.id === r.id ? 'on' : ''}`}
-                      onClick={() => setOpenReq(r)}>
-                      <span className="rt-chip" style={{ background: meta.bg, color: meta.color }}>{meta.label}</span>
-                      <span className="ap-recent-title">
-                        {ACTION_LABEL[r.action] || r.action} · {r.title || r.target_id || ''}
-                      </span>
-                      <span className="ap-recent-age">{elapsedLabel(r.reviewed_at || r.requested_at)}</span>
-                    </button>
-                  )
-                })}
+            {/* 최근 처리 탭에서만 — 전체 이력은 '승인 이력' 화면으로 */}
+            {!loading && view === 'recent' && recent.length > 0 && (
+              <div className="ap-more">
+                <Link to="/approval-history" className="ap-recent-more">전체 이력 보기 →</Link>
               </div>
             )}
           </div>
