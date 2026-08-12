@@ -492,6 +492,9 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .ac-minical-cell.is-selected { background: #0284c7; color: #fff; }
 .ac-minical-empty { visibility: hidden; }
 
+/* 승인 전 주의 표시 — 막지는 않고 판단 재료만 제공 */
+.ac-req-warn { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; border-radius: 6px; padding: 6px 10px; font-size: 12.5px; font-weight: 600; margin: 4px 0; }
+
 /* 계정 관리 — 등급 카드 */
 .au-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
 .au-card { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; text-align: left; padding: 14px 16px; border: 1px solid #e2e8f0; border-radius: 10px; background: #ffffff; cursor: pointer; font: inherit; transition: border-color .12s, box-shadow .12s; }

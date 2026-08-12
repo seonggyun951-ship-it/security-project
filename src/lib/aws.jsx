@@ -152,10 +152,27 @@ export function reqDetailLines(r) {
   return []
 }
 
+// 승인 전에 관리자가 알아야 할 점. 신청을 막지는 않고 판단 재료만 제공한다.
+export function reqWarnings(r) {
+  const p = r.payload || {}
+  const out = []
+
+  if (r.action === 'create_acl' && p.default_action !== 'block') {
+    const n = (p.managed_rule_groups || []).length
+    out.push(
+      n === 0
+        ? '기본 허용 + 규칙 없음 — 아무 요청도 차단하지 않는 Web ACL입니다.'
+        : `기본 허용 규칙입니다 — 선택한 관리형 규칙 ${n}개에 걸리는 요청만 차단됩니다.`
+    )
+  }
+  return out
+}
+
 // 신청 1건 카드 — 승인자는 onApprove/onReject/onRemove 전달, 신청자는 미전달(상태만 표시)
 export function ReqCard({ r, busyId, onApprove, onReject, onRemove }) {
   const meta = REQ_STATUS_META[r.status] || { label: r.status, color: '#94a3b8' }
   const detail = reqDetailLines(r)
+  const warnings = reqWarnings(r)
   const busy = busyId === r.id
   return (
     <div className="ac-req">
@@ -164,6 +181,7 @@ export function ReqCard({ r, busyId, onApprove, onReject, onRemove }) {
         <span className="ac-req-title">{reqTitle(r)}</span>
       </div>
       {detail.map((line, i) => <div key={i} className="ac-req-reason">{line}</div>)}
+      {warnings.map((w, i) => <div key={i} className="ac-req-warn">⚠️ {w}</div>)}
       {r.reason && <div className="ac-req-reason">사유: {r.reason}</div>}
       {r.payload?.expires_at && <div className="ac-req-meta">만료: {new Date(r.payload.expires_at).toLocaleDateString('ko-KR')}</div>}
       {r.requester_email && <div className="ac-req-meta">신청자: {r.requester_email}</div>}

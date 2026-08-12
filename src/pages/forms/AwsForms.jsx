@@ -190,16 +190,14 @@ export function WafForm({ aclOptions, onSubmit, submitting }) {
   const submit = async () => {
     if (action === 'create_acl') {
       if (!form.acl_name.trim()) return alert('Web ACL 이름은 필수입니다')
-      // 관리형 규칙은 선택 사항이다. 빈 Web ACL을 먼저 만들고 나중에 규칙을 신청해 추가할 수 있다.
-      // 다만 기본 액션이 '허용'인데 규칙이 하나도 없으면 아무것도 막지 않으므로 한 번 확인받는다.
-      if (groups.length === 0 && form.default_action !== 'block') {
-        const go = confirm(
-          '관리형 규칙 없이 생성하면 이 Web ACL은 아무 요청도 차단하지 않습니다.\n' +
-          '(기본 액션이 "허용"이고 규칙이 없는 상태)\n\n' +
-          '규칙은 나중에 "기존 Web ACL에 규칙 추가"로 신청할 수 있습니다.\n\n' +
-          '이대로 신청할까요?'
+      // 기본 액션이 '차단'이면 그 자체가 정책이므로 관리형 규칙 없이도 의미가 있다.
+      // 반면 '허용' + 규칙 0개는 아무 요청도 걸러내지 않는 빈 껍데기라서 막는다.
+      if (form.default_action !== 'block' && groups.length === 0) {
+        return alert(
+          '기본 액션이 "허용"이면 관리형 규칙을 최소 1개 선택해야 합니다.\n' +
+          '규칙이 없으면 아무 요청도 차단하지 않는 Web ACL이 됩니다.\n\n' +
+          '규칙 없이 만들려면 기본 액션을 "차단"으로 선택해주세요.'
         )
-        if (!go) return
       }
       const ok = await onSubmit({
         resource_type: 'waf_web_acl', action: 'create_acl',
