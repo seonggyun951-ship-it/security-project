@@ -356,8 +356,8 @@ function RequestQueue() {
             <div className="ap-h2">
               대기 {pendingRequests.length}건
               {riskyRequests.length > 0 && (
-                <> · <span style={{ color: 'var(--fail)', fontWeight: 700 }}>먼저 볼 것 {riskyRequests.length}건</span>
-                  <span className="ap-hint">삭제 신청이거나 전체 개방(0.0.0.0/0)입니다</span></>
+                <> · <span style={{ color: 'var(--fail)', fontWeight: 700 }}>위험 {riskyRequests.length}건</span>
+                  <span className="ap-hint">삭제 신청이거나 전체 개방(0.0.0.0/0)</span></>
               )}
             </div>
           </div>

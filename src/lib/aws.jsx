@@ -252,8 +252,8 @@ export function ReqTable({ requests, onOpen, selectedId }) {
                 <td>
                   <span className="rt-chip" style={{ background: meta.bg, color: meta.color }}>{meta.label}</span>
                   {/* 색 띠만으로는 뜻이 안 보여서 글자로도 표시한다 */}
-                  {risk === 'risk' && <span className="rt-flag rt-flag-risk">먼저 볼 것</span>}
-                  {risk === 'aged' && <span className="rt-flag rt-flag-aged">오래됨</span>}
+                  {risk === 'risk' && <span className="rt-flag rt-flag-risk">위험</span>}
+                  {risk === 'aged' && <span className="rt-flag rt-flag-aged">지연</span>}
                 </td>
                 <td>
                   <div className="rt-title">{ACTION_LABEL[r.action] || r.action} · {r.title || r.target_id || ''}</div>
