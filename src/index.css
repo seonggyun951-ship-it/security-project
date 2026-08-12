@@ -106,6 +106,19 @@ body {
 .sb-link:hover { background: rgba(255,255,255,.06); color: var(--side-on-ink); }
 .sb-link.is-active { background: var(--side-on); color: var(--side-on-ink); font-weight: 700; }
 .sb-link-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.sb-icon { width: 16px; text-align: center; flex-shrink: 0; opacity: .85; }
+
+/* 접힌 사이드바 — 승인 화면처럼 폭이 필요한 곳에서 아이콘만 남긴다 */
+.sb.is-rail { width: 56px; padding: 20px 8px; align-items: center; }
+.sb.is-rail .sb-brand { font-size: 14px; padding: 4px 0 18px; }
+.sb.is-rail .sb-group-label { display: none; }
+.sb.is-rail .sb-nav { gap: 10px; width: 100%; align-items: center; }
+.sb.is-rail .sb-group { gap: 3px; width: 100%; align-items: center; }
+.sb.is-rail .sb-link { justify-content: center; padding: 9px 0; width: 40px; position: relative; }
+.sb.is-rail .sb-link-text { display: none; }
+.sb.is-rail .sb-icon { width: auto; font-size: 15px; }
+.sb.is-rail .sb-badge { position: absolute; top: 2px; right: 2px; min-width: 15px; height: 15px; font-size: 9px; padding: 0 3px; }
+.sb.is-rail .sb-logout { width: 40px; padding: 8px 0; text-align: center; }
 /* 대기중 건수 — 숫자만 갱신되고 페이지는 다시 그리지 않는다 */
 .sb-badge { flex-shrink: 0; background: var(--wait); color: #fff; font-size: 11px; font-weight: 800; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; font-variant-numeric: tabular-nums; }
 .sb-logout {
@@ -555,7 +568,7 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
    카드 대신 표를 쓰는 이유: 열이 맞아야 세로로 훑을 수 있다.
    좁은 화면에서는 가로 스크롤로 넘긴다 (본문이 밀리지 않도록). */
 .rt-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); box-shadow: var(--shadow); }
-.rt { width: 100%; min-width: 720px; border-collapse: collapse; }
+.rt { width: 100%; min-width: 640px; border-collapse: collapse; }
 .rt th {
   text-align: left; padding: 9px 12px; font-size: 11px; font-weight: 600;
   letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3);
@@ -628,8 +641,17 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
    상주하지 않고 필요할 때만 오른쪽에서 덮는다.
    뒤의 표는 흐려질 뿐 사라지지 않아, 닫으면 보던 자리 그대로다. */
 .rt-click td { cursor: pointer; }
-.rd-backdrop { position: fixed; inset: 0; background: rgba(15,19,26,.32); z-index: 200; display: flex; justify-content: flex-end; }
-.rd { width: min(420px, 100%); background: var(--panel); border-left: 1px solid var(--line); box-shadow: -8px 0 28px rgba(15,19,26,.14); display: flex; flex-direction: column; height: 100%; }
+.rt tr.rt-sel td { background: var(--accent-soft); }
+.rt tr.rt-sel td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+
+/* 목록 | 검토 패널 2단. 패널은 상주하고 목록을 덮지 않는다 */
+.ap-split { display: grid; grid-template-columns: minmax(0, 1fr) 24rem; gap: 14px; align-items: start; }
+.rv { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); display: flex; flex-direction: column; position: sticky; top: 20px; max-height: calc(100vh - 60px); }
+.rv-empty { align-items: center; justify-content: center; padding: 40px 20px; text-align: center; color: var(--ink-3); font-size: 13px; line-height: 1.7; min-height: 200px; }
+@media (max-width: 1100px) {
+  .ap-split { grid-template-columns: 1fr; }
+  .rv { position: static; max-height: none; }
+}
 .rd-head { display: flex; align-items: flex-start; gap: 10px; padding: 16px 18px; border-bottom: 1px solid var(--line); }
 .rd-title { font-size: 15px; font-weight: 700; color: var(--ink); margin-top: 6px; letter-spacing: -0.01em; }
 .rd-sub { font-family: var(--mono); font-size: 12px; color: var(--ink-3); margin-top: 2px; word-break: break-all; }

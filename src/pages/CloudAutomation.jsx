@@ -342,21 +342,24 @@ function RequestQueue() {
     <>
       {revealKey && <RevealKeyPopup result={revealKey} onClose={() => setRevealKey(null)} />}
       <ErrorBanner message={loadError} onRetry={fetchRequests} />
-      <div className={`ac-card ac-card-wide ${pendingRequests.length > 0 ? 'ac-card-alert' : ''}`}>
-        <div className="ac-card-title">
-          처리 대기중
-          {pendingRequests.length > 0 && <span className="ac-count-badge">{pendingRequests.length}</span>}
+      {/* 목록과 검토 패널을 나란히 — 고르고 판단하고 다음으로 넘어가는 흐름이 끊기지 않게 */}
+      <div className="ap-split">
+        <div className={`ac-card ac-card-wide ${pendingRequests.length > 0 ? 'ac-card-alert' : ''}`} style={{ marginBottom: 0 }}>
+          <div className="ac-card-title">
+            처리 대기중
+            {pendingRequests.length > 0 && <span className="ac-count-badge">{pendingRequests.length}</span>}
+          </div>
+          {loading && <div className="ac-empty">불러오는 중...</div>}
+          {!loading && pendingRequests.length === 0 && <div className="ac-empty">대기중인 신청이 없습니다.</div>}
+          {!loading && pendingRequests.length > 0 && (
+            <ReqTable requests={pendingRequests} busyId={busyId} isSuper={isSuper === true}
+              selectedId={openReq?.id} onApprove={approve} onReject={reject} onOpen={setOpenReq} />
+          )}
         </div>
-        {loading && <div className="ac-empty">불러오는 중...</div>}
-        {!loading && pendingRequests.length === 0 && <div className="ac-empty">대기중인 신청이 없습니다.</div>}
-        {!loading && pendingRequests.length > 0 && (
-          <ReqTable requests={pendingRequests} busyId={busyId} isSuper={isSuper === true}
-            onApprove={approve} onReject={reject} onOpen={setOpenReq} />
-        )}
-      </div>
 
-      <ReqDrawer r={openReq} busyId={busyId} isSuper={isSuper === true}
-        onApprove={approve} onReject={reject} onClose={() => setOpenReq(null)} />
+        <ReqDrawer r={openReq} busyId={busyId} isSuper={isSuper === true}
+          onApprove={approve} onReject={reject} onClose={() => setOpenReq(null)} />
+      </div>
 
       <div className="ac-card ac-card-wide ac-card-muted">
         <div className="ac-card-title">처리 이력</div>

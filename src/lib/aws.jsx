@@ -225,7 +225,7 @@ export function reqWarnings(r) {
 // 관리자의 일은 '고르기'다. 카드로 쌓으면 삭제 신청도, 사흘 묵은 건도, 방금 온 건도
 // 전부 같은 무게로 보여서 뭐부터 봐야 할지 알 수 없다.
 // 표로 두면 열이 맞아떨어져 세로로 훑을 수 있고, 왼쪽 색 띠로 위험·지연이 먼저 눈에 걸린다.
-export function ReqTable({ requests, busyId, onApprove, onReject, onOpen, isSuper = false }) {
+export function ReqTable({ requests, busyId, onApprove, onReject, onOpen, selectedId, isSuper = false }) {
   return (
     <div className="rt-scroll">
       <table className="rt">
@@ -244,7 +244,7 @@ export function ReqTable({ requests, busyId, onApprove, onReject, onOpen, isSupe
             const summary = summarizePayload(r.action, r.payload)
 
             return (
-              <tr key={r.id} className={`${risk ? `rt-${risk}` : ''} ${onOpen ? 'rt-click' : ''}`}>
+              <tr key={r.id} className={`${risk ? `rt-${risk}` : ''} ${onOpen ? 'rt-click' : ''} ${selectedId === r.id ? 'rt-sel' : ''}`}>
                 {/* 행을 누르면 상세가 열린다. 처리 버튼은 별도 칸이라 눌러도 열리지 않는다. */}
                 <td onClick={() => onOpen?.(r)}>
                   <span className="rt-chip" style={{ background: meta.color }}>{meta.label}</span>
@@ -305,12 +305,19 @@ export function ReqTable({ requests, busyId, onApprove, onReject, onOpen, isSupe
   )
 }
 
-// 표에서 행을 눌렀을 때 오른쪽에서 덮는 상세.
+// 오른쪽에 상주하는 검토 패널.
 //
-// 상주하지 않고 필요할 때만 열린다. 표는 흐려질 뿐 사라지지 않으므로
-// 닫으면 보던 자리 그대로다 — 연달아 처리해도 위치를 다시 찾을 필요가 없다.
+// 목록을 덮지 않고 옆에 나란히 있어서, 고르고 판단하고 다음으로 넘어가는 흐름이 끊기지 않는다.
+// 줄글이 아니라 항목별 서식으로 묶어 편지 본문처럼 읽히지 않게 한다.
 export function ReqDrawer({ r, busyId, onApprove, onReject, onClose, isSuper = false }) {
-  if (!r) return null
+  // 상주형 패널 — 아무것도 고르지 않았을 때도 자리를 지킨다.
+  if (!r) {
+    return (
+      <aside className="rv rv-empty">
+        <div>목록에서 신청을 선택하면<br />여기에 상세가 표시됩니다.</div>
+      </aside>
+    )
+  }
   const meta = REQ_STATUS_META[r.status] || { label: r.status, color: 'var(--ink-3)' }
   const detail = reqDetailLines(r)
   const warnings = reqWarnings(r)
@@ -319,15 +326,14 @@ export function ReqDrawer({ r, busyId, onApprove, onReject, onClose, isSuper = f
   const actionable = r.status === 'pending' || (isDelete && r.status === 'awaiting_super')
 
   return (
-    <div className="rd-backdrop" onClick={onClose}>
-      <aside className="rd" onClick={(e) => e.stopPropagation()}>
+      <aside className="rv">
         <div className="rd-head">
           <div style={{ flex: 1, minWidth: 0 }}>
             <span className="rt-chip" style={{ background: meta.color }}>{meta.label}</span>
             <div className="rd-title">{ACTION_LABEL[r.action] || r.action}</div>
             <div className="rd-sub">{r.title || r.target_id || ''}</div>
           </div>
-          <button className="rd-x" onClick={onClose} aria-label="닫기">✕</button>
+          <button className="rd-x" onClick={onClose} aria-label="선택 해제">✕</button>
         </div>
 
         <div className="rd-body">
@@ -391,7 +397,6 @@ export function ReqDrawer({ r, busyId, onApprove, onReject, onClose, isSuper = f
           </div>
         )}
       </aside>
-    </div>
   )
 }
 
