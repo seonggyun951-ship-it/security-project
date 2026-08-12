@@ -11,34 +11,52 @@ import { sgRuleLabel, wafRuleLabel } from '../../lib/aws'
 //   - 원본 신청과 이어져 감사 추적이 된다
 // RLS상 신청자는 본인 신청만, 관리자는 전체가 보인다.
 
-// resource_type/action에 해당하는 '적용 완료' 신청 목록
-function useAppliedRequests(resourceType, actions) {
+// 이미 삭제가 진행 중이거나 끝난 대상은 다시 신청할 수 없어야 한다.
+// 실패·거부된 삭제 신청은 다시 시도할 수 있어야 하므로 여기 포함하지 않는다.
+const BLOCKING = ['pending', 'awaiting_super', 'approved', 'applied']
+
+// 삭제 신청 대상 목록 = 적용 완료된 생성 신청 중, 아직 삭제가 걸려 있지 않은 것
+function useDeletableRequests(resourceType, createActions, deleteAction) {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const key = createActions.join(',')
 
-  useEffect(() => {
-    let alive = true
-    const load = async () => {
-      setLoading(true)
-      const res = await fetchRows(
+  const load = async () => {
+    setLoading(true)
+    const [applied, deletes] = await Promise.all([
+      fetchRows(
         supabase.from('aws_requests')
           .select('id, title, action, payload, result, requested_at, requester_email')
           .eq('resource_type', resourceType)
-          .in('action', actions)
+          .in('action', createActions)
           .eq('status', 'applied')
           .order('requested_at', { ascending: false }).limit(100),
-        '적용된 신청 목록')
-      if (!alive) return
-      setRows(res.rows)
-      setError(res.error)
-      setLoading(false)
-    }
-    load()
-    return () => { alive = false }
-  }, [resourceType, actions.join(',')])
+        '적용된 신청 목록'),
+      fetchRows(
+        supabase.from('aws_requests')
+          .select('payload, status')
+          .eq('action', deleteAction)
+          .in('status', BLOCKING).limit(200),
+        '삭제 신청 목록'),
+    ])
 
-  return { rows, loading, error }
+    // 이미 삭제 신청이 걸린 원본은 후보에서 뺀다 (중복 신청 방지)
+    const taken = new Set(
+      deletes.rows.map((d) => d.payload?.source_request_id).filter(Boolean)
+    )
+    setRows(applied.rows.filter((r) => !taken.has(r.id)))
+    setError(applied.error || deletes.error)
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    let alive = true
+    load().catch(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
+  }, [resourceType, key, deleteAction])
+
+  return { rows, loading, error, reload: load }
 }
 
 const whenLabel = (r) =>
@@ -46,7 +64,7 @@ const whenLabel = (r) =>
 
 // ---- IAM 계정 삭제 ----
 export function IamDeleteForm({ onSubmit, submitting }) {
-  const { rows, loading, error } = useAppliedRequests('iam_user', ['create_readonly_user'])
+  const { rows, loading, error, reload } = useDeletableRequests('iam_user', ['create_readonly_user'], 'delete_iam_user')
   const [targetId, setTargetId] = useState('')
   const [reason, setReason] = useState('')
 
@@ -65,7 +83,7 @@ export function IamDeleteForm({ onSubmit, submitting }) {
       payload: { user_name: userName, source_request_id: target.id },
       reason: reason.trim(),
     })
-    if (ok) { setTargetId(''); setReason('') }
+    if (ok) { setTargetId(''); setReason(''); await reload() }
   }
 
   return (
@@ -109,7 +127,7 @@ export function IamDeleteForm({ onSubmit, submitting }) {
 
 // ---- SG 규칙 삭제 ----
 export function SgDeleteForm({ onSubmit, submitting }) {
-  const { rows, loading, error } = useAppliedRequests('security_group', ['create_sg', 'add_rules'])
+  const { rows, loading, error, reload } = useDeletableRequests('security_group', ['create_sg', 'add_rules'], 'delete_sg_rules')
   const [targetId, setTargetId] = useState('')
   const [picked, setPicked] = useState([]) // 선택된 규칙 index
   const [reason, setReason] = useState('')
@@ -140,7 +158,7 @@ export function SgDeleteForm({ onSubmit, submitting }) {
       },
       reason: reason.trim(),
     })
-    if (ok) { setTargetId(''); setPicked([]); setReason('') }
+    if (ok) { setTargetId(''); setPicked([]); setReason(''); await reload() }
   }
 
   return (
@@ -200,7 +218,7 @@ export function SgDeleteForm({ onSubmit, submitting }) {
 
 // ---- WAF 규칙 삭제 ----
 export function WafDeleteForm({ onSubmit, submitting }) {
-  const { rows, loading, error } = useAppliedRequests('waf_web_acl', ['add_waf_rules'])
+  const { rows, loading, error, reload } = useDeletableRequests('waf_web_acl', ['add_waf_rules'], 'delete_waf_rules')
   const [targetId, setTargetId] = useState('')
   const [picked, setPicked] = useState([]) // 선택된 규칙 이름
   const [reason, setReason] = useState('')
@@ -233,7 +251,7 @@ export function WafDeleteForm({ onSubmit, submitting }) {
       },
       reason: reason.trim(),
     })
-    if (ok) { setTargetId(''); setPicked([]); setReason('') }
+    if (ok) { setTargetId(''); setPicked([]); setReason(''); await reload() }
   }
 
   return (

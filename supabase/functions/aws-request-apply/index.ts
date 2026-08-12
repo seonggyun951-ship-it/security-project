@@ -269,8 +269,17 @@ async function handleDeleteIamUser(iam, req) {
   const UserName = p.user_name
   if (!UserName) throw new Error('user_name이 없습니다')
 
+  // 이미 없는 계정이면 목적은 달성된 상태다. 실패로 처리하면 재시도만 반복된다.
+  const gone = (e) => String(e).includes('NoSuchEntity')
+
   // IAM은 액세스 키와 정책이 붙어 있으면 사용자를 지울 수 없다. 먼저 떼어낸다.
-  const keys = await iam.send(new ListAccessKeysCommand({ UserName }))
+  let keys
+  try {
+    keys = await iam.send(new ListAccessKeysCommand({ UserName }))
+  } catch (e) {
+    if (gone(e)) return { deleted_user: UserName, note: '이미 삭제된 계정입니다' }
+    throw e
+  }
   for (const k of (keys.AccessKeyMetadata || [])) {
     await iam.send(new DeleteAccessKeyCommand({ UserName, AccessKeyId: k.AccessKeyId }))
   }
