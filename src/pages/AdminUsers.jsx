@@ -2,6 +2,22 @@ import { useState, useEffect } from 'react'
 import { callFunction } from '../lib/db'
 import ErrorBanner from '../components/ErrorBanner'
 
+// 등급 정의. 카드 순서이자 목록 분류 기준이다.
+const ROLES = [
+  {
+    key: 'super', label: '최고 관리자', cls: 'au-role-super',
+    desc: '계정 생성·삭제와 권한 변경까지 가능합니다.',
+  },
+  {
+    key: 'admin', label: '관리자', cls: 'au-role-admin',
+    desc: '신청을 승인하거나 거부할 수 있습니다.',
+  },
+  {
+    key: 'user', label: '일반 사용자', cls: 'au-role-user',
+    desc: '신청만 할 수 있습니다.',
+  },
+]
+
 // 최고 관리자 전용 계정 관리 화면.
 // 계정 생성/삭제와 권한 변경은 service_role이 필요해 브라우저에서 직접 못 한다.
 // 모든 동작은 admin-users Edge Function을 거치고, 거기서 최고 관리자인지 다시 확인한다.
@@ -13,6 +29,7 @@ export default function AdminUsers() {
 
   const [form, setForm] = useState({ email: '', password: '', make_admin: false })
   const [creating, setCreating] = useState(false)
+  const [openRole, setOpenRole] = useState(null)
 
   const fetchUsers = async () => {
     setLoading(true)
@@ -82,10 +99,13 @@ export default function AdminUsers() {
   }
 
   const roleOf = (u) => {
-    if (u.is_super) return { label: '최고 관리자', cls: 'au-role-super' }
-    if (u.is_admin) return { label: '관리자', cls: 'au-role-admin' }
-    return { label: '신청자', cls: 'au-role-user' }
+    if (u.is_super) return ROLES.find((r) => r.key === 'super')
+    if (u.is_admin) return ROLES.find((r) => r.key === 'admin')
+    return ROLES.find((r) => r.key === 'user')
   }
+
+  const grouped = ROLES.map((r) => ({ ...r, items: users.filter((u) => roleOf(u).key === r.key) }))
+  const openGroup = grouped.find((g) => g.key === openRole)
 
   return (
     <div className="ac-page">
@@ -131,46 +151,80 @@ export default function AdminUsers() {
           {loading && <div className="ac-empty">불러오는 중...</div>}
           {!loading && users.length === 0 && !loadError && <div className="ac-empty">계정이 없습니다.</div>}
 
-          <div className="au-list">
-            {users.map((u) => {
-              const role = roleOf(u)
-              const busy = busyId === u.id
-              return (
-                <div key={u.id} className="au-row">
-                  <div className="au-main">
-                    <span className="au-email">{u.email}</span>
-                    <span className={`au-role ${role.cls}`}>{role.label}</span>
-                    {u.is_self && <span className="au-self">본인</span>}
-                  </div>
-                  <div className="au-meta">
-                    최근 로그인: {u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleString('ko-KR') : '없음'}
-                  </div>
-                  {/* 최고 관리자와 본인 계정은 이 화면에서 바꿀 수 없다 (스스로 잠기는 상황 방지) */}
-                  {!u.is_super && !u.is_self && (
-                    <div className="au-actions">
-                      {u.is_admin ? (
-                        <button className="ac-btn ac-btn-secondary" disabled={busy} onClick={() => setAdmin(u, false)}>
-                          관리자 해제
-                        </button>
-                      ) : (
-                        <button className="ac-btn" disabled={busy} onClick={() => setAdmin(u, true)}>
-                          관리자로 지정
-                        </button>
-                      )}
-                      <button className="ac-btn ac-btn-secondary" disabled={busy} onClick={() => resetPassword(u)}>
-                        비밀번호 재설정
-                      </button>
-                      <button className="ac-btn ac-btn-secondary" disabled={busy} onClick={() => removeUser(u)}>
-                        {busy ? '처리 중...' : '계정 삭제'}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
+          {!loading && users.length > 0 && (
+            <div className="au-cards">
+              {grouped.map((g) => (
+                <button
+                  key={g.key}
+                  className={`au-card au-card-${g.key}`}
+                  onClick={() => g.items.length > 0 && setOpenRole(g.key)}
+                  disabled={g.items.length === 0}
+                >
+                  <span className={`au-role ${g.cls}`}>{g.label}</span>
+                  <span className="au-card-count">{g.items.length}</span>
+                  <span className="au-card-desc">{g.desc}</span>
+                  <span className="au-card-more">{g.items.length > 0 ? '목록 보기 →' : '없음'}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
+
+      {openGroup && (
+        <div className="ac-datepop-backdrop" onClick={() => setOpenRole(null)}>
+          <div className="ac-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="ac-modal-head">
+              <span className="ac-modal-title">
+                {openGroup.label} <b>{openGroup.items.length}</b>명
+              </span>
+              <button className="ac-btn ac-btn-secondary" onClick={() => setOpenRole(null)}>닫기</button>
+            </div>
+            <div className="ac-modal-body">
+              <div className="au-list">
+                {openGroup.items.map((u) => {
+                  const busy = busyId === u.id
+                  return (
+                    <div key={u.id} className="au-row">
+                      <div className="au-main">
+                        <span className="au-email">{u.email}</span>
+                        {u.is_self && <span className="au-self">본인</span>}
+                      </div>
+                      <div className="au-meta">
+                        최근 로그인: {u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleString('ko-KR') : '없음'}
+                      </div>
+                      {/* 최고 관리자와 본인 계정은 이 화면에서 바꿀 수 없다 (스스로 잠기는 상황 방지) */}
+                      {u.is_super || u.is_self ? (
+                        <div className="au-meta au-locked">
+                          {u.is_self ? '본인 계정은 여기서 변경할 수 없습니다.' : '최고 관리자 계정은 변경할 수 없습니다.'}
+                        </div>
+                      ) : (
+                        <div className="au-actions">
+                          {u.is_admin ? (
+                            <button className="ac-btn ac-btn-secondary" disabled={busy} onClick={() => setAdmin(u, false)}>
+                              관리자 해제
+                            </button>
+                          ) : (
+                            <button className="ac-btn" disabled={busy} onClick={() => setAdmin(u, true)}>
+                              관리자로 지정
+                            </button>
+                          )}
+                          <button className="ac-btn ac-btn-secondary" disabled={busy} onClick={() => resetPassword(u)}>
+                            비밀번호 재설정
+                          </button>
+                          <button className="ac-btn ac-btn-secondary" disabled={busy} onClick={() => removeUser(u)}>
+                            {busy ? '처리 중...' : '계정 삭제'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

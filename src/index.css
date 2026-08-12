@@ -492,7 +492,18 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .ac-minical-cell.is-selected { background: #0284c7; color: #fff; }
 .ac-minical-empty { visibility: hidden; }
 
-/* 계정 관리 */
+/* 계정 관리 — 등급 카드 */
+.au-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+.au-card { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; text-align: left; padding: 14px 16px; border: 1px solid #e2e8f0; border-radius: 10px; background: #ffffff; cursor: pointer; font: inherit; transition: border-color .12s, box-shadow .12s; }
+.au-card:hover:not(:disabled) { border-color: #94a3b8; box-shadow: 0 1px 6px rgba(15,23,42,.07); }
+.au-card:disabled { cursor: default; opacity: .6; }
+.au-card-count { font-size: 26px; font-weight: 800; color: #0f172a; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.au-card-desc { font-size: 12px; color: #64748b; line-height: 1.5; }
+.au-card-more { font-size: 12px; font-weight: 600; color: #4338ca; margin-top: 2px; }
+.au-card:disabled .au-card-more { color: #94a3b8; }
+.au-locked { font-style: italic; margin-top: 8px; }
+
+/* 계정 관리 — 목록 */
 .au-list { display: flex; flex-direction: column; gap: 8px; }
 .au-row { border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; background: #ffffff; }
 .au-main { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
