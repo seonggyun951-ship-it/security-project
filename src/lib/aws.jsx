@@ -245,7 +245,7 @@ export function ReqCard({ r, busyId, onApprove, onReject, onRemove, isSuper = fa
             <span className="ac-req-meta">최고 관리자 승인을 기다리는 중입니다.</span>
           ) : (
             <button className="ac-btn" disabled={busy} onClick={() => onApprove(r.id)}>
-              {busy ? '처리 중...' : '1차 승인 (실제 삭제는 최고관리자가)'}
+              {busy ? '처리 중...' : '1차 승인'}
             </button>
           )}
           <button className="ac-btn ac-btn-secondary" disabled={busy} onClick={() => onReject(r.id)}>거절</button>
