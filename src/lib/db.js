@@ -31,6 +31,19 @@ export async function runWrite(query, context) {
   return { ok: true, error: null }
 }
 
+// 신청자 본인이 아직 처리되지 않은 신청을 거둬들인다.
+// RLS가 "본인 + pending/awaiting_super → cancelled"만 허용하므로,
+// 남의 신청이나 이미 적용된 건은 여기서 0건으로 돌아온다.
+export async function cancelRequest(table, id) {
+  return runWrite(
+    supabase.from(table)
+      .update({ status: 'cancelled' })
+      .eq('id', id)
+      .in('status', ['pending', 'awaiting_super'])
+      .select(),
+    '신청 취소')
+}
+
 // Edge Function 호출 공통 — 인증 헤더 부착과 비정상 응답 처리를 한 곳에서 한다.
 // 기존에는 페이지마다 fetch를 따로 짜서 res.ok를 확인하지 않는 곳이 있었다.
 export async function callFunction(name, body = {}) {

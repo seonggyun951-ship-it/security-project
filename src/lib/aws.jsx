@@ -44,8 +44,9 @@ export const REQ_STATUS_META = {
   awaiting_super: { label: '최고관리자 승인 대기', color: '#a855f7' },
   approved:       { label: '승인 처리중', color: '#38bdf8' },
   applied:  { label: '적용 완료', color: '#10b981' },
-  rejected: { label: '거절됨', color: '#64748b' },
-  failed:   { label: '적용 실패', color: '#ef4444' },
+  rejected:       { label: '거절됨', color: '#64748b' },
+  failed:         { label: '적용 실패', color: '#ef4444' },
+  cancelled:      { label: '신청 취소', color: '#94a3b8' },
 }
 
 // WAF 신규 생성 시 선택 가능한 AWS 관리형 규칙 그룹

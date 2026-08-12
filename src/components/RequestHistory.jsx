@@ -7,11 +7,15 @@ import { WEEKDAYS, dateKey, localDateKey, todayKey, monthCells, groupByDate } fr
 
 // 'approved'는 Terraform 대상만 머무르는 상태다. SG/WAF/IAM은 이 상태를 거치지 않지만
 // 빈 그룹은 아래에서 걸러지므로 순서 목록을 공유해도 문제없다.
-const STATUS_GROUP_ORDER = ['pending', 'approved', 'failed', 'applied', 'rejected']
+const STATUS_GROUP_ORDER = ['pending', 'awaiting_super', 'approved', 'failed', 'applied', 'rejected', 'cancelled']
+
+// 아직 실행되지 않은 신청만 취소할 수 있다.
+const CANCELABLE = ['pending', 'awaiting_super']
 
 // showResult: Terraform으로 만든 리소스는 생성된 AWS ID를 따로 보여준다.
 // SG/WAF는 reqTitle에 이미 생성 ID가 붙어서 중복이라 끈다.
-export function MyReqRow({ r, showResult = false }) {
+// onCancel: 신청자 본인이 취소할 수 있을 때만 전달된다.
+export function MyReqRow({ r, showResult = false, onCancel, busy = false }) {
   const [open, setOpen] = useState(false)
   const detail = reqDetailLines(r)
   const d = new Date(r.requested_at)
@@ -39,6 +43,13 @@ export function MyReqRow({ r, showResult = false }) {
           )}
           {r.status !== 'rejected' && r.error_message && <div className="ac-req-error">{r.error_message}</div>}
           <div className="ac-req-meta">{d.toLocaleString('ko-KR')}</div>
+          {onCancel && CANCELABLE.includes(r.status) && (
+            <div className="ac-req-actions">
+              <button className="ac-btn ac-btn-secondary" disabled={busy} onClick={() => onCancel(r)}>
+                {busy ? '취소 중...' : '신청 취소'}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -46,7 +57,7 @@ export function MyReqRow({ r, showResult = false }) {
 }
 
 // 상태별로 묶고, 그 안에서 다시 날짜별로 묶는다. 건수가 늘어도 화면이 길어지지 않게 접어둔다.
-export function MyReqGrouped({ requests, showResult = false }) {
+export function MyReqGrouped({ requests, showResult = false, onCancel, busyId }) {
   const [openGroup, setOpenGroup] = useState('pending')
 
   const groups = STATUS_GROUP_ORDER.map((status) => {
@@ -73,7 +84,10 @@ export function MyReqGrouped({ requests, showResult = false }) {
               {g.dates.map(([date, items]) => (
                 <div key={date} className="ac-sgroup-date">
                   <div className="ac-sgroup-date-label">{date}</div>
-                  {items.map((r) => <MyReqRow key={r.id} r={r} showResult={showResult} />)}
+                  {items.map((r) => (
+                    <MyReqRow key={r.id} r={r} showResult={showResult}
+                      onCancel={onCancel} busy={busyId === r.id} />
+                  ))}
                 </div>
               ))}
             </div>

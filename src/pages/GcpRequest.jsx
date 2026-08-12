@@ -8,7 +8,7 @@ import {
 import { notify, summarizePayload } from '../lib/discord'
 import { requireUser, currentUserId } from '../lib/auth'
 import { pendingChanged } from '../lib/pending'
-import { fetchRows } from '../lib/db'
+import { fetchRows, cancelRequest } from '../lib/db'
 import ErrorBanner from '../components/ErrorBanner'
 
 function FirewallForm({ onSubmit, submitting }) {
@@ -265,7 +265,9 @@ function IamForm({ onSubmit, submitting }) {
   )
 }
 
-function MyReqRow({ r }) {
+const CANCELABLE = ['pending', 'awaiting_super']
+
+function MyReqRow({ r, onCancel, busy }) {
   const [open, setOpen] = useState(false)
   const detail = gcpReqDetailLines(r)
   const d = new Date(r.requested_at)
@@ -284,6 +286,13 @@ function MyReqRow({ r }) {
           {r.reason && <div className="ac-req-reason">사유: {r.reason}</div>}
           {r.error_message && <div className="ac-req-error">{r.error_message}</div>}
           <div className="ac-req-meta">{d.toLocaleString('ko-KR')}</div>
+          {onCancel && CANCELABLE.includes(r.status) && (
+            <div className="ac-req-actions">
+              <button className="ac-btn ac-btn-secondary" disabled={busy} onClick={() => onCancel(r)}>
+                {busy ? '취소 중...' : '신청 취소'}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -301,6 +310,18 @@ export default function GcpRequest({ resourceType = 'firewall_rule' }) {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [loadError, setLoadError] = useState(null)
+  const [cancelingId, setCancelingId] = useState(null)
+
+  const cancel = async (r) => {
+    if (!confirm(`이 신청을 취소할까요?\n\n${gcpReqTitle(r)}`)) return
+    setCancelingId(r.id)
+    const { ok, error } = await cancelRequest('gcp_requests', r.id)
+    setCancelingId(null)
+    if (!ok) return alert(error)
+    notify(`↩️ **GCP 신청 취소**\n${r.action}: ${r.title || ''}\n신청자가 직접 취소했습니다`)
+    pendingChanged()
+    await fetchMyRequests()
+  }
 
   const fetchMyRequests = async () => {
     setLoading(true)
@@ -369,7 +390,9 @@ export default function GcpRequest({ resourceType = 'firewall_rule' }) {
           {loading && <div className="ac-empty">불러오는 중...</div>}
           {!loading && myRequests.length === 0 && <div className="ac-empty">아직 신청 내역이 없습니다.</div>}
           <div className="ac-snapshot-list">
-            {myRequests.map((r) => <MyReqRow key={r.id} r={r} />)}
+            {myRequests.map((r) => (
+              <MyReqRow key={r.id} r={r} onCancel={cancel} busy={cancelingId === r.id} />
+            ))}
           </div>
         </div>
       </div>

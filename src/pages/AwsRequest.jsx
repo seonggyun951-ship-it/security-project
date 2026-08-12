@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import { notify, summarizePayload } from '../lib/discord'
 import { requireUser, currentUserId } from '../lib/auth'
 import { pendingChanged } from '../lib/pending'
-import { fetchRows } from '../lib/db'
+import { fetchRows, cancelRequest } from '../lib/db'
 import ErrorBanner from '../components/ErrorBanner'
 import { MyReqGrouped, MiniCal } from '../components/RequestHistory'
 import { localDateKey } from '../lib/date'
@@ -30,6 +30,18 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
   const [listError, setListError] = useState(null)
   const [optionsError, setOptionsError] = useState(null)
   const [mode, setMode] = useState('create') // 'create' | 'delete'
+  const [cancelingId, setCancelingId] = useState(null)
+
+  const cancel = async (r) => {
+    if (!confirm(`이 신청을 취소할까요?\n\n${reqTitle(r)}`)) return
+    setCancelingId(r.id)
+    const { ok, error } = await cancelRequest('aws_requests', r.id)
+    setCancelingId(null)
+    if (!ok) return alert(error)
+    notify(`↩️ **신청 취소**\n${ACTION_LABEL[r.action] || r.action}: ${r.title || ''}\n신청자가 직접 취소했습니다`)
+    pendingChanged()
+    await fetchMyRequests()
+  }
 
   const filteredRequests = dateFilter
     ? myRequests.filter((r) => localDateKey(r.requested_at) === dateFilter)
@@ -180,7 +192,9 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
           {calOpen && <MiniCal requests={myRequests} selected={dateFilter} onSelect={(d) => { setDateFilter(d); setCalOpen(false) }} />}
           {loading && <div className="ac-empty">불러오는 중...</div>}
           {!loading && filteredRequests.length === 0 && <div className="ac-empty">{dateFilter ? '해당 날짜에 신청 내역이 없습니다.' : '아직 신청 내역이 없습니다.'}</div>}
-          {!loading && filteredRequests.length > 0 && <MyReqGrouped requests={filteredRequests} />}
+          {!loading && filteredRequests.length > 0 && (
+            <MyReqGrouped requests={filteredRequests} onCancel={cancel} busyId={cancelingId} />
+          )}
         </div>
       </div>
 
