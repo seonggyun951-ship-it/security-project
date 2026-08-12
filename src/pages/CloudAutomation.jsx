@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { ReqCard, ReqTable, ReqDrawer, REQ_STATUS_META, ACTION_LABEL, isDeleteAction } from '../lib/aws'
+import { ReqCard, ReqTable, ReqDrawer, REQ_STATUS_META, ACTION_LABEL, isDeleteAction, reqRisk } from '../lib/aws'
 import { notify } from '../lib/discord'
 import { fetchRows, runWrite, callFunction } from '../lib/db'
 import { approverLine, useIsSuperAdmin } from '../lib/auth'
@@ -231,7 +231,8 @@ function RequestQueue() {
   const [busyId, setBusyId] = useState(null)
   const [revealKey, setRevealKey] = useState(null)
   const [loadError, setLoadError] = useState(null)
-  const [openReq, setOpenReq] = useState(null) // 상세 드로어에 열린 신청
+  const [openReq, setOpenReq] = useState(null) // 검토 패널에 열린 신청
+  const [view, setView] = useState('pending')  // 'pending' | 'risk' | 'history'
   const isSuper = useIsSuperAdmin()
 
   // awaiting_super(1차 승인된 삭제)는 최고 관리자만 처리할 수 있다.
@@ -338,36 +339,63 @@ function RequestQueue() {
     await fetchRequests()
   }
 
+  // 위험한 건만 추려 보기 — 삭제 신청이나 전체 개방처럼 먼저 봐야 하는 것들
+  const riskyRequests = pendingRequests.filter((r) => reqRisk(r) === 'risk')
+  const shown = view === 'history' ? [] : view === 'risk' ? riskyRequests : pendingRequests
+
   return (
     <>
       {revealKey && <RevealKeyPopup result={revealKey} onClose={() => setRevealKey(null)} />}
-      <ErrorBanner message={loadError} onRetry={fetchRequests} />
-      {/* 목록과 검토 패널을 나란히 — 고르고 판단하고 다음으로 넘어가는 흐름이 끊기지 않게.
-          ac-card-wide(grid-column: 1/-1)를 쓰면 목록이 2칸을 다 먹어 패널이 아래로 밀린다. */}
-      <div className="ap-split">
-        <div className={`ac-card ${pendingRequests.length > 0 ? 'ac-card-alert' : ''}`} style={{ marginBottom: 0, minWidth: 0 }}>
-          <div className="ac-card-title">
-            처리 대기중
-            {pendingRequests.length > 0 && <span className="ac-count-badge">{pendingRequests.length}</span>}
+
+      {/* 목록과 검토 패널이 화면 높이를 채우는 2단.
+          카드로 감싸지 않아야 시안처럼 경계가 깔끔하게 떨어진다. */}
+      <div className="ap">
+        <section className="ap-col">
+          <div className="ap-head">
+            <div className="ap-h1">관리자 승인</div>
+            <div className="ap-h2">
+              대기 {pendingRequests.length}건
+              {riskyRequests.length > 0 && ` · 먼저 볼 것 ${riskyRequests.length}건`}
+            </div>
           </div>
-          {loading && <div className="ac-empty">불러오는 중...</div>}
-          {!loading && pendingRequests.length === 0 && <div className="ac-empty">대기중인 신청이 없습니다.</div>}
-          {!loading && pendingRequests.length > 0 && (
-            <ReqTable requests={pendingRequests} busyId={busyId} isSuper={isSuper === true}
-              selectedId={openReq?.id} onApprove={approve} onReject={reject} onOpen={setOpenReq} />
-          )}
-        </div>
+
+          <div className="ap-chips">
+            <button className={`ap-chip ${view === 'pending' ? 'on' : ''}`} onClick={() => setView('pending')}>
+              대기 {pendingRequests.length}
+            </button>
+            <button className={`ap-chip ${view === 'risk' ? 'on' : ''}`} onClick={() => setView('risk')}>
+              위험 {riskyRequests.length}
+            </button>
+            <button className={`ap-chip ${view === 'history' ? 'on' : ''}`} onClick={() => setView('history')}>
+              이력
+            </button>
+          </div>
+
+          <div className="ap-body">
+            <ErrorBanner message={loadError} onRetry={fetchRequests} />
+            {loading && <div className="ac-empty">불러오는 중...</div>}
+
+            {!loading && view === 'history' && (
+              historyRequests.length === 0
+                ? <div className="ac-empty">이력이 없습니다.</div>
+                : <HistoryList historyRequests={historyRequests} busyId={busyId} onRemove={removeRequest} />
+            )}
+
+            {!loading && view !== 'history' && shown.length === 0 && (
+              <div className="ac-empty">
+                {view === 'risk' ? '위험으로 분류된 신청이 없습니다.' : '대기중인 신청이 없습니다.'}
+              </div>
+            )}
+
+            {!loading && view !== 'history' && shown.length > 0 && (
+              <ReqTable requests={shown} busyId={busyId} isSuper={isSuper === true}
+                selectedId={openReq?.id} onApprove={approve} onReject={reject} onOpen={setOpenReq} />
+            )}
+          </div>
+        </section>
 
         <ReqDrawer r={openReq} busyId={busyId} isSuper={isSuper === true}
           onApprove={approve} onReject={reject} onClose={() => setOpenReq(null)} />
-      </div>
-
-      <div className="ac-card ac-card-wide ac-card-muted">
-        <div className="ac-card-title">처리 이력</div>
-        {!loading && historyRequests.length === 0 && <div className="ac-empty">이력이 없습니다.</div>}
-        {!loading && historyRequests.length > 0 && (
-          <HistoryList historyRequests={historyRequests} busyId={busyId} onRemove={removeRequest} />
-        )}
       </div>
     </>
   )
@@ -375,14 +403,9 @@ function RequestQueue() {
 
 export default function CloudAutomation() {
   return (
-    // 목록과 검토 패널을 나란히 놓으려면 폭이 필요해서 ac-page 폭 제한을 쓰지 않는다
-    <div className="ac-page ac-page-wide">
-      <h2 className="ac-title">관리자 승인</h2>
-      <p className="ac-sub">신청을 검토해 승인하면 실제 AWS에 반영됩니다. 적용 결과 확인은 "AWS 현황" 페이지에서 합니다.</p>
-
-      <div className="ac-grid">
-        <RequestQueue />
-      </div>
+    // 페이지 제목·여백 없이 화면을 꽉 채운다. 제목은 목록 머리에 들어간다.
+    <div className="ap-page">
+      <RequestQueue />
     </div>
   )
 }
