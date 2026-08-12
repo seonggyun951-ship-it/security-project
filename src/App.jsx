@@ -11,6 +11,7 @@ import LogAnalysis from './pages/LogAnalysis'
 import PrivacyCheck from './pages/PrivacyCheck'
 import CloudCheck from './pages/CloudCheck'
 import CloudAutomation from './pages/CloudAutomation'
+import ApprovalHistory from './pages/ApprovalHistory'
 import AwsRequest from './pages/AwsRequest'
 import AwsStatus from './pages/AwsStatus'
 import PhishingDetect from './pages/PhishingDetect'
@@ -112,6 +113,7 @@ export default function App() {
             <Route path="/request/infra-network" element={<InfraRequest mode="network" />} />
             <Route path="/request/infra-compute" element={<InfraRequest mode="compute" />} />
             <Route path="/cloud-automation" element={<AdminRoute><CloudAutomation /></AdminRoute>} />
+            <Route path="/approval-history" element={<AdminRoute><ApprovalHistory /></AdminRoute>} />
             <Route path="/aws-status" element={<AdminRoute><AwsStatus /></AdminRoute>} />
             <Route path="/admin/users" element={<SuperAdminRoute><AdminUsers /></SuperAdminRoute>} />
             <Route path="/phishing" element={<PhishingDetect />} />

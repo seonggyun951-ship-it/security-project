@@ -1,198 +1,11 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { ReqCard, ReqTable, ReqDrawer, REQ_STATUS_META, ACTION_LABEL, isDeleteAction, reqRisk } from '../lib/aws'
+import { ReqTable, ReqDrawer, ACTION_LABEL, isDeleteAction, reqRisk } from '../lib/aws'
 import { notify } from '../lib/discord'
 import { fetchRows, runWrite, callFunction } from '../lib/db'
 import { approverLine, useIsSuperAdmin } from '../lib/auth'
 import { pendingChanged } from '../lib/pending'
 import ErrorBanner from '../components/ErrorBanner'
-import {
-  WEEKDAYS, dateKey, localDateKey, todayKey, monthCells,
-  groupByDate, countsByDate, PERIOD_OPTIONS, periodRange, inRange,
-} from '../lib/date'
-
-function DatePickerPopup({ countsByDate, selected, onSelect, onViewAll, onClose }) {
-  const today = new Date()
-  const base = selected ? new Date(selected + 'T00:00:00') : today
-  const [viewDate, setViewDate] = useState(new Date(base.getFullYear(), base.getMonth(), 1))
-
-  const year = viewDate.getFullYear()
-  const month = viewDate.getMonth()
-  const cells = monthCells(year, month)
-  const tKey = todayKey()
-
-  return (
-    <div className="ac-datepop-backdrop" onClick={onClose}>
-      <div className="ac-datepop" onClick={(e) => e.stopPropagation()}>
-        <div className="ac-cal-header">
-          <button className="ac-btn ac-btn-secondary ac-cal-nav" onClick={() => setViewDate(new Date(year, month - 1, 1))}>‹</button>
-          <span className="ac-cal-title">{year}년 {month + 1}월</span>
-          <button className="ac-btn ac-btn-secondary ac-cal-nav" onClick={() => setViewDate(new Date(year, month + 1, 1))}>›</button>
-        </div>
-        <div className="ac-cal-grid">
-          {WEEKDAYS.map((w) => <div key={w} className="ac-cal-weekday">{w}</div>)}
-          {cells.map((d, i) => {
-            if (d === null) return <div key={i} className="ac-cal-cell ac-cal-empty" />
-            const key = dateKey(year, month, d)
-            const count = countsByDate[key] || 0
-            const isToday = key === tKey
-            const isSelected = key === selected
-            return (
-              <div
-                key={i}
-                className={`ac-cal-cell ${count > 0 ? 'has-data' : ''} ${isToday ? 'is-today' : ''} ${isSelected ? 'is-selected' : ''}`}
-                onClick={() => onSelect(key)}
-              >
-                <span className="ac-cal-day">{d}</span>
-                <span className="ac-cal-count">{count > 0 ? count : ''}</span>
-              </div>
-            )
-          })}
-        </div>
-        <div className="ac-datepop-actions">
-          <button className="ac-btn ac-btn-secondary" onClick={onClose}>닫기</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-const HISTORY_CATEGORIES = [
-  { key: 'all', label: '전체' },
-  { key: 'security_group', label: ' SG' },
-  { key: 'waf_web_acl', label: ' WAF' },
-  { key: 'iam_user', label: ' IAM' },
-  { key: 'vpc', label: ' VPC' },
-  { key: 'subnet', label: ' 서브넷' },
-  { key: 'ec2_instance', label: ' EC2' },
-  { key: 'internet_gateway', label: ' IGW' },
-  { key: 'route_table', label: ' RT' },
-]
-
-// 날짜 요약 줄에 표시할 상태 순서
-const STATUS_ORDER = ['applied', 'rejected', 'failed', 'approved']
-
-function statusSummary(items) {
-  const c = {}
-  for (const r of items) c[r.status] = (c[r.status] || 0) + 1
-  return STATUS_ORDER.filter((s) => c[s]).map((s) => ({ status: s, count: c[s], meta: REQ_STATUS_META[s] }))
-}
-
-// 하루치 처리 내역을 새 창(모달)으로 — 목록을 화면에 펼치지 않기 위해
-function DayDetailModal({ date, items, busyId, onRemove, onClose }) {
-  return (
-    <div className="ac-datepop-backdrop" onClick={onClose}>
-      <div className="ac-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="ac-modal-head">
-          <span className="ac-modal-title">{date} 처리 내역 <b>{items.length}</b>건</span>
-          <button className="ac-btn ac-btn-secondary" onClick={onClose}>닫기</button>
-        </div>
-        <div className="ac-modal-body">
-          <div className="ac-snapshot-list">
-            {items.map((r) => <ReqCard key={r.id} r={r} busyId={busyId} onRemove={onRemove} />)}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function HistoryList({ historyRequests, busyId, onRemove }) {
-  const tKey = todayKey()
-
-  const [category, setCategory] = useState('all')
-  const [period, setPeriod] = useState('day')
-  const [periodOffset, setPeriodOffset] = useState(0)
-  const [dateFilter, setDateFilter] = useState(tKey)
-  const [pickerOpen, setPickerOpen] = useState(false)
-  const [openDate, setOpenDate] = useState(null)
-
-  const range = (period === 'month' || period === 'week') ? periodRange(period, periodOffset) : null
-  const dayCounts = countsByDate(historyRequests)
-
-  const periodFiltered = period === 'day' && dateFilter
-    ? historyRequests.filter((r) => localDateKey(r.requested_at) === dateFilter)
-    : period === 'all'
-      ? historyRequests
-      : historyRequests.filter((r) => inRange(r.requested_at, range))
-  const filtered = category === 'all' ? periodFiltered : periodFiltered.filter((r) => r.resource_type === category)
-  const grouped = groupByDate(filtered)
-  const counts = { all: periodFiltered.length }
-  for (const r of periodFiltered) counts[r.resource_type] = (counts[r.resource_type] || 0) + 1
-
-  const changePeriod = (p) => { setPeriod(p); setPeriodOffset(0); setDateFilter(p === 'day' ? tKey : '') }
-
-  return (
-    <div>
-      <div className="ac-filter-row">
-        {PERIOD_OPTIONS.map((p) => (
-          <button key={p.key} className={`ac-filter-btn ${period === p.key ? 'active' : ''}`} onClick={() => changePeriod(p.key)}>
-            {p.label}
-          </button>
-        ))}
-      </div>
-      <div className="ac-filter-row">
-        {(period === 'month' || period === 'week') && range && (
-          <div className="ac-period-nav">
-            <button className="ac-btn ac-btn-secondary ac-cal-nav" onClick={() => setPeriodOffset(periodOffset - 1)}>‹</button>
-            <span className="ac-period-label">{range.label}</span>
-            <button className="ac-btn ac-btn-secondary ac-cal-nav" onClick={() => setPeriodOffset(periodOffset + 1)}>›</button>
-          </div>
-        )}
-        {period === 'day' && (
-          <div className="ac-date-picker">
-            <button className="ac-date-trigger" onClick={() => setPickerOpen(true)}>
-              {dateFilter || '날짜 선택'}
-            </button>
-          </div>
-        )}
-        {pickerOpen && (
-          <DatePickerPopup
-            countsByDate={dayCounts}
-            selected={dateFilter}
-            onSelect={(key) => { setDateFilter(key); setPickerOpen(false) }}
-            onViewAll={() => { setDateFilter(''); setPickerOpen(false) }}
-            onClose={() => setPickerOpen(false)}
-          />
-        )}
-        {HISTORY_CATEGORIES.map((c) => (
-          <button key={c.key} className={`ac-filter-btn ${category === c.key ? 'active' : ''}`} onClick={() => setCategory(c.key)}>
-            {c.label} {counts[c.key] || 0}
-          </button>
-        ))}
-      </div>
-      {grouped.length === 0 && <div className="ac-empty">해당 항목이 없습니다.</div>}
-      {/* 날짜당 한 줄만 — 건수가 늘어도 화면 길이가 날짜 수만큼만 늘어남 */}
-      <div className="ac-daylist">
-        {grouped.map(([date, items]) => (
-          <div key={date} className="ac-dayrow" onClick={() => setOpenDate(date)}>
-            <span className="ac-dayrow-date">{date}</span>
-            <span className="ac-dayrow-total">{items.length}건</span>
-            <span className="ac-dayrow-breakdown">
-              {statusSummary(items).map(({ status, count, meta }) => (
-                <span key={status} className="ac-dayrow-stat">
-                  <i className="ac-dayrow-dot" style={{ background: meta.color }} />
-                  {meta.label} {count}
-                </span>
-              ))}
-            </span>
-            <span className="ac-dayrow-open">보기</span>
-          </div>
-        ))}
-      </div>
-
-      {openDate && (
-        <DayDetailModal
-          date={openDate}
-          items={grouped.find(([d]) => d === openDate)?.[1] || []}
-          busyId={busyId}
-          onRemove={onRemove}
-          onClose={() => setOpenDate(null)}
-        />
-      )}
-    </div>
-  )
-}
 
 // 발급된 액세스키를 한 번만 보여주는 팝업 (DB에는 저장하지 않음 — 닫으면 다시 못 봄)
 function RevealKeyPopup({ result, onClose }) {
@@ -224,7 +37,7 @@ function RevealKeyPopup({ result, onClose }) {
   )
 }
 
-// 신청 대기/이력 관리 (통합 큐)
+// 처리 대기중인 신청만 다룬다. 지나간 건은 '승인 이력' 화면으로 분리했다.
 function RequestQueue() {
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(true)
@@ -232,21 +45,23 @@ function RequestQueue() {
   const [revealKey, setRevealKey] = useState(null)
   const [loadError, setLoadError] = useState(null)
   const [openReq, setOpenReq] = useState(null) // 검토 패널에 열린 신청
-  const [view, setView] = useState('pending')  // 'pending' | 'risk' | 'history'
+  const [view, setView] = useState('pending')  // 'pending' | 'risk'
   const isSuper = useIsSuperAdmin()
 
   // awaiting_super(1차 승인된 삭제)는 최고 관리자만 처리할 수 있다.
   // 1차 승인을 마친 일반 관리자에게는 더 할 일이 없으므로 대기 목록에서 빼고 이력으로 넘긴다.
   const OPEN = isSuper === true ? ['pending', 'awaiting_super'] : ['pending']
   const pendingRequests = requests.filter((r) => OPEN.includes(r.status))
-  const historyRequests = requests.filter((r) => !OPEN.includes(r.status))
 
   const fetchRequests = async () => {
     pendingChanged() // 사이드바 대기 배지도 같이 맞춘다 (페이지는 새로고침하지 않음)
     setOpenReq(null) // 처리가 끝나면 드로어를 닫는다 (사라진 신청이 열려 있으면 안 됨)
     setLoading(true)
+    // 처리 대기중인 것만 가져온다. 지나간 건은 '승인 이력' 화면이 따로 조회한다.
     const { rows, error } = await fetchRows(
-      supabase.from('aws_requests').select('*').order('requested_at', { ascending: false }).limit(100),
+      supabase.from('aws_requests').select('*')
+        .in('status', ['pending', 'awaiting_super'])
+        .order('requested_at', { ascending: false }).limit(200),
       '신청 목록')
     setRequests(rows)
     setLoadError(error)
@@ -329,19 +144,9 @@ function RequestQueue() {
     setBusyId(null)
   }
 
-  const removeRequest = async (id) => {
-    if (!confirm('이 신청을 목록에서 삭제할까요?')) return
-    setBusyId(id)
-    const { ok, error } = await runWrite(
-      supabase.from('aws_requests').delete().eq('id', id).select(), '삭제')
-    setBusyId(null)
-    if (!ok) return alert(error)
-    await fetchRequests()
-  }
-
   // 위험한 건만 추려 보기 — 삭제 신청이나 전체 개방처럼 먼저 봐야 하는 것들
   const riskyRequests = pendingRequests.filter((r) => reqRisk(r) === 'risk')
-  const shown = view === 'history' ? [] : view === 'risk' ? riskyRequests : pendingRequests
+  const shown = view === 'risk' ? riskyRequests : pendingRequests
 
   return (
     <>
@@ -362,6 +167,7 @@ function RequestQueue() {
             </div>
           </div>
 
+          {/* 이력은 '승인 이력' 메뉴로 분리했다. 여기는 처리할 것만 다룬다. */}
           <div className="ap-chips">
             <button className={`ap-chip ${view === 'pending' ? 'on' : ''}`} onClick={() => setView('pending')}>
               대기 {pendingRequests.length}
@@ -369,28 +175,19 @@ function RequestQueue() {
             <button className={`ap-chip ${view === 'risk' ? 'on' : ''}`} onClick={() => setView('risk')}>
               위험 {riskyRequests.length}
             </button>
-            <button className={`ap-chip ${view === 'history' ? 'on' : ''}`} onClick={() => setView('history')}>
-              이력
-            </button>
           </div>
 
           <div className="ap-body">
             <ErrorBanner message={loadError} onRetry={fetchRequests} />
             {loading && <div className="ac-empty">불러오는 중...</div>}
 
-            {!loading && view === 'history' && (
-              historyRequests.length === 0
-                ? <div className="ac-empty">이력이 없습니다.</div>
-                : <HistoryList historyRequests={historyRequests} busyId={busyId} onRemove={removeRequest} />
-            )}
-
-            {!loading && view !== 'history' && shown.length === 0 && (
+            {!loading && shown.length === 0 && (
               <div className="ac-empty">
                 {view === 'risk' ? '위험으로 분류된 신청이 없습니다.' : '대기중인 신청이 없습니다.'}
               </div>
             )}
 
-            {!loading && view !== 'history' && shown.length > 0 && (
+            {!loading && shown.length > 0 && (
               <ReqTable requests={shown} selectedId={openReq?.id} onOpen={setOpenReq} />
             )}
           </div>

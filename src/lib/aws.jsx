@@ -279,7 +279,7 @@ export function ReqTable({ requests, onOpen, selectedId }) {
 //
 // 목록을 덮지 않고 옆에 나란히 있어서, 고르고 판단하고 다음으로 넘어가는 흐름이 끊기지 않는다.
 // 줄글이 아니라 항목별 서식으로 묶어 편지 본문처럼 읽히지 않게 한다.
-export function ReqDrawer({ r, busyId, onApprove, onReject, onClose, isSuper = false }) {
+export function ReqDrawer({ r, busyId, onApprove, onReject, onClose, onRemove, isSuper = false }) {
   // 상주형 패널 — 아무것도 고르지 않았을 때도 자리를 지킨다.
   if (!r) {
     return (
@@ -374,6 +374,15 @@ export function ReqDrawer({ r, busyId, onApprove, onReject, onClose, isSuper = f
               </button>
             )}
             <button className="ac-btn ac-btn-secondary" disabled={busy} onClick={() => onReject(r.id)}>거절</button>
+          </div>
+        )}
+
+        {/* 이력 화면에서 목록 정리용. 처리 대기중인 건에는 뜨지 않는다. */}
+        {!actionable && onRemove && (
+          <div className="rd-foot">
+            <button className="ac-btn ac-btn-secondary" style={{ flex: 1 }} disabled={busy} onClick={() => onRemove(r.id)}>
+              {busy ? '삭제 중...' : '목록에서 삭제'}
+            </button>
           </div>
         )}
       </aside>
