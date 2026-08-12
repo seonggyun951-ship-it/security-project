@@ -284,7 +284,10 @@ function MyReqRow({ r, onCancel, busy }) {
         <div className="ac-myreq-body">
           {detail.map((line, i) => <div key={i} className="ac-req-reason">{line}</div>)}
           {r.reason && <div className="ac-req-reason">사유: {r.reason}</div>}
-          {r.error_message && <div className="ac-req-error">{r.error_message}</div>}
+          {r.status === 'cancelled' && r.error_message && (
+            <div className="ac-req-reason">취소 사유: {r.error_message}</div>
+          )}
+          {r.status !== 'cancelled' && r.error_message && <div className="ac-req-error">{r.error_message}</div>}
           <div className="ac-req-meta">{d.toLocaleString('ko-KR')}</div>
           {onCancel && CANCELABLE.includes(r.status) && (
             <div className="ac-req-actions">
@@ -313,12 +316,14 @@ export default function GcpRequest({ resourceType = 'firewall_rule' }) {
   const [cancelingId, setCancelingId] = useState(null)
 
   const cancel = async (r) => {
-    if (!confirm(`이 신청을 취소할까요?\n\n${gcpReqTitle(r)}`)) return
+    const reason = prompt(`이 신청을 취소합니다.\n\n${gcpReqTitle(r)}\n\n취소 사유를 입력해주세요.`)
+    if (reason === null) return
+    if (!reason.trim()) return alert('취소 사유를 입력해주세요')
     setCancelingId(r.id)
-    const { ok, error } = await cancelRequest('gcp_requests', r.id)
+    const { ok, error } = await cancelRequest('gcp_requests', r.id, reason.trim())
     setCancelingId(null)
     if (!ok) return alert(error)
-    notify(`↩️ **GCP 신청 취소**\n${r.action}: ${r.title || ''}\n신청자가 직접 취소했습니다`)
+    notify(`↩️ **GCP 신청 취소**\n${r.action}: ${r.title || ''}\n신청자가 직접 취소\n사유: ${reason.trim()}`)
     pendingChanged()
     await fetchMyRequests()
   }

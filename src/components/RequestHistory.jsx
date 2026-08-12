@@ -38,10 +38,16 @@ export function MyReqRow({ r, showResult = false, onCancel, busy = false }) {
           {showResult && r.result?.terraform && (
             <div className="ac-req-meta">🔧 Terraform으로 적용됨</div>
           )}
+          {/* error_message 한 칸을 거부 사유·취소 사유·실패 원인이 나눠 쓴다. 상태로 구분해 표시한다. */}
           {r.status === 'rejected' && r.error_message && (
             <div className="ac-reject-box">거부 사유: {r.error_message}</div>
           )}
-          {r.status !== 'rejected' && r.error_message && <div className="ac-req-error">{r.error_message}</div>}
+          {r.status === 'cancelled' && r.error_message && (
+            <div className="ac-req-reason">취소 사유: {r.error_message}</div>
+          )}
+          {!['rejected', 'cancelled'].includes(r.status) && r.error_message && (
+            <div className="ac-req-error">{r.error_message}</div>
+          )}
           <div className="ac-req-meta">{d.toLocaleString('ko-KR')}</div>
           {onCancel && CANCELABLE.includes(r.status) && (
             <div className="ac-req-actions">

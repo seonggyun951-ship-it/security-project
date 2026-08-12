@@ -232,7 +232,11 @@ export function ReqCard({ r, busyId, onApprove, onReject, onRemove, isSuper = fa
           {r.first_approved_at && ` (${new Date(r.first_approved_at).toLocaleString('ko-KR')})`}
         </div>
       )}
-      {r.error_message && <div className="ac-req-error">{r.error_message}</div>}
+      {/* error_message는 거부 사유·취소 사유·실패 원인이 함께 쓰는 칸이라 상태로 구분한다. */}
+      {r.status === 'cancelled' && r.error_message && (
+        <div className="ac-req-reason">취소 사유: {r.error_message}</div>
+      )}
+      {r.status !== 'cancelled' && r.error_message && <div className="ac-req-error">{r.error_message}</div>}
       <div className="ac-req-meta">{new Date(r.requested_at).toLocaleString('ko-KR')}</div>
 
       {/* 삭제 신청 — 최고 관리자만 최종 실행. 일반 관리자는 1차 승인까지만 가능하다. */}

@@ -28,12 +28,14 @@ export default function InfraRequest({ mode = 'network' }) {
   const [cancelingId, setCancelingId] = useState(null)
 
   const cancel = async (r) => {
-    if (!confirm(`이 신청을 취소할까요?\n\n${reqTitle(r)}`)) return
+    const reason = prompt(`이 신청을 취소합니다.\n\n${reqTitle(r)}\n\n취소 사유를 입력해주세요.`)
+    if (reason === null) return
+    if (!reason.trim()) return alert('취소 사유를 입력해주세요')
     setCancelingId(r.id)
-    const { ok, error } = await cancelRequest('aws_requests', r.id)
+    const { ok, error } = await cancelRequest('aws_requests', r.id, reason.trim())
     setCancelingId(null)
     if (!ok) return alert(error)
-    notify(`↩️ **신청 취소**\n${ACTION_LABEL[r.action] || r.action}: ${r.title || ''}\n신청자가 직접 취소했습니다`)
+    notify(`↩️ **신청 취소**\n${ACTION_LABEL[r.action] || r.action}: ${r.title || ''}\n신청자가 직접 취소\n사유: ${reason.trim()}`)
     pendingChanged()
     await fetchMyRequests()
   }
