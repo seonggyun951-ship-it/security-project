@@ -225,7 +225,7 @@ export function reqWarnings(r) {
 // 관리자의 일은 '고르기'다. 카드로 쌓으면 삭제 신청도, 사흘 묵은 건도, 방금 온 건도
 // 전부 같은 무게로 보여서 뭐부터 봐야 할지 알 수 없다.
 // 표로 두면 열이 맞아떨어져 세로로 훑을 수 있고, 왼쪽 색 띠로 위험·지연이 먼저 눈에 걸린다.
-export function ReqTable({ requests, busyId, onApprove, onReject, isSuper = false }) {
+export function ReqTable({ requests, busyId, onApprove, onReject, onOpen, isSuper = false }) {
   return (
     <div className="rt-scroll">
       <table className="rt">
@@ -244,19 +244,20 @@ export function ReqTable({ requests, busyId, onApprove, onReject, isSuper = fals
             const summary = summarizePayload(r.action, r.payload)
 
             return (
-              <tr key={r.id} className={risk ? `rt-${risk}` : ''}>
-                <td>
+              <tr key={r.id} className={`${risk ? `rt-${risk}` : ''} ${onOpen ? 'rt-click' : ''}`}>
+                {/* 행을 누르면 상세가 열린다. 처리 버튼은 별도 칸이라 눌러도 열리지 않는다. */}
+                <td onClick={() => onOpen?.(r)}>
                   <span className="rt-chip" style={{ background: meta.color }}>{meta.label}</span>
                 </td>
-                <td>
+                <td onClick={() => onOpen?.(r)}>
                   <div className="rt-title">{ACTION_LABEL[r.action] || r.action} · {r.title || r.target_id || ''}</div>
                   <div className="rt-who">
                     {r.requester_email || '알 수 없음'}
                     {r.first_approver_email && ` · 1차 ${r.first_approver_email}`}
                   </div>
                 </td>
-                <td className="rt-val">{summary || '—'}</td>
-                <td className={`rt-age ${isAged(r.requested_at) ? 'is-aged' : ''}`}>
+                <td className="rt-val" onClick={() => onOpen?.(r)}>{summary || '—'}</td>
+                <td className={`rt-age ${isAged(r.requested_at) ? 'is-aged' : ''}`} onClick={() => onOpen?.(r)}>
                   {elapsedLabel(r.requested_at)}
                 </td>
                 <td className="rt-act">
@@ -300,6 +301,96 @@ export function ReqTable({ requests, busyId, onApprove, onReject, isSuper = fals
           })}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+// 표에서 행을 눌렀을 때 오른쪽에서 덮는 상세.
+//
+// 상주하지 않고 필요할 때만 열린다. 표는 흐려질 뿐 사라지지 않으므로
+// 닫으면 보던 자리 그대로다 — 연달아 처리해도 위치를 다시 찾을 필요가 없다.
+export function ReqDrawer({ r, busyId, onApprove, onReject, onClose, isSuper = false }) {
+  if (!r) return null
+  const meta = REQ_STATUS_META[r.status] || { label: r.status, color: 'var(--ink-3)' }
+  const detail = reqDetailLines(r)
+  const warnings = reqWarnings(r)
+  const busy = busyId === r.id
+  const isDelete = isDeleteAction(r.action)
+  const actionable = r.status === 'pending' || (isDelete && r.status === 'awaiting_super')
+
+  return (
+    <div className="rd-backdrop" onClick={onClose}>
+      <aside className="rd" onClick={(e) => e.stopPropagation()}>
+        <div className="rd-head">
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <span className="rt-chip" style={{ background: meta.color }}>{meta.label}</span>
+            <div className="rd-title">{ACTION_LABEL[r.action] || r.action}</div>
+            <div className="rd-sub">{r.title || r.target_id || ''}</div>
+          </div>
+          <button className="rd-x" onClick={onClose} aria-label="닫기">✕</button>
+        </div>
+
+        <div className="rd-body">
+          {warnings.map((w, i) => <div key={i} className="ac-req-warn">⚠️ {w}</div>)}
+
+          {detail.map((line, i) => <div key={i} className="rd-line">{line}</div>)}
+
+          {r.reason && <div className="rd-kv"><span className="rd-k">사유</span><span className="rd-v">{r.reason}</span></div>}
+          <div className="rd-kv"><span className="rd-k">신청자</span><span className="rd-v">{r.requester_email || '알 수 없음'}</span></div>
+          {r.first_approver_email && (
+            <div className="rd-kv"><span className="rd-k">1차 승인</span><span className="rd-v">{r.first_approver_email}</span></div>
+          )}
+          <div className="rd-kv">
+            <span className="rd-k">신청</span>
+            <span className="rd-v">{new Date(r.requested_at).toLocaleString('ko-KR')} · {elapsedLabel(r.requested_at)} 전</span>
+          </div>
+          {r.payload?.expires_at && (
+            <div className="rd-kv"><span className="rd-k">만료</span><span className="rd-v">{new Date(r.payload.expires_at).toLocaleDateString('ko-KR')}</span></div>
+          )}
+          {r.result?.created_id && (
+            <div className="rd-kv"><span className="rd-k">생성 ID</span><span className="rd-v">{r.result.created_id}</span></div>
+          )}
+          {r.error_message && (
+            <div className={r.status === 'cancelled' ? 'rd-line' : 'ac-req-error'} style={{ marginTop: 10 }}>
+              {r.status === 'rejected' ? '거부 사유: ' : r.status === 'cancelled' ? '취소 사유: ' : ''}{r.error_message}
+            </div>
+          )}
+        </div>
+
+        {actionable && onApprove && (
+          <div className="rd-foot">
+            {isDelete ? (
+              isSuper ? (
+                <button className="ac-btn ac-btn-danger" style={{ flex: 1 }} disabled={busy} onClick={() => onApprove(r.id)}>
+                  {busy ? '처리 중...' : r.status === 'awaiting_super' ? '최종 승인 후 삭제' : '승인 후 삭제'}
+                </button>
+              ) : r.status === 'awaiting_super' ? (
+                <span className="rt-hold" style={{ flex: 1 }}>최고 관리자 승인을 기다리는 중입니다.</span>
+              ) : (
+                <button className="ac-btn" style={{ flex: 1 }} disabled={busy} onClick={() => onApprove(r.id)}>
+                  {busy ? '처리 중...' : '1차 승인'}
+                </button>
+              )
+            ) : r.resource_type === 'iam_user' ? (
+              <>
+                <button className="ac-btn" style={{ flex: 1 }} disabled={busy}
+                  onClick={() => onApprove(r.id, { issueKey: !!r.payload?.issue_key })}>
+                  {busy ? '처리 중...' : `승인 (${r.payload?.issue_key ? '키 발급' : '키 없이'})`}
+                </button>
+                <button className="ac-btn ac-btn-secondary" disabled={busy}
+                  onClick={() => onApprove(r.id, { issueKey: !r.payload?.issue_key })}>
+                  {r.payload?.issue_key ? '키 없이' : '키 발급'}
+                </button>
+              </>
+            ) : (
+              <button className="ac-btn" style={{ flex: 1 }} disabled={busy} onClick={() => onApprove(r.id)}>
+                {busy ? '처리 중...' : '승인'}
+              </button>
+            )}
+            <button className="ac-btn ac-btn-secondary" disabled={busy} onClick={() => onReject(r.id)}>거절</button>
+          </div>
+        )}
+      </aside>
     </div>
   )
 }

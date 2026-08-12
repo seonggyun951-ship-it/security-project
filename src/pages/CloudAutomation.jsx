@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { ReqCard, ReqTable, REQ_STATUS_META, ACTION_LABEL, isDeleteAction } from '../lib/aws'
+import { ReqCard, ReqTable, ReqDrawer, REQ_STATUS_META, ACTION_LABEL, isDeleteAction } from '../lib/aws'
 import { notify } from '../lib/discord'
 import { fetchRows, runWrite, callFunction } from '../lib/db'
 import { approverLine, useIsSuperAdmin } from '../lib/auth'
@@ -231,6 +231,7 @@ function RequestQueue() {
   const [busyId, setBusyId] = useState(null)
   const [revealKey, setRevealKey] = useState(null)
   const [loadError, setLoadError] = useState(null)
+  const [openReq, setOpenReq] = useState(null) // 상세 드로어에 열린 신청
   const isSuper = useIsSuperAdmin()
 
   // awaiting_super(1차 승인된 삭제)는 최고 관리자만 처리할 수 있다.
@@ -241,6 +242,7 @@ function RequestQueue() {
 
   const fetchRequests = async () => {
     pendingChanged() // 사이드바 대기 배지도 같이 맞춘다 (페이지는 새로고침하지 않음)
+    setOpenReq(null) // 처리가 끝나면 드로어를 닫는다 (사라진 신청이 열려 있으면 안 됨)
     setLoading(true)
     const { rows, error } = await fetchRows(
       supabase.from('aws_requests').select('*').order('requested_at', { ascending: false }).limit(100),
@@ -349,9 +351,12 @@ function RequestQueue() {
         {!loading && pendingRequests.length === 0 && <div className="ac-empty">대기중인 신청이 없습니다.</div>}
         {!loading && pendingRequests.length > 0 && (
           <ReqTable requests={pendingRequests} busyId={busyId} isSuper={isSuper === true}
-            onApprove={approve} onReject={reject} />
+            onApprove={approve} onReject={reject} onOpen={setOpenReq} />
         )}
       </div>
+
+      <ReqDrawer r={openReq} busyId={busyId} isSuper={isSuper === true}
+        onApprove={approve} onReject={reject} onClose={() => setOpenReq(null)} />
 
       <div className="ac-card ac-card-wide ac-card-muted">
         <div className="ac-card-title">처리 이력</div>

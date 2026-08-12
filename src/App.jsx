@@ -3,6 +3,7 @@ import { HashRouter, Routes, Route } from 'react-router-dom'
 import './index.css'
 import { supabase } from './lib/supabase'
 import Sidebar from './components/Sidebar'
+import RequesterShell from './components/RequesterShell'
 import Login from './pages/Login'
 import Home from './pages/Home'
 import VulnScan from './pages/VulnScan'
@@ -59,6 +60,24 @@ function RootPage() {
   return isAdmin ? <Home /> : <RequesterHome />
 }
 
+// 관리자와 신청자는 하는 일이 반대라 껍데기를 나눈다.
+//   관리자 — 여러 화면을 오가며 훑는다 → 메뉴가 늘 보이는 사이드바
+//   신청자 — 화면 2~3개에서 쓴다     → 상단 탭 + 좁은 본문
+// 권한 확인 중에는 사이드바를 보여준다(관리자가 대부분의 시간을 쓰는 쪽).
+function Shell({ children, onLogout, email }) {
+  const isAdmin = useIsAdmin()
+
+  if (isAdmin === false) {
+    return <RequesterShell onLogout={onLogout} email={email}>{children}</RequesterShell>
+  }
+  return (
+    <div className="shell">
+      <Sidebar onLogout={onLogout} />
+      <main className="shell-main">{children}</main>
+    </div>
+  )
+}
+
 export default function App() {
   const [session, setSession] = useState(undefined)
 
@@ -80,10 +99,8 @@ export default function App() {
 
   return (
     <HashRouter>
-      <div className="shell">
-        <Sidebar onLogout={logout} />
-        <main className="shell-main">
-          <Routes>
+      <Shell onLogout={logout} email={session.user?.email}>
+        <Routes>
             <Route path="/" element={<RootPage />} />
             <Route path="/vuln" element={<VulnScan />} />
             <Route path="/log" element={<LogAnalysis />} />
@@ -102,9 +119,8 @@ export default function App() {
             <Route path="/gcp/armor" element={<GcpRequest resourceType="cloud_armor" />} />
             <Route path="/gcp/iam" element={<GcpRequest resourceType="service_account" />} />
             <Route path="/gcp/approval" element={<AdminRoute><GcpApproval /></AdminRoute>} />
-          </Routes>
-        </main>
-      </div>
+        </Routes>
+      </Shell>
     </HashRouter>
   )
 }
