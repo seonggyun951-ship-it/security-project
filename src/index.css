@@ -599,7 +599,8 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .rt tr.rt-risk td:first-child { box-shadow: inset 3px 0 0 var(--fail); }
 .rt tr.rt-aged td:first-child { box-shadow: inset 3px 0 0 var(--wait); }
 
-.rt-chip { display: inline-block; color: #fff; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: var(--r-sm); white-space: nowrap; }
+/* 옅은 배경 + 진한 글씨. 진한 배경에 흰 글씨면 목록에서 칩만 튀어 시끄럽다. */
+.rt-chip { display: inline-block; font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 4px; white-space: nowrap; letter-spacing: -0.01em; }
 .rt-title { font-size: 13px; font-weight: 650; color: var(--ink); word-break: break-word; }
 .rt-who { font-family: var(--mono); font-size: 11px; color: var(--ink-3); margin-top: 1px; word-break: break-all; }
 /* 기술값은 모노스페이스 — CIDR·포트·리소스 ID를 세로로 비교할 수 있게 */
@@ -696,16 +697,24 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
   .rv { height: auto; }
   .rv-empty { min-height: 160px; }
 }
-.rd-head { display: flex; align-items: flex-start; gap: 10px; padding: 16px 18px; border-bottom: 1px solid var(--line); }
-.rd-title { font-size: 15px; font-weight: 700; color: var(--ink); margin-top: 6px; letter-spacing: -0.01em; }
-.rd-sub { font-family: var(--mono); font-size: 12px; color: var(--ink-3); margin-top: 2px; word-break: break-all; }
+.rd-head { display: flex; align-items: flex-start; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.rd-title { font-size: 15px; font-weight: 700; color: var(--ink); margin-top: 5px; letter-spacing: -0.015em; }
+.rd-sub { font-family: var(--mono); font-size: 11px; color: var(--ink-3); margin-top: 2px; word-break: break-all; }
 .rd-x { background: transparent; border: none; color: var(--ink-3); font-size: 15px; cursor: pointer; padding: 2px 4px; flex-shrink: 0; }
 .rd-x:hover { color: var(--ink); }
-.rd-body { padding: 14px 18px; flex: 1; overflow-y: auto; }
-.rd-line { font-size: 13px; color: var(--ink-2); padding: 2px 0; }
-.rd-kv { display: grid; grid-template-columns: 68px 1fr; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line-2); font-size: 12.5px; }
+.rd-body { padding: 14px 16px; flex: 1; overflow-y: auto; background: var(--bg); }
+/* 항목별 서식 카드 — 줄글이 아니라 결재 양식처럼 보이게 */
+.rd-fs { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); margin-bottom: 10px; overflow: hidden; }
+.rd-fst {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-3); padding: 7px 12px; background: var(--soft); border-bottom: 1px solid var(--line-2);
+}
+.rd-fline { font-size: 12.5px; color: var(--ink-2); padding: 7px 12px; line-height: 1.55; word-break: break-word; }
+.rd-fline + .rd-fline { border-top: 1px solid var(--line-2); }
+.rd-kv { display: grid; grid-template-columns: 58px 1fr; gap: 8px; padding: 7px 12px; font-size: 12.5px; }
+.rd-kv + .rd-kv { border-top: 1px solid var(--line-2); }
 .rd-k { color: var(--ink-3); }
-.rd-v { color: var(--ink-2); word-break: break-all; }
+.rd-v { color: var(--ink-2); word-break: break-word; }
 .rd-foot { padding: 14px 18px; border-top: 1px solid var(--line); display: flex; gap: 8px; }
 
 /* 승인 전 주의 표시 — 막지는 않고 판단 재료만 제공 */

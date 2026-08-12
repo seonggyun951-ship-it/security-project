@@ -43,13 +43,14 @@ export const IAM_READONLY_POLICIES = [
 
 export const REQ_STATUS_META = {
   // 색은 index.css의 토큰을 그대로 쓴다. 팔레트를 바꿀 때 CSS 한 곳만 고치면 되도록.
-  pending:        { label: '대기중', color: 'var(--wait)' },
-  awaiting_super: { label: '최고관리자 승인 대기', color: 'var(--super)' },
-  approved:       { label: '승인 처리중', color: 'var(--accent-2)' },
-  applied:        { label: '적용 완료', color: 'var(--done)' },
-  rejected:       { label: '거절됨', color: 'var(--off)' },
-  failed:         { label: '적용 실패', color: 'var(--fail)' },
-  cancelled:      { label: '신청 취소', color: 'var(--ink-3)' },
+  // bg는 옅은 배경 — 진한 배경에 흰 글씨로 하면 목록에서 칩만 튀어 시끄럽다.
+  pending:        { label: '대기중', color: 'var(--wait)',     bg: 'var(--wait-bg)' },
+  awaiting_super: { label: '최고관리자 대기', color: 'var(--super)', bg: 'var(--super-bg)' },
+  approved:       { label: '승인 처리중', color: 'var(--accent)', bg: 'var(--accent-soft)' },
+  applied:        { label: '적용 완료', color: 'var(--done)',   bg: 'var(--done-bg)' },
+  rejected:       { label: '거절됨', color: 'var(--off)',       bg: 'var(--off-bg)' },
+  failed:         { label: '적용 실패', color: 'var(--fail)',   bg: 'var(--fail-bg)' },
+  cancelled:      { label: '신청 취소', color: 'var(--ink-3)',  bg: 'var(--soft)' },
 }
 
 // WAF 신규 생성 시 선택 가능한 AWS 관리형 규칙 그룹
@@ -249,7 +250,7 @@ export function ReqTable({ requests, onOpen, selectedId }) {
                 className={`${risk ? `rt-${risk}` : ''} ${onOpen ? 'rt-click' : ''} ${selectedId === r.id ? 'rt-sel' : ''}`}
                 onClick={() => onOpen?.(r)}>
                 <td>
-                  <span className="rt-chip" style={{ background: meta.color }}>{meta.label}</span>
+                  <span className="rt-chip" style={{ background: meta.bg, color: meta.color }}>{meta.label}</span>
                 </td>
                 <td>
                   <div className="rt-title">{ACTION_LABEL[r.action] || r.action} · {r.title || r.target_id || ''}</div>
@@ -295,35 +296,45 @@ export function ReqDrawer({ r, busyId, onApprove, onReject, onClose, isSuper = f
       <aside className="rv">
         <div className="rd-head">
           <div style={{ flex: 1, minWidth: 0 }}>
-            <span className="rt-chip" style={{ background: meta.color }}>{meta.label}</span>
+            <span className="rt-chip" style={{ background: meta.bg, color: meta.color }}>{meta.label}</span>
             <div className="rd-title">{ACTION_LABEL[r.action] || r.action}</div>
             <div className="rd-sub">{r.title || r.target_id || ''}</div>
           </div>
           <button className="rd-x" onClick={onClose} aria-label="선택 해제">✕</button>
         </div>
 
+        {/* 줄글로 나열하지 않고 항목별 서식으로 묶는다 — 편지 본문이 아니라 결재 양식으로 읽히게 */}
         <div className="rd-body">
           {warnings.map((w, i) => <div key={i} className="ac-req-warn">⚠️ {w}</div>)}
 
-          {detail.map((line, i) => <div key={i} className="rd-line">{line}</div>)}
+          {detail.length > 0 && (
+            <div className="rd-fs">
+              <div className="rd-fst">신청 내용</div>
+              {detail.map((line, i) => <div key={i} className="rd-fline">{line}</div>)}
+            </div>
+          )}
 
-          {r.reason && <div className="rd-kv"><span className="rd-k">사유</span><span className="rd-v">{r.reason}</span></div>}
-          <div className="rd-kv"><span className="rd-k">신청자</span><span className="rd-v">{r.requester_email || '알 수 없음'}</span></div>
-          {r.first_approver_email && (
-            <div className="rd-kv"><span className="rd-k">1차 승인</span><span className="rd-v">{r.first_approver_email}</span></div>
-          )}
-          <div className="rd-kv">
-            <span className="rd-k">신청</span>
-            <span className="rd-v">{new Date(r.requested_at).toLocaleString('ko-KR')} · {elapsedLabel(r.requested_at)} 전</span>
+          <div className="rd-fs">
+            <div className="rd-fst">신청 정보</div>
+            <div className="rd-kv"><span className="rd-k">신청자</span><span className="rd-v">{r.requester_email || '알 수 없음'}</span></div>
+            {r.reason && <div className="rd-kv"><span className="rd-k">사유</span><span className="rd-v">{r.reason}</span></div>}
+            {r.first_approver_email && (
+              <div className="rd-kv"><span className="rd-k">1차 승인</span><span className="rd-v">{r.first_approver_email}</span></div>
+            )}
+            <div className="rd-kv">
+              <span className="rd-k">신청</span>
+              <span className="rd-v">{new Date(r.requested_at).toLocaleString('ko-KR')} · {elapsedLabel(r.requested_at)} 전</span>
+            </div>
+            {r.payload?.expires_at && (
+              <div className="rd-kv"><span className="rd-k">만료</span><span className="rd-v">{new Date(r.payload.expires_at).toLocaleDateString('ko-KR')}</span></div>
+            )}
+            {r.result?.created_id && (
+              <div className="rd-kv"><span className="rd-k">생성 ID</span><span className="rd-v">{r.result.created_id}</span></div>
+            )}
           </div>
-          {r.payload?.expires_at && (
-            <div className="rd-kv"><span className="rd-k">만료</span><span className="rd-v">{new Date(r.payload.expires_at).toLocaleDateString('ko-KR')}</span></div>
-          )}
-          {r.result?.created_id && (
-            <div className="rd-kv"><span className="rd-k">생성 ID</span><span className="rd-v">{r.result.created_id}</span></div>
-          )}
+
           {r.error_message && (
-            <div className={r.status === 'cancelled' ? 'rd-line' : 'ac-req-error'} style={{ marginTop: 10 }}>
+            <div className={r.status === 'cancelled' ? 'rd-fline' : 'ac-req-error'}>
               {r.status === 'rejected' ? '거부 사유: ' : r.status === 'cancelled' ? '취소 사유: ' : ''}{r.error_message}
             </div>
           )}
