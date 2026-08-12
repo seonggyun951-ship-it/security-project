@@ -143,8 +143,11 @@ export function SgDeleteForm({ onSubmit, submitting }) {
     if (picked.length === 0) return alert('삭제할 규칙을 최소 1개 선택해주세요')
     if (!reason.trim()) return alert('삭제 사유는 필수입니다')
 
-    // 원본 신청에 기록된 SG를 그대로 쓴다. create_sg는 결과에, add_rules는 target_id에 있다.
-    const sgId = target.result?.created_id || target.payload?.sg_id
+    // 원본 신청에 기록된 SG를 그대로 쓴다. 신청 종류마다 저장 위치가 다르다.
+    //   add_rules  → target_id (기존 SG를 고른 것)
+    //   create_sg  → result.created_id (새로 만들어진 SG)
+    // payload.sg_id는 예전 형식이라 마지막에 본다.
+    const sgId = target.target_id || target.result?.created_id || target.payload?.sg_id
     if (!sgId) return alert('원본 신청에서 대상 SG를 찾을 수 없습니다')
 
     const chosen = picked.map((i) => rules[i]).filter(Boolean)
