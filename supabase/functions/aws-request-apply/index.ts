@@ -4,6 +4,8 @@ import {
   EC2Client,
   AuthorizeSecurityGroupIngressCommand,
   AuthorizeSecurityGroupEgressCommand,
+  RevokeSecurityGroupIngressCommand,
+  RevokeSecurityGroupEgressCommand,
   CreateSecurityGroupCommand,
   CreateTagsCommand,
 } from 'npm:@aws-sdk/client-ec2@3'
@@ -19,6 +21,11 @@ import {
   CreateUserCommand,
   AttachUserPolicyCommand,
   CreateAccessKeyCommand,
+  DeleteUserCommand,
+  ListAccessKeysCommand,
+  DeleteAccessKeyCommand,
+  ListAttachedUserPoliciesCommand,
+  DetachUserPolicyCommand,
 } from 'npm:@aws-sdk/client-iam@3'
 
 const cors = {
@@ -251,6 +258,104 @@ async function handleIam(iam, req, issueKey) {
   return result
 }
 
+// ---- 삭제 ----
+// 삭제는 되돌릴 수 없어 최고 관리자만 실행할 수 있다(아래 serve에서 검사).
+// 신청 시점에 원본 신청의 payload를 그대로 복사해두므로, 무엇을 지울지가 정확히 특정된다.
+
+const DELETE_ACTIONS = ['delete_iam_user', 'delete_sg_rules', 'delete_waf_rules']
+
+async function handleDeleteIamUser(iam, req) {
+  const p = req.payload || {}
+  const UserName = p.user_name
+  if (!UserName) throw new Error('user_name이 없습니다')
+
+  // IAM은 액세스 키와 정책이 붙어 있으면 사용자를 지울 수 없다. 먼저 떼어낸다.
+  const keys = await iam.send(new ListAccessKeysCommand({ UserName }))
+  for (const k of (keys.AccessKeyMetadata || [])) {
+    await iam.send(new DeleteAccessKeyCommand({ UserName, AccessKeyId: k.AccessKeyId }))
+  }
+  const attached = await iam.send(new ListAttachedUserPoliciesCommand({ UserName }))
+  for (const pol of (attached.AttachedPolicies || [])) {
+    await iam.send(new DetachUserPolicyCommand({ UserName, PolicyArn: pol.PolicyArn }))
+  }
+  await iam.send(new DeleteUserCommand({ UserName }))
+
+  return {
+    deleted_user: UserName,
+    removed_access_keys: (keys.AccessKeyMetadata || []).length,
+    detached_policies: (attached.AttachedPolicies || []).length,
+  }
+}
+
+async function handleDeleteSgRules(ec2, req) {
+  const p = req.payload || {}
+  const sgId = p.sg_id
+  if (!sgId) throw new Error('sg_id가 없습니다')
+
+  const ingress = (p.rules || []).filter((r) => r.direction === 'ingress')
+  const egress = (p.rules || []).filter((r) => r.direction === 'egress')
+  if (ingress.length === 0 && egress.length === 0) throw new Error('삭제할 규칙이 없습니다')
+
+  // 이미 없는 규칙을 지우려 하면 InvalidPermission.NotFound가 난다.
+  // 목적(그 규칙이 없는 상태)은 이미 달성된 것이므로 실패로 보지 않는다.
+  const skipIfMissing = async (fn) => {
+    try {
+      await fn()
+      return true
+    } catch (e) {
+      if (String(e).includes('InvalidPermission.NotFound')) return false
+      throw e
+    }
+  }
+
+  let removed = 0
+  if (ingress.length > 0) {
+    const ok = await skipIfMissing(() => ec2.send(new RevokeSecurityGroupIngressCommand({
+      GroupId: sgId, IpPermissions: ingress.map(toPermission),
+    })))
+    if (ok) removed += ingress.length
+  }
+  if (egress.length > 0) {
+    const ok = await skipIfMissing(() => ec2.send(new RevokeSecurityGroupEgressCommand({
+      GroupId: sgId, IpPermissions: egress.map(toPermission),
+    })))
+    if (ok) removed += egress.length
+  }
+  return { sg_id: sgId, removed_rules: removed }
+}
+
+async function handleDeleteWafRules(req, credentials, defaultRegion) {
+  const p = req.payload || {}
+  const Scope = wafScopeOf(p)
+  const waf = new WAFV2Client({ region: wafRegionFor(Scope, defaultRegion), credentials })
+
+  const aclName = p.web_acl_name
+  const aclId = p.web_acl_id || req.target_id
+  if (!aclName || !aclId) throw new Error('대상 Web ACL 정보가 없습니다')
+
+  const names = new Set((p.rule_names || []).filter(Boolean))
+  if (names.size === 0) throw new Error('삭제할 규칙 이름이 없습니다')
+
+  const get = await wafRetry(() => waf.send(new GetWebACLCommand({ Name: aclName, Id: aclId, Scope })))
+  const acl = get.WebACL
+  const kept = (acl.Rules || []).filter((r) => !names.has(r.Name))
+  const removed = (acl.Rules || []).length - kept.length
+
+  // 지울 규칙이 이미 없으면 업데이트를 건너뛴다(LockToken 낭비 방지).
+  if (removed === 0) return { web_acl_id: aclId, removed_rules: 0, note: '이미 없는 규칙입니다' }
+
+  await wafRetry(() => waf.send(new UpdateWebACLCommand({
+    Name: aclName,
+    Id: aclId,
+    Scope,
+    DefaultAction: acl.DefaultAction,
+    Rules: kept,
+    VisibilityConfig: acl.VisibilityConfig,
+    LockToken: get.LockToken,
+  })))
+  return { web_acl_id: aclId, removed_rules: removed }
+}
+
 // 관리자가 승인 누른 신청을 실제 AWS에 반영. status='pending'인 요청만 처리(중복 승인 방지).
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
@@ -267,19 +372,52 @@ serve(async (req) => {
 
     // 승인은 관리자만. 프론트에서 메뉴를 감추는 것만으로는 이 함수를 직접 호출하는 걸 막지 못한다.
     const { data: adminRow, error: adminErr } = await supabase
-      .from('admins').select('user_id').eq('user_id', user.id).maybeSingle()
+      .from('admins').select('user_id, is_super').eq('user_id', user.id).maybeSingle()
     if (adminErr) throw adminErr
     if (!adminRow) return json({ ok: false, error: '관리자만 승인할 수 있습니다' }, 403)
+    const isSuper = !!adminRow.is_super
 
     const { request_id, issue_key } = await req.json()
     if (!request_id) throw new Error('request_id가 필요합니다')
 
-    // pending -> approved로 원자적 전환 (동시 승인 중복 적용 방지)
+    // 어떤 신청인지 먼저 확인한다. 삭제면 승인 경로가 달라진다.
+    const { data: target, error: targetErr } = await supabase
+      .from('aws_requests').select('*').eq('id', request_id).maybeSingle()
+    if (targetErr) throw targetErr
+    if (!target) return json({ ok: false, error: '존재하지 않는 신청입니다' }, 400)
+
+    const isDelete = DELETE_ACTIONS.includes(target.action)
+
+    // 삭제인데 최고 관리자가 아니면 실제 AWS 작업을 하지 않고 1차 승인으로만 넘긴다.
+    // 되돌릴 수 없는 작업이므로 최고 관리자 승인을 반드시 거치게 한다.
+    if (isDelete && !isSuper) {
+      const { data: staged, error: stageErr } = await supabase
+        .from('aws_requests')
+        .update({
+          status: 'awaiting_super',
+          reviewed_at: new Date().toISOString(),
+          first_approver_id: user.id,
+          first_approver_email: user.email,
+          first_approved_at: new Date().toISOString(),
+        })
+        .eq('id', request_id)
+        .eq('status', 'pending')
+        .select()
+        .maybeSingle()
+      if (stageErr) throw stageErr
+      if (!staged) return json({ ok: false, error: '이미 처리된 신청이거나 존재하지 않습니다' }, 400)
+      return json({ ok: true, staged: true, message: '1차 승인 완료. 최고 관리자 승인이 필요합니다.' })
+    }
+
+    // 실행 대상 상태: 일반 신청은 pending, 삭제는 pending 또는 1차 승인된 것.
+    const fromStatuses = isDelete ? ['pending', 'awaiting_super'] : ['pending']
+
+    // 원자적 전환 (동시 승인 중복 적용 방지)
     const { data: claimed, error: claimErr } = await supabase
       .from('aws_requests')
       .update({ status: 'approved', reviewed_at: new Date().toISOString() })
       .eq('id', request_id)
-      .eq('status', 'pending')
+      .in('status', fromStatuses)
       .select()
       .maybeSingle()
 
@@ -299,7 +437,14 @@ serve(async (req) => {
 
     try {
       let result = {}
-      if (claimed.resource_type === 'security_group') {
+      // 삭제는 action으로 먼저 분기한다 (resource_type은 생성과 같은 값을 쓰므로).
+      if (claimed.action === 'delete_iam_user') {
+        result = await handleDeleteIamUser(new IAMClient({ region, credentials }), claimed)
+      } else if (claimed.action === 'delete_sg_rules') {
+        result = await handleDeleteSgRules(new EC2Client({ region, credentials }), claimed)
+      } else if (claimed.action === 'delete_waf_rules') {
+        result = await handleDeleteWafRules(claimed, credentials, region)
+      } else if (claimed.resource_type === 'security_group') {
         result = await handleSg(new EC2Client({ region, credentials }), claimed)
       } else if (claimed.resource_type === 'waf_web_acl') {
         result = await handleWaf(claimed, credentials, region)

@@ -45,6 +45,14 @@ export function summarizePayload(action, payload) {
   if (action === 'create_readonly_user') {
     return `계정: ${p.user_name || ''}, 액세스 키: ${p.issue_key ? '발급 요청' : '요청 안 함'}`
   }
+  // 삭제
+  if (action === 'delete_iam_user') return `삭제 대상 계정: ${p.user_name || ''}`
+  if (action === 'delete_sg_rules') {
+    return `대상 SG: ${p.sg_name || p.sg_id || ''}, 규칙 ${(p.rules || []).length}개 제거`
+  }
+  if (action === 'delete_waf_rules') {
+    return `대상 ACL: ${p.web_acl_name || ''}, 규칙 제거: ${(p.rule_names || []).join(', ')}`
+  }
   // VPC
   if (action === 'create_vpc') return `CIDR: ${p.cidr_block || ''}`
   // Subnet

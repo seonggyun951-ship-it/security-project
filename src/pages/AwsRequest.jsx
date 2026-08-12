@@ -9,6 +9,7 @@ import { MyReqGrouped, MiniCal } from '../components/RequestHistory'
 import { localDateKey } from '../lib/date'
 import { ACTION_LABEL, ReqCard, reqTitle } from '../lib/aws'
 import { SgForm, WafForm, IamUserForm } from './forms/AwsForms'
+import { SgDeleteForm, WafDeleteForm, IamDeleteForm } from './forms/DeleteForms'
 
 // 리소스 타입별 신청 페이지 — 라우트에서 resourceType을 넘겨 재사용
 const PAGE_META = {
@@ -28,6 +29,7 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
   const [detailReq, setDetailReq] = useState(null)
   const [listError, setListError] = useState(null)
   const [optionsError, setOptionsError] = useState(null)
+  const [mode, setMode] = useState('create') // 'create' | 'delete'
 
   const filteredRequests = dateFilter
     ? myRequests.filter((r) => localDateKey(r.requested_at) === dateFilter)
@@ -142,9 +144,29 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
       <div className="ac-grid">
         <div className="ac-card ac-card-wide">
           <div className="ac-card-title">신청서 작성</div>
-          {resourceType === 'security_group' && <SgForm sgOptions={sgOptions} onSubmit={submitRequest} submitting={submitting} />}
-          {resourceType === 'waf_web_acl' && <WafForm aclOptions={aclOptions} onSubmit={submitRequest} submitting={submitting} />}
-          {resourceType === 'iam_user' && <IamUserForm onSubmit={submitRequest} submitting={submitting} />}
+          {/* 추가와 삭제는 성격이 반대라 탭으로 분리한다. 실수로 삭제를 누르지 않도록. */}
+          <div className="ac-filter-row">
+            <button className={`ac-filter-btn ${mode === 'create' ? 'active' : ''}`} onClick={() => setMode('create')}>
+              추가 신청
+            </button>
+            <button className={`ac-filter-btn ${mode === 'delete' ? 'active' : ''}`} onClick={() => setMode('delete')}>
+              삭제 신청
+            </button>
+          </div>
+
+          {mode === 'create' ? (
+            <>
+              {resourceType === 'security_group' && <SgForm sgOptions={sgOptions} onSubmit={submitRequest} submitting={submitting} />}
+              {resourceType === 'waf_web_acl' && <WafForm aclOptions={aclOptions} onSubmit={submitRequest} submitting={submitting} />}
+              {resourceType === 'iam_user' && <IamUserForm onSubmit={submitRequest} submitting={submitting} />}
+            </>
+          ) : (
+            <>
+              {resourceType === 'security_group' && <SgDeleteForm onSubmit={submitRequest} submitting={submitting} />}
+              {resourceType === 'waf_web_acl' && <WafDeleteForm onSubmit={submitRequest} submitting={submitting} />}
+              {resourceType === 'iam_user' && <IamDeleteForm onSubmit={submitRequest} submitting={submitting} />}
+            </>
+          )}
         </div>
 
         <div className="ac-card ac-card-wide ac-card-muted">

@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { ReqCard, REQ_STATUS_META, ACTION_LABEL } from '../lib/aws'
+import { ReqCard, REQ_STATUS_META, ACTION_LABEL, isDeleteAction } from '../lib/aws'
 import { notify } from '../lib/discord'
 import { fetchRows, runWrite, callFunction } from '../lib/db'
-import { approverLine } from '../lib/auth'
+import { approverLine, useIsSuperAdmin } from '../lib/auth'
 import { pendingChanged } from '../lib/pending'
 import ErrorBanner from '../components/ErrorBanner'
 import {
@@ -231,9 +231,12 @@ function RequestQueue() {
   const [busyId, setBusyId] = useState(null)
   const [revealKey, setRevealKey] = useState(null)
   const [loadError, setLoadError] = useState(null)
+  const isSuper = useIsSuperAdmin()
 
-  const pendingRequests = requests.filter((r) => r.status === 'pending')
-  const historyRequests = requests.filter((r) => r.status !== 'pending')
+  // awaiting_super(1차 승인된 삭제)도 아직 처리가 남았으므로 대기 목록에 둔다.
+  const OPEN = ['pending', 'awaiting_super']
+  const pendingRequests = requests.filter((r) => OPEN.includes(r.status))
+  const historyRequests = requests.filter((r) => !OPEN.includes(r.status))
 
   const fetchRequests = async () => {
     pendingChanged() // 사이드바 대기 배지도 같이 맞춘다 (페이지는 새로고침하지 않음)
@@ -279,12 +282,17 @@ function RequestQueue() {
       if (!data.ok) {
         alert('적용 실패: ' + data.error)
         notify(`❌ **적용 실패**\n${actionLabel}: ${reqName}${by}\n오류: ${data.error}`)
+      } else if (data.staged) {
+        // 삭제 신청을 일반 관리자가 승인한 경우 — 실제 삭제는 아직 일어나지 않았다.
+        alert('1차 승인되었습니다. 최고 관리자가 최종 승인해야 실제로 삭제됩니다.')
+        notify(`🕓 **삭제 1차 승인**\n${actionLabel}: ${reqName}${by}\n→ 최고 관리자 최종 승인 대기 중`)
       } else {
         // IAM은 신청자가 요청한 것과 다르게 승인할 수 있으므로, 실제 처리 결과를 남긴다.
-        const keyLine = req?.resource_type === 'iam_user'
+        const keyLine = req?.resource_type === 'iam_user' && !isDeleteAction(req?.action)
           ? `\n액세스 키: ${opts?.issueKey ? '발급함' : '발급 안 함'}`
           : ''
-        notify(`✅ **승인 + 적용 완료**\n${actionLabel}: ${reqName}${by}${keyLine}`)
+        const title = isDeleteAction(req?.action) ? '🗑️ **삭제 완료**' : '✅ **승인 + 적용 완료**'
+        notify(`${title}\n${actionLabel}: ${reqName}${by}${keyLine}`)
         if (data.result?.access_key_id && data.result?.secret_access_key) setRevealKey(data.result)
       }
     }
@@ -305,7 +313,8 @@ function RequestQueue() {
         status: 'rejected',
         reviewed_at: new Date().toISOString(),
         error_message: reason.trim() || null,
-      }).eq('id', id).eq('status', 'pending').select(),
+      // 1차 승인된 삭제(awaiting_super)도 최종 단계에서 거부할 수 있어야 한다.
+      }).eq('id', id).in('status', ['pending', 'awaiting_super']).select(),
       '거부')
     if (!ok) {
       alert(error)
@@ -339,7 +348,7 @@ function RequestQueue() {
         {!loading && pendingRequests.length === 0 && <div className="ac-empty">대기중인 신청이 없습니다.</div>}
         <div className="ac-snapshot-list">
           {pendingRequests.map((r) => (
-            <ReqCard key={r.id} r={r} busyId={busyId} onApprove={approve} onReject={reject} onRemove={removeRequest} />
+            <ReqCard key={r.id} r={r} busyId={busyId} isSuper={isSuper === true} onApprove={approve} onReject={reject} onRemove={removeRequest} />
           ))}
         </div>
       </div>
