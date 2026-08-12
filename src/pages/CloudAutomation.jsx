@@ -189,7 +189,7 @@ function RequestQueue() {
               검토필요 {riskyRequests.length}
             </button>
             <button className={`ap-chip ${view === 'recent' ? 'on' : ''}`} onClick={() => setView('recent')}>
-              처리됨 {recent.length}
+              승인내역 {recent.length}
             </button>
           </div>
 
@@ -200,7 +200,7 @@ function RequestQueue() {
             {!loading && shown.length === 0 && (
               <div className="ac-empty">
                 {view === 'risk' ? '검토가 필요한 신청이 없습니다.'
-                  : view === 'recent' ? '처리한 신청이 없습니다.'
+                  : view === 'recent' ? '승인내역이 없습니다.'
                     : '대기중인 신청이 없습니다.'}
               </div>
             )}
