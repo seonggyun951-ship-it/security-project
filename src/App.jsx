@@ -68,7 +68,12 @@ export default function App() {
     return () => listener.subscription.unsubscribe()
   }, [])
 
-  const logout = () => supabase.auth.signOut()
+  // 주소를 홈으로 되돌린 뒤 로그아웃한다.
+  // 그러지 않으면 해시에 남은 페이지가 다음 로그인 때 그대로 다시 열린다.
+  const logout = async () => {
+    window.location.hash = '#/'
+    await supabase.auth.signOut()
+  }
 
   if (session === undefined) return null
   if (!session) return <Login />

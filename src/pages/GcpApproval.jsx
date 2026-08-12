@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { GcpReqCard, GCP_REQ_STATUS_META } from '../lib/gcp'
 import { notify } from '../lib/discord'
 import { fetchRows, runWrite } from '../lib/db'
+import { approverLine } from '../lib/auth'
 import ErrorBanner from '../components/ErrorBanner'
 import {
   WEEKDAYS, dateKey, localDateKey, todayKey, monthCells,
@@ -208,6 +209,7 @@ function RequestQueue() {
     setBusyId(id)
     const req = requests.find((r) => r.id === id)
     const reqName = req?.title || req?.target_id || ''
+    const by = await approverLine()
     const { ok, error } = await runWrite(
       supabase.from('gcp_requests')
         .update({ status: 'approved', reviewed_at: new Date().toISOString() })
@@ -216,7 +218,7 @@ function RequestQueue() {
     if (!ok) {
       alert(error)
     } else {
-      notify(`✅ **GCP 신청 승인**\n${req?.action || ''}: ${reqName}`)
+      notify(`✅ **GCP 신청 승인**\n${req?.action || ''}: ${reqName}${by}\n→ 실제 적용은 수동 처리가 필요합니다`)
     }
     await fetchRequests()
     setBusyId(null)
@@ -228,6 +230,7 @@ function RequestQueue() {
     setBusyId(id)
     const req = requests.find((r) => r.id === id)
     const reqName = req?.title || req?.target_id || ''
+    const by = await approverLine()
     const { ok, error } = await runWrite(
       supabase.from('gcp_requests').update({
         status: 'rejected',
@@ -238,7 +241,7 @@ function RequestQueue() {
     if (!ok) {
       alert(error)
     } else {
-      notify(`🚫 **GCP 신청 거부**\n${req?.action || ''}: ${reqName}${reason.trim() ? `\n사유: ${reason.trim()}` : ''}`)
+      notify(`🚫 **GCP 신청 거부**\n${req?.action || ''}: ${reqName}${by}${reason.trim() ? `\n사유: ${reason.trim()}` : ''}`)
     }
     await fetchRequests()
     setBusyId(null)

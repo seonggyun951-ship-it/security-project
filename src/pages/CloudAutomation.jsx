@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { ReqCard, REQ_STATUS_META, ACTION_LABEL } from '../lib/aws'
 import { notify } from '../lib/discord'
 import { fetchRows, runWrite, callFunction } from '../lib/db'
+import { approverLine } from '../lib/auth'
 import ErrorBanner from '../components/ErrorBanner'
 import {
   WEEKDAYS, dateKey, localDateKey, todayKey, monthCells,
@@ -254,6 +255,8 @@ function RequestQueue() {
 
     const actionLabel = ACTION_LABEL[req?.action] || req?.action || ''
     const reqName = req?.title || req?.target_id || ''
+    // 관리자가 여러 명일 수 있으므로 누가 처리했는지 알림에 남긴다.
+    const by = await approverLine()
 
     if (req && TERRAFORM_TYPES.includes(req.resource_type)) {
       // Terraform 대상: DB 상태만 approved로 변경 → 로컬 에이전트가 처리.
@@ -266,16 +269,16 @@ function RequestQueue() {
       if (!ok) {
         alert(error)
       } else {
-        notify(`✅ **승인 (Terraform 대기)**\n${actionLabel}: ${reqName}\n→ 로컬 에이전트가 자동 적용 예정`)
+        notify(`✅ **승인 (Terraform 대기)**\n${actionLabel}: ${reqName}${by}\n→ 로컬 에이전트가 자동 적용 예정`)
       }
     } else {
       // SG/WAF/IAM: Edge Function으로 즉시 적용
       const data = await callFunction('aws-request-apply', { request_id: id, issue_key: !!opts?.issueKey })
       if (!data.ok) {
         alert('적용 실패: ' + data.error)
-        notify(`❌ **적용 실패**\n${actionLabel}: ${reqName}\n오류: ${data.error}`)
+        notify(`❌ **적용 실패**\n${actionLabel}: ${reqName}${by}\n오류: ${data.error}`)
       } else {
-        notify(`✅ **승인 + 적용 완료**\n${actionLabel}: ${reqName}`)
+        notify(`✅ **승인 + 적용 완료**\n${actionLabel}: ${reqName}${by}`)
         if (data.result?.access_key_id && data.result?.secret_access_key) setRevealKey(data.result)
       }
     }
@@ -290,6 +293,7 @@ function RequestQueue() {
     const req = requests.find((r) => r.id === id)
     const actionLabel = ACTION_LABEL[req?.action] || req?.action || ''
     const reqName = req?.title || req?.target_id || ''
+    const by = await approverLine()
     const { ok, error } = await runWrite(
       supabase.from('aws_requests').update({
         status: 'rejected',
@@ -300,7 +304,7 @@ function RequestQueue() {
     if (!ok) {
       alert(error)
     } else {
-      notify(`🚫 **신청 거부**\n${actionLabel}: ${reqName}${reason.trim() ? `\n사유: ${reason.trim()}` : ''}`)
+      notify(`🚫 **신청 거부**\n${actionLabel}: ${reqName}${by}${reason.trim() ? `\n사유: ${reason.trim()}` : ''}`)
     }
     await fetchRequests()
     setBusyId(null)

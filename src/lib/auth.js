@@ -13,10 +13,26 @@ export async function requireUser() {
 // 각자 조회하면 같은 쿼리가 여러 번 나가고 메뉴가 늦게 뜨므로, 진행 중인 조회를 공유한다.
 let adminCheck = null
 
+// 승인/거부 알림에 붙일 처리자 표시.
+// 관리자가 여러 명이 될 수 있으므로 누가 처리했는지 남긴다.
+// 알림 문구를 만들다 실패해도 본 기능이 막히면 안 되므로 빈 문자열로 넘어간다.
+export async function approverLine() {
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    const email = session?.user?.email
+    return email ? `\n처리자: ${email}` : ''
+  } catch {
+    return ''
+  }
+}
+
 const NOT_ADMIN = { isAdmin: false, isSuper: false }
 
 async function fetchAdminInfo() {
-  const { data: { user } } = await supabase.auth.getUser()
+  // getUser()는 서버에 한 번 더 다녀오지만, 여기서는 user id만 있으면 된다.
+  // getSession()은 로컬 저장소에서 읽어 네트워크 호출이 없다.
+  const { data: { session } } = await supabase.auth.getSession()
+  const user = session?.user
   if (!user) return NOT_ADMIN
   const { data, error } = await supabase
     .from('admins').select('user_id, is_super').eq('user_id', user.id).maybeSingle()
