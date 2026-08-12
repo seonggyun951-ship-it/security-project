@@ -288,7 +288,7 @@ function RequestQueue() {
 }
 
 function GcpApprovalCard({ r, busyId, onApprove, onReject, onRemove }) {
-  const meta = GCP_REQ_STATUS_META[r.status] || { label: r.status, color: '#94a3b8' }
+  const meta = GCP_REQ_STATUS_META[r.status] || { label: r.status, color: 'var(--ink-3)' }
   const detail = (() => {
     const p = r.payload || {}
     if (r.action === 'create_firewall') {

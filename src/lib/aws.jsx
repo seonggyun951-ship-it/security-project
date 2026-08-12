@@ -40,13 +40,14 @@ export const IAM_READONLY_POLICIES = [
 ]
 
 export const REQ_STATUS_META = {
-  pending:        { label: '대기중', color: '#f59e0b' },
-  awaiting_super: { label: '최고관리자 승인 대기', color: '#a855f7' },
-  approved:       { label: '승인 처리중', color: '#38bdf8' },
-  applied:  { label: '적용 완료', color: '#10b981' },
-  rejected:       { label: '거절됨', color: '#64748b' },
-  failed:         { label: '적용 실패', color: '#ef4444' },
-  cancelled:      { label: '신청 취소', color: '#94a3b8' },
+  // 색은 index.css의 토큰을 그대로 쓴다. 팔레트를 바꿀 때 CSS 한 곳만 고치면 되도록.
+  pending:        { label: '대기중', color: 'var(--wait)' },
+  awaiting_super: { label: '최고관리자 승인 대기', color: 'var(--super)' },
+  approved:       { label: '승인 처리중', color: 'var(--accent-2)' },
+  applied:        { label: '적용 완료', color: 'var(--done)' },
+  rejected:       { label: '거절됨', color: 'var(--off)' },
+  failed:         { label: '적용 실패', color: 'var(--fail)' },
+  cancelled:      { label: '신청 취소', color: 'var(--ink-3)' },
 }
 
 // WAF 신규 생성 시 선택 가능한 AWS 관리형 규칙 그룹
@@ -208,7 +209,7 @@ export function reqWarnings(r) {
 // 신청 1건 카드 — 승인자는 onApprove/onReject/onRemove 전달, 신청자는 미전달(상태만 표시)
 // isSuper: 최고 관리자 여부. 삭제 신청은 최고 관리자만 최종 실행할 수 있다.
 export function ReqCard({ r, busyId, onApprove, onReject, onRemove, isSuper = false }) {
-  const meta = REQ_STATUS_META[r.status] || { label: r.status, color: '#94a3b8' }
+  const meta = REQ_STATUS_META[r.status] || { label: r.status, color: 'var(--ink-3)' }
   const detail = reqDetailLines(r)
   const warnings = reqWarnings(r)
   const busy = busyId === r.id

@@ -14,11 +14,14 @@ export const GCP_ACTION_LABEL = {
 }
 
 export const GCP_REQ_STATUS_META = {
-  pending:  { label: '대기중', color: '#f59e0b' },
-  approved: { label: '승인 처리중', color: '#38bdf8' },
-  applied:  { label: '적용 완료', color: '#10b981' },
-  rejected: { label: '거절됨', color: '#64748b' },
-  failed:   { label: '적용 실패', color: '#ef4444' },
+  // 색은 index.css의 토큰을 그대로 쓴다 (AWS 쪽과 동일 기준).
+  pending:        { label: '대기중', color: 'var(--wait)' },
+  awaiting_super: { label: '최고관리자 승인 대기', color: 'var(--super)' },
+  approved:       { label: '승인 처리중', color: 'var(--accent-2)' },
+  applied:        { label: '적용 완료', color: 'var(--done)' },
+  rejected:       { label: '거절됨', color: 'var(--off)' },
+  failed:         { label: '적용 실패', color: 'var(--fail)' },
+  cancelled:      { label: '신청 취소', color: 'var(--ink-3)' },
 }
 
 export const GCP_PROTOCOLS = [
@@ -83,7 +86,7 @@ export function gcpReqDetailLines(r) {
 }
 
 export function GcpReqCard({ r }) {
-  const meta = GCP_REQ_STATUS_META[r.status] || { label: r.status, color: '#94a3b8' }
+  const meta = GCP_REQ_STATUS_META[r.status] || { label: r.status, color: 'var(--ink-3)' }
   const detail = gcpReqDetailLines(r)
   return (
     <div className="ac-req">

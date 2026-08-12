@@ -67,7 +67,7 @@ export function MyReqGrouped({ requests, showResult = false, onCancel, busyId })
   const [openGroup, setOpenGroup] = useState('pending')
 
   const groups = STATUS_GROUP_ORDER.map((status) => {
-    const meta = REQ_STATUS_META[status] || { label: status, color: '#94a3b8' }
+    const meta = REQ_STATUS_META[status] || { label: status, color: 'var(--ink-3)' }
     const items = requests.filter((r) => r.status === status)
     return { status, meta, items, dates: groupByDate(items) }
   }).filter((g) => g.items.length > 0)

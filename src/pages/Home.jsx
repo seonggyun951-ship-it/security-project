@@ -29,10 +29,10 @@ function StatCard({ label, value, unit, tone, onClick }) {
 
 // 막대 구분 — 그날 무슨 일이 일어났는지 기준
 const SERIES = [
-  { key: 'requested', label: '신청', color: '#10b981' },
-  { key: 'applied', label: '완료', color: '#0284c7' },
-  { key: 'rejected', label: '승인 거부', color: '#ef4444' },
-  { key: 'failed', label: '실패', color: '#f59e0b' },
+  { key: 'requested', label: '신청', color: 'var(--ink-3)' },
+  { key: 'applied', label: '완료', color: 'var(--done)' },
+  { key: 'rejected', label: '승인 거부', color: 'var(--fail)' },
+  { key: 'failed', label: '실패', color: 'var(--wait)' },
 ]
 
 // 신청 1건이 날짜별로 어떤 사건을 만드는지 펼친다.
