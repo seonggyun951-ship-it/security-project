@@ -293,7 +293,7 @@ function RequestQueue() {
     const req = requests.find((r) => r.id === id)
     const actionLabel = ACTION_LABEL[req?.action] || req?.action || ''
     const reqName = req?.title || req?.target_id || ''
-    const by = await approverLine()
+    const by = await approverLine('거부자')
     const { ok, error } = await runWrite(
       supabase.from('aws_requests').update({
         status: 'rejected',

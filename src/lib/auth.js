@@ -15,12 +15,13 @@ let adminCheck = null
 
 // 승인/거부 알림에 붙일 처리자 표시.
 // 관리자가 여러 명이 될 수 있으므로 누가 처리했는지 남긴다.
+// 거부 알림에 '승인자'라고 적히면 어색하므로 label로 구분한다.
 // 알림 문구를 만들다 실패해도 본 기능이 막히면 안 되므로 빈 문자열로 넘어간다.
-export async function approverLine() {
+export async function approverLine(label = '승인자') {
   try {
     const { data: { session } } = await supabase.auth.getSession()
     const email = session?.user?.email
-    return email ? `\n처리자: ${email}` : ''
+    return email ? `\n${label}: ${email}` : ''
   } catch {
     return ''
   }

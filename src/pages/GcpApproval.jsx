@@ -230,7 +230,7 @@ function RequestQueue() {
     setBusyId(id)
     const req = requests.find((r) => r.id === id)
     const reqName = req?.title || req?.target_id || ''
-    const by = await approverLine()
+    const by = await approverLine('거부자')
     const { ok, error } = await runWrite(
       supabase.from('gcp_requests').update({
         status: 'rejected',
