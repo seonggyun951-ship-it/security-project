@@ -4,6 +4,7 @@ import { GcpReqCard, GCP_REQ_STATUS_META } from '../lib/gcp'
 import { notify } from '../lib/discord'
 import { fetchRows, runWrite } from '../lib/db'
 import { approverLine } from '../lib/auth'
+import { pendingChanged } from '../lib/pending'
 import ErrorBanner from '../components/ErrorBanner'
 import {
   WEEKDAYS, dateKey, localDateKey, todayKey, monthCells,
@@ -194,6 +195,7 @@ function RequestQueue() {
   const historyRequests = requests.filter((r) => r.status !== 'pending')
 
   const fetchRequests = async () => {
+    pendingChanged() // 사이드바 대기 배지도 같이 맞춘다 (페이지는 새로고침하지 않음)
     setLoading(true)
     const { rows, error } = await fetchRows(
       supabase.from('gcp_requests').select('*').order('requested_at', { ascending: false }).limit(100),

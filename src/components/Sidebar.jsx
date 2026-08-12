@@ -1,6 +1,7 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { useIsAdmin, useIsSuperAdmin } from '../lib/auth'
+import { usePendingCounts } from '../lib/pending'
 
 // 사이드바 메뉴 — 그룹 단위로 흐름이 보이게 구성
 export const NAV_GROUPS = [
@@ -26,7 +27,7 @@ export const NAV_GROUPS = [
   {
     label: 'AWS 관리',
     items: [
-      { title: '관리자 승인', path: '/cloud-automation', adminOnly: true },
+      { title: '관리자 승인', path: '/cloud-automation', adminOnly: true, badge: 'aws' },
       { title: 'AWS 현황', path: '/aws-status', adminOnly: true },
     ],
   },
@@ -41,7 +42,7 @@ export const NAV_GROUPS = [
   {
     label: 'GCP 관리',
     items: [
-      { title: '관리자 승인', path: '/gcp/approval', adminOnly: true },
+      { title: '관리자 승인', path: '/gcp/approval', adminOnly: true, badge: 'gcp' },
     ],
   },
   {
@@ -67,6 +68,8 @@ export default function Sidebar({ onLogout }) {
   const location = useLocation()
   const isAdmin = useIsAdmin()
   const isSuper = useIsSuperAdmin()
+  // 관리자만 대기 건수를 센다. 신청자는 승인 메뉴 자체가 없다.
+  const pending = usePendingCounts(isAdmin === true)
 
   // 모바일에서 메뉴 선택 후 자동으로 닫기
   useEffect(() => { setOpen(false) }, [location.pathname])
@@ -103,6 +106,11 @@ export default function Sidebar({ onLogout }) {
                   className={({ isActive }) => `sb-link ${isActive ? 'is-active' : ''}`}
                 >
                   <span className="sb-link-text">{item.title}</span>
+                  {item.badge && pending[item.badge] > 0 && (
+                    <span className="sb-badge" title={`승인 대기 ${pending[item.badge]}건`}>
+                      {pending[item.badge]}
+                    </span>
+                  )}
                 </NavLink>
               ))}
             </div>

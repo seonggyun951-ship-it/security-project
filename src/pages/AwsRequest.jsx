@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { notify, summarizePayload } from '../lib/discord'
 import { requireUser, currentUserId } from '../lib/auth'
+import { pendingChanged } from '../lib/pending'
 import { fetchRows } from '../lib/db'
 import ErrorBanner from '../components/ErrorBanner'
 import { MyReqGrouped, MiniCal } from '../components/RequestHistory'
@@ -88,6 +89,7 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
     const actionLabel = ACTION_LABEL[req.action] || req.action
     const detail = summarizePayload(req.action, req.payload)
     notify(`📋 **새 신청 접수**\n${actionLabel}: ${req.title || ''}\n신청자: ${me.email}${detail ? `\n내용: ${detail}` : ''}${req.reason ? `\n사유: ${req.reason}` : ''}`)
+    pendingChanged() // 관리자 화면의 대기 배지 반영
     alert('신청되었습니다. 승인자 검토 후 반영됩니다.')
     return true
   }
