@@ -98,7 +98,10 @@ body {
   display: inline-flex; align-items: center; justify-content: center;
 }
 .sb-rail-btn:hover { border-color: var(--side-ink); color: var(--side-on-ink); }
-.sb-nav { flex: 1; display: flex; flex-direction: column; gap: 18px; overflow-y: auto; }
+/* 메뉴가 길면 스크롤은 되게 하되 스크롤바는 감춘다.
+   좁은 레일에서 막대가 아이콘과 겹쳐 지저분해 보인다. */
+.sb-nav { flex: 1; display: flex; flex-direction: column; gap: 18px; overflow-y: auto; scrollbar-width: none; -ms-overflow-style: none; }
+.sb-nav::-webkit-scrollbar { width: 0; height: 0; }
 .sb-group { display: flex; flex-direction: column; gap: 2px; }
 .sb-group-label {
   font-size: 11px; font-weight: 700; color: var(--side-dim);
@@ -121,9 +124,11 @@ body {
 .sb.is-rail .sb-top { flex-direction: column; gap: 8px; padding: 0 0 16px; width: 100%; }
 .sb.is-rail .sb-brand { font-size: 14px; flex: none; text-align: center; }
 .sb.is-rail .sb-group-label { display: none; }
-.sb.is-rail .sb-nav { gap: 10px; width: 100%; align-items: center; }
-.sb.is-rail .sb-group { gap: 3px; width: 100%; align-items: center; }
-.sb.is-rail .sb-link { justify-content: center; padding: 9px 0; width: 40px; position: relative; }
+/* 레일에서는 그룹 구분선으로 나누고 간격을 줄여 스크롤이 덜 생기게 한다 */
+.sb.is-rail .sb-nav { gap: 8px; width: 100%; align-items: center; }
+.sb.is-rail .sb-group { gap: 2px; width: 100%; align-items: center; padding-top: 8px; border-top: 1px solid var(--side-line); }
+.sb.is-rail .sb-group:first-child { padding-top: 0; border-top: none; }
+.sb.is-rail .sb-link { justify-content: center; padding: 7px 0; width: 38px; position: relative; }
 .sb.is-rail .sb-link-text { display: none; }
 .sb.is-rail .sb-icon { width: auto; font-size: 15px; }
 .sb.is-rail .sb-badge { position: absolute; top: 2px; right: 2px; min-width: 15px; height: 15px; font-size: 9px; padding: 0 3px; }

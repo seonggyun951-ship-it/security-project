@@ -148,7 +148,18 @@ export function SgDeleteForm({ onSubmit, submitting }) {
     //   create_sg  → result.created_id (새로 만들어진 SG)
     // payload.sg_id는 예전 형식이라 마지막에 본다.
     const sgId = target.target_id || target.result?.created_id || target.payload?.sg_id
-    if (!sgId) return alert('원본 신청에서 대상 SG를 찾을 수 없습니다')
+    if (!sgId) {
+      // 어디를 봤는데 없었는지 남긴다. 원인 없이 "못 찾음"만 뜨면 확인할 방법이 없다.
+      console.error('SG 대상 확인 실패', {
+        id: target.id, action: target.action,
+        target_id: target.target_id, result: target.result, payload_sg_id: target.payload?.sg_id,
+      })
+      return alert(
+        '원본 신청에서 대상 SG를 찾을 수 없습니다.\n' +
+        `(신청 ${target.action} / target_id: ${target.target_id ?? '없음'})\n\n` +
+        'F12 콘솔에 상세가 남습니다.'
+      )
+    }
 
     const chosen = picked.map((i) => rules[i]).filter(Boolean)
     const ok = await onSubmit({
