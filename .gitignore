@@ -15,9 +15,12 @@ dist-ssr
 supabase/.temp
 
 # Terraform
-terraform/.terraform/
-terraform/terraform.tfstate
-terraform/terraform.tfstate.backup
+# 경로를 고정하지 않고 어느 깊이에서든 걸리게 한다 (terraform/envs/*/ 포함).
+# .terraform/에는 프로바이더 바이너리가 들어가 디렉터리당 686MB나 된다.
+# state에는 리소스 ID가 그대로 남으므로 저장소에 올리지 않는다.
+**/.terraform/
+*.tfstate
+*.tfstate.*
 terraform/.env
 terraform/node_modules
 terraform/req_*.tf
