@@ -175,7 +175,7 @@ function RequestQueue() {
               대기 {pendingRequests.length}건
               {riskyRequests.length > 0 && (
                 <> · <span style={{ color: 'var(--fail)', fontWeight: 700 }}>검토필요 {riskyRequests.length}건</span>
-                  <span className="ap-hint">삭제 신청이거나 전체 개방(0.0.0.0/0)</span></>
+                  <span className="ap-hint">삭제 신청이거나 점검에서 걸린 것</span></>
               )}
             </div>
           </div>

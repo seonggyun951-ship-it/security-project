@@ -40,26 +40,38 @@ const json = (body, status = 200) => new Response(JSON.stringify(body), {
 // WAF 이름/메트릭은 [a-zA-Z0-9-_] 만 허용
 const safeName = (s) => (s || '').replace(/[^A-Za-z0-9_-]/g, '') || 'rule'
 
-// ---- SG 가드레일 ----
-const SENSITIVE_PORTS = [22, 3389, 3306, 5432, 1433, 6379, 27017]
+// ---- SG 가드레일 (최종 방어선) ----
+//
+// 같은 규칙을 신청 화면(src/lib/rules.js)이 접수 시점에 먼저 검사한다.
+// 여기 있는 것은 그걸 우회해 직접 DB에 넣었을 때를 대비한 마지막 방어선이므로,
+// 두 곳의 판정이 어긋나면 안 된다. 신청 화면이 '위험'으로 막는 것과 같은 항목만 둔다.
+//
+// 민감 포트(22 등)는 여기서 막지 않는다. 신청 화면이 '주의'로 표시해 관리자에게
+// 넘기고, 관리자가 승인 버튼을 누른 것이 곧 수동 승인이다. 여기서 또 막으면
+// 관리자가 승인한 신청이 적용 단계에서 실패한다.
 const MAX_RULES_PER_SG = 50
 const MIN_CIDR_PREFIX = 24 // /24 이상만 허용 (/0~/23 차단)
+const WEB_PORTS = [80, 443] // 외부 공개 서비스의 정상 포트 — 전체 개방을 허용한다
 
 function validateSgRules(rules) {
   const errors = []
   for (const r of (rules || [])) {
-    if (r.cidr === '0.0.0.0/0' || r.cidr === '::/0') {
+    // 아웃바운드 전체 허용은 AWS 기본값이라 막지 않는다. 들어오는 쪽만 본다.
+    if (r.direction !== 'ingress') continue
+
+    // 웹 포트 하나만 여는 것은 통과. 신청 화면이 '주의'로 표시해 관리자가 이미 보고 승인한다.
+    const onlyWebPort = r.from_port != null
+      && r.from_port === (r.to_port ?? r.from_port)
+      && WEB_PORTS.includes(r.from_port)
+
+    if ((r.cidr === '0.0.0.0/0' || r.cidr === '::/0') && !onlyWebPort) {
       errors.push(`전체 개방(${r.cidr})은 허용되지 않습니다`)
+      continue
     }
+    if (onlyWebPort) continue
     const prefix = parseInt((r.cidr || '').split('/')[1])
     if (!isNaN(prefix) && prefix < MIN_CIDR_PREFIX) {
       errors.push(`CIDR ${r.cidr}: /${MIN_CIDR_PREFIX} 이상만 허용됩니다 (현재 /${prefix})`)
-    }
-    const ports = [r.from_port, r.to_port].filter((p) => p != null)
-    for (const port of ports) {
-      if (SENSITIVE_PORTS.includes(port) && r.direction === 'ingress') {
-        errors.push(`포트 ${port}은 인바운드 자동 승인이 불가합니다 (수동 승인 필요)`)
-      }
     }
   }
   if ((rules || []).length > MAX_RULES_PER_SG) {

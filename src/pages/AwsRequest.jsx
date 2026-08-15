@@ -8,6 +8,7 @@ import ErrorBanner from '../components/ErrorBanner'
 import { MyReqGrouped, MiniCal } from '../components/RequestHistory'
 import { localDateKey } from '../lib/date'
 import { ACTION_LABEL, ReqCard, reqTitle } from '../lib/aws'
+import { checkRequest, SEVERITY_LABEL } from '../lib/rules'
 import { SgForm, WafForm, IamUserForm } from './forms/AwsForms'
 import { SgDeleteForm, WafDeleteForm, IamDeleteForm } from './forms/DeleteForms'
 
@@ -86,6 +87,24 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
   }, [resourceType])
 
   const submitRequest = async (req) => {
+    // 접수 전에 규칙 엔진으로 한 번 거른다.
+    //   위험 → 접수하지 않고 신청자가 바로 고치게 한다 (관리자를 기다릴 이유가 없다)
+    //   주의 → 접수하되 사유를 함께 저장해 관리자가 보고 판단하게 한다
+    const check = checkRequest(req.action, req.payload)
+    if (check?.verdict === 'reject') {
+      const lines = check.findings
+        .filter((f) => f.severity === 'high')
+        .map((f) => `· ${f.title}\n  ${f.why}`)
+        .join('\n\n')
+      alert(`신청할 수 없는 내용이 있습니다.\n\n${lines}\n\n수정 후 다시 신청해주세요.`)
+      return false
+    }
+    const warnings = check?.findings.filter((f) => f.severity === 'medium') || []
+    if (warnings.length > 0) {
+      const lines = warnings.map((f) => `· ${f.title}`).join('\n')
+      if (!confirm(`아래 항목은 관리자가 직접 확인합니다.\n\n${lines}\n\n이대로 신청할까요?`)) return false
+    }
+
     setSubmitting(true)
     let me
     try {
@@ -93,8 +112,13 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
     } catch (e) {
       setSubmitting(false); alert(e.message); return false
     }
+    // 점검 결과를 payload에 실어 보낸다. 관리자 검토 화면이 이걸 그대로 보여준다.
+    const payload = warnings.length > 0
+      ? { ...req.payload, check: warnings.map((f) => ({ severity: f.severity, title: f.title, why: f.why })) }
+      : req.payload
     const { error } = await supabase.from('aws_requests').insert({
       ...req,
+      payload,
       status: 'pending',
       requester_id: me.id,
       requester_email: me.email,
@@ -104,7 +128,10 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
     await fetchMyRequests()
     const actionLabel = ACTION_LABEL[req.action] || req.action
     const detail = summarizePayload(req.action, req.payload)
-    notify(`📋 **새 신청 접수**\n${actionLabel}: ${req.title || ''}\n신청자: ${me.email}${detail ? `\n내용: ${detail}` : ''}${req.reason ? `\n사유: ${req.reason}` : ''}`)
+    const warnLine = warnings.length > 0
+      ? `\n⚠️ ${SEVERITY_LABEL.medium} ${warnings.length}건: ${warnings.map((f) => f.title).join(', ')}`
+      : ''
+    notify(`📋 **새 신청 접수**\n${actionLabel}: ${req.title || ''}\n신청자: ${me.email}${detail ? `\n내용: ${detail}` : ''}${req.reason ? `\n사유: ${req.reason}` : ''}${warnLine}`)
     pendingChanged() // 관리자 화면의 대기 배지 반영
     alert('신청되었습니다. 승인자 검토 후 반영됩니다.')
     return true

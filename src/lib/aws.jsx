@@ -1,6 +1,7 @@
 // AWS 자동화 신청/승인 공통 모듈 — 신청자 페이지와 승인자 페이지가 함께 사용
 import { elapsedLabel, isAged } from './date'
 import { summarizePayload } from './discord'
+import { checkRequest } from './rules'
 
 export const RESOURCE_META = {
   security_group:   { label: 'Security Group' },
@@ -187,13 +188,22 @@ export function reqDetailLines(r) {
 }
 
 // 목록에서 눈에 띄어야 하는 신청인지. 행 왼쪽 색 띠로 표시한다.
-//   위험 — 되돌릴 수 없거나 접근을 크게 여는 것
+//   위험 — 되돌릴 수 없거나, 규칙 엔진이 짚은 것
 //   지연 — 오래 방치된 것
+//
+// 판정은 신청 점검과 같은 엔진(rules.js)에 맡긴다.
+// 예전에는 여기서 따로 "cidr이 0.0.0.0/0이면 위험"만 봤는데, 이제 위험한 전체 개방은
+// 접수 자체가 안 되므로 그 조건으로는 웹 포트(80/443)만 걸렸다. 정작 관리자가 봐야 할
+// 사내망 SSH 같은 신청은 아무 표시도 없었다.
 export function reqRisk(r) {
-  const p = r.payload || {}
   if (isDeleteAction(r.action)) return 'risk'
-  const rules = p.rules || []
-  if (rules.some((x) => x.cidr === '0.0.0.0/0' || x.cidr === '::/0')) return 'risk'
+
+  const check = checkRequest(r.action, r.payload)
+  if (check && check.verdict !== 'pass') return 'risk'
+
+  // 접수 시점에 저장해 둔 점검 결과 (엔진이 지금 다루지 않는 종류의 신청 대비)
+  if ((r.payload?.check || []).length > 0) return 'risk'
+
   if (isAged(r.requested_at)) return 'aged'
   return null
 }
@@ -218,6 +228,13 @@ export function reqWarnings(r) {
         : `기본 허용 규칙입니다 — 선택한 관리형 규칙 ${n}개에 걸리는 요청만 차단됩니다.`
     )
   }
+
+  // 신청 접수 때 규칙 엔진이 남긴 것.
+  // 위험한 신청은 애초에 접수되지 않으므로 여기 오는 건 '주의'뿐이다.
+  for (const c of (p.check || [])) {
+    out.push(`${c.title}${c.why ? ` — ${c.why}` : ''}`)
+  }
+
   return out
 }
 
