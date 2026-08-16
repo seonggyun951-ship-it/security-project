@@ -15,6 +15,11 @@ export async function notify(message) {
 /** 신청 payload에서 핵심 내용 한줄 요약 */
 export function summarizePayload(action, payload) {
   const p = payload || {}
+  // 환경 접근 권한
+  if (action === 'grant_env_access' || action === 'revoke_env_access') {
+    const verb = action === 'grant_env_access' ? '부여' : '회수'
+    return `${p.user_name || '-'} → env-${p.environment} ${verb}`
+  }
   // SG
   if (action === 'add_rules' || action === 'create_sg') {
     const rules = p.rules || []

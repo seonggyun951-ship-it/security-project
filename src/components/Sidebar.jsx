@@ -19,7 +19,8 @@ export const NAV_GROUPS = [
     items: [
       { title: 'Security Group', path: '/request/sg', icon: '⛨' },
       { title: 'WAF', path: '/request/waf', icon: '⛉' },
-      { title: 'IAM 계정', path: '/request/iam', icon: '⚿' },
+      // 계정 생성 / 환경 권한 / 계정 삭제를 한 화면 안 탭으로 둔다
+      { title: 'IAM 계정 · 권한', path: '/request/iam', icon: '⚿' },
       { title: 'VPC / 서브넷', path: '/request/infra-network', icon: '⬡' },
       { title: 'EC2 인스턴스', path: '/request/infra-compute', icon: '▦' },
     ],

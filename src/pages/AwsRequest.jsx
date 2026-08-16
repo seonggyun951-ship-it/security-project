@@ -10,18 +10,20 @@ import { localDateKey } from '../lib/date'
 import { ACTION_LABEL, ReqCard, reqTitle } from '../lib/aws'
 import { checkRequest, SEVERITY_LABEL } from '../lib/rules'
 import { SgForm, WafForm, IamUserForm } from './forms/AwsForms'
+import { EnvAccessForm } from './forms/EnvAccessForm'
 import { SgDeleteForm, WafDeleteForm, IamDeleteForm } from './forms/DeleteForms'
 
 // 리소스 타입별 신청 페이지 — 라우트에서 resourceType을 넘겨 재사용
 const PAGE_META = {
   security_group: { title: 'Security Group 신청', sub: '신규 SG 생성 또는 기존 SG에 인바운드/아웃바운드 규칙 추가를 신청합니다.' },
   waf_web_acl:    { title: 'WAF 신청', sub: '신규 Web ACL 생성 또는 기존 Web ACL에 차단 규칙 추가를 신청합니다.' },
-  iam_user:       { title: 'IAM 계정 신청', sub: '읽기 전용 IAM 계정 발급을 신청합니다.' },
+  iam_user:       { title: 'IAM 계정 · 권한 신청', sub: '읽기 전용 계정 발급과, dev/qa/prod/db 환경 접근 권한의 부여·회수를 신청합니다.' },
 }
 
 export default function AwsRequest({ resourceType = 'security_group' }) {
   const [sgOptions, setSgOptions] = useState([])
   const [aclOptions, setAclOptions] = useState([])
+  const [userOptions, setUserOptions] = useState([]) // 환경 권한 신청의 대상 IAM 사용자
   const [myRequests, setMyRequests] = useState([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -30,7 +32,7 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
   const [detailReq, setDetailReq] = useState(null)
   const [listError, setListError] = useState(null)
   const [optionsError, setOptionsError] = useState(null)
-  const [mode, setMode] = useState('create') // 'create' | 'delete'
+  const [mode, setMode] = useState('create') // 'create' | 'env' | 'delete'
   const [cancelingId, setCancelingId] = useState(null)
 
   const cancel = async (r) => {
@@ -58,11 +60,13 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
   const fetchOptions = async () => {
     const { rows, error } = await fetchRows(
       supabase.from('aws_resource_options')
-        .select('resource_id, resource_name, resource_type')
+        // env_groups는 IAM 사용자가 이미 가진 환경 권한 — 신청 화면에서 바로 보여준다
+        .select('resource_id, resource_name, resource_type, env_groups')
         .order('collected_at', { ascending: false }).limit(400),
       '리소스 목록')
     setSgOptions(dedupeByResource(rows.filter((s) => s.resource_type === 'security_group')))
     setAclOptions(dedupeByResource(rows.filter((s) => s.resource_type === 'waf_web_acl')))
+    setUserOptions(dedupeByResource(rows.filter((s) => s.resource_type === 'iam_user')))
     setOptionsError(error)
   }
 
@@ -185,17 +189,26 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
       <div className="ac-grid">
         <div className="ac-card ac-card-wide">
           <div className="ac-card-title">신청서 작성</div>
-          {/* 추가와 삭제는 성격이 반대라 탭으로 분리한다. 실수로 삭제를 누르지 않도록. */}
+          {/* 추가와 삭제는 성격이 반대라 탭으로 분리한다. 실수로 삭제를 누르지 않도록.
+              IAM은 계정을 만드는 것과 기존 계정에 권한을 주는 것이 달라 탭이 하나 더 있다. */}
           <div className="ac-filter-row">
             <button className={`ac-filter-btn ${mode === 'create' ? 'active' : ''}`} onClick={() => setMode('create')}>
-              추가 신청
+              {resourceType === 'iam_user' ? '계정 생성' : '추가 신청'}
             </button>
+            {resourceType === 'iam_user' && (
+              <button className={`ac-filter-btn ${mode === 'env' ? 'active' : ''}`} onClick={() => setMode('env')}>
+                환경 권한
+              </button>
+            )}
             <button className={`ac-filter-btn ${mode === 'delete' ? 'active' : ''}`} onClick={() => setMode('delete')}>
-              삭제 신청
+              {resourceType === 'iam_user' ? '계정 삭제' : '삭제 신청'}
             </button>
           </div>
 
-          {mode === 'create' ? (
+          {mode === 'env' ? (
+            <EnvAccessForm userOptions={userOptions} optionsError={optionsError}
+              onSubmit={submitRequest} submitting={submitting} />
+          ) : mode === 'create' ? (
             <>
               {resourceType === 'security_group' && <SgForm sgOptions={sgOptions} onSubmit={submitRequest} submitting={submitting} />}
               {resourceType === 'waf_web_acl' && <WafForm aclOptions={aclOptions} onSubmit={submitRequest} submitting={submitting} />}

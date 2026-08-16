@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { EC2Client, DescribeSecurityGroupsCommand, DescribeVpcsCommand } from 'npm:@aws-sdk/client-ec2@3'
-import { IAMClient, ListRolesCommand, ListPoliciesCommand } from 'npm:@aws-sdk/client-iam@3'
+import { IAMClient, ListRolesCommand, ListPoliciesCommand, ListUsersCommand, ListGroupsForUserCommand } from 'npm:@aws-sdk/client-iam@3'
 import { WAFV2Client, ListWebACLsCommand, GetWebACLCommand } from 'npm:@aws-sdk/client-wafv2@3'
 
 const cors = {
@@ -73,6 +73,36 @@ async function collectIamRoles(iam) {
     resource_name: r.RoleName,
     region: null,
     raw_data: r,
+  }))
+}
+
+// IAM 사용자 — 환경 권한 신청 화면의 드롭다운에 쓴다.
+// 어떤 환경 그룹에 이미 속해 있는지도 함께 담아, 승인자가 화면에서 바로 판단할 수 있게 한다.
+async function collectIamUsers(iam) {
+  const users = await paginate(
+    (token) => iam.send(new ListUsersCommand({ Marker: token })),
+    (res) => res.Users || [],
+    (res) => res.IsTruncated ? res.Marker : undefined
+  )
+
+  // 사용자마다 그룹을 한 번씩 더 조회한다. 규모가 크지 않아 이 정도면 충분하다.
+  // 한 명이 실패해도 나머지 목록은 살린다.
+  return await Promise.all(users.map(async (u) => {
+    let envGroups = []
+    try {
+      const g = await iam.send(new ListGroupsForUserCommand({ UserName: u.UserName }))
+      envGroups = (g.Groups || []).map((x) => x.GroupName).filter((n) => n.startsWith('env-'))
+    } catch (e) {
+      console.error(`그룹 조회 실패 (${u.UserName}):`, e)
+    }
+    return {
+      resource_type: 'iam_user',
+      resource_id: u.UserId,
+      resource_name: u.UserName,
+      region: null,
+      // EnvGroups는 뷰(aws_resource_options)가 꺼내 쓴다
+      raw_data: { ...u, EnvGroups: envGroups.join(', ') },
+    }
   }))
 }
 
@@ -156,17 +186,18 @@ serve(async (req) => {
     // CLOUDFRONT 스코프는 us-east-1 엔드포인트로만 조회된다.
     const wafGlobal = new WAFV2Client({ region: 'us-east-1', credentials })
 
-    const [sgResults, vpcResults, roleResults, policyResults, wafRegional, wafCloudfront] = await Promise.all([
+    const [sgResults, vpcResults, roleResults, policyResults, userResults, wafRegional, wafCloudfront] = await Promise.all([
       collectSecurityGroups(ec2).catch((e) => { console.error('SG 수집 실패:', e); return [] }),
       collectVpcs(ec2).catch((e) => { console.error('VPC 수집 실패:', e); return [] }),
       collectIamRoles(iam).catch((e) => { console.error('IAM Role 수집 실패:', e); return [] }),
       collectIamPolicies(iam).catch((e) => { console.error('IAM Policy 수집 실패:', e); return [] }),
+      collectIamUsers(iam).catch((e) => { console.error('IAM User 수집 실패:', e); return [] }),
       collectWafScope(waf, 'REGIONAL', region).catch((e) => { console.error('WAF(REGIONAL) 수집 실패:', e); return [] }),
       collectWafScope(wafGlobal, 'CLOUDFRONT', region).catch((e) => { console.error('WAF(CLOUDFRONT) 수집 실패:', e); return [] }),
     ])
     const wafResults = [...wafRegional, ...wafCloudfront]
 
-    const rows = [...sgResults, ...vpcResults, ...roleResults, ...policyResults, ...wafResults]
+    const rows = [...sgResults, ...vpcResults, ...roleResults, ...policyResults, ...userResults, ...wafResults]
 
     const supabase = createClient(Deno.env.get('SUPABASE_URL'), Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'))
 
@@ -197,6 +228,7 @@ serve(async (req) => {
         vpc: vpcResults.length,
         iam_role: roleResults.length,
         iam_policy: policyResults.length,
+        iam_user: userResults.length,
         waf_web_acl: wafResults.length,
       }
     }), { headers: { ...cors, 'Content-Type': 'application/json' } })

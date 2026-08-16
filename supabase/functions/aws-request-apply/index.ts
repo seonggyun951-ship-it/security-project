@@ -26,6 +26,10 @@ import {
   DeleteAccessKeyCommand,
   ListAttachedUserPoliciesCommand,
   DetachUserPolicyCommand,
+  AddUserToGroupCommand,
+  RemoveUserFromGroupCommand,
+  ListGroupsForUserCommand,
+  GetUserCommand,
 } from 'npm:@aws-sdk/client-iam@3'
 
 const cors = {
@@ -270,6 +274,68 @@ async function handleIam(iam, req, issueKey) {
   return result
 }
 
+// ---- 환경 권한 부여/회수 ----
+//
+// Terraform으로 만들어 둔 그룹(env-dev 등)에 사용자를 넣고 뺀다.
+// 그룹에 들어가면 그 환경의 역할(env-dev-role)을 맡을 수 있고, 역할을 맡으면
+// 1시간짜리 임시 자격증명을 받는다. 영구 키를 사람마다 쥐어주지 않아도 된다.
+//
+// 어떤 환경이 있는지는 여기서 못 박는다. 화면에서 넘어온 값을 그대로 믿고
+// 그룹 이름을 만들면, 신청서에 임의의 그룹명을 넣어 다른 그룹에 들어갈 수 있다.
+const ENV_ACCESS_ACTIONS = ['grant_env_access', 'revoke_env_access']
+const ENVIRONMENTS = ['dev', 'qa', 'prod', 'db']
+
+// prod와 db는 최고 관리자 승인까지 받아야 한다.
+// IAM만으로는 "db는 소수에게만"을 표현할 수 없어, 승인 절차로 지킨다.
+const SUPER_ENVS = ['prod', 'db']
+
+const groupNameOf = (env) => `env-${env}`
+
+async function handleEnvAccess(iam, req) {
+  const p = req.payload || {}
+  const env = String(p.environment || '')
+  const UserName = String(p.user_name || '')
+
+  if (!ENVIRONMENTS.includes(env)) throw new Error(`알 수 없는 환경입니다: ${env}`)
+  if (!UserName) throw new Error('user_name이 없습니다')
+
+  const GroupName = groupNameOf(env)
+  const grant = req.action === 'grant_env_access'
+
+  // 없는 사용자에게 부여하면 IAM이 NoSuchEntity를 던진다. 먼저 확인해 메시지를 분명히 한다.
+  try {
+    await iam.send(new GetUserCommand({ UserName }))
+  } catch (e) {
+    if (String(e).includes('NoSuchEntity')) throw new Error(`IAM 사용자를 찾을 수 없습니다: ${UserName}`)
+    throw e
+  }
+
+  if (grant) {
+    await iam.send(new AddUserToGroupCommand({ GroupName, UserName }))
+  } else {
+    // 이미 빠져 있어도 목적은 달성된 상태다. 실패로 처리하면 재시도만 반복된다.
+    try {
+      await iam.send(new RemoveUserFromGroupCommand({ GroupName, UserName }))
+    } catch (e) {
+      if (!String(e).includes('NoSuchEntity')) throw e
+    }
+  }
+
+  // 처리 후 실제로 어떤 환경 권한을 갖고 있는지 남긴다. 승인 이력에서 바로 확인된다.
+  const groups = await iam.send(new ListGroupsForUserCommand({ UserName }))
+  const envGroups = (groups.Groups || [])
+    .map((g) => g.GroupName)
+    .filter((n) => n.startsWith('env-'))
+
+  return {
+    user_name: UserName,
+    environment: env,
+    group_name: GroupName,
+    action: grant ? 'granted' : 'revoked',
+    current_env_groups: envGroups,
+  }
+}
+
 // ---- 삭제 ----
 // 삭제는 되돌릴 수 없어 최고 관리자만 실행할 수 있다(아래 serve에서 검사).
 // 신청 시점에 원본 신청의 payload를 그대로 복사해두므로, 무엇을 지울지가 정확히 특정된다.
@@ -409,9 +475,15 @@ serve(async (req) => {
 
     const isDelete = DELETE_ACTIONS.includes(target.action)
 
-    // 삭제인데 최고 관리자가 아니면 실제 AWS 작업을 하지 않고 1차 승인으로만 넘긴다.
-    // 되돌릴 수 없는 작업이므로 최고 관리자 승인을 반드시 거치게 한다.
-    if (isDelete && !isSuper) {
+    // prod·db 환경 권한을 새로 주는 것도 최고 관리자까지 거친다.
+    // 회수는 권한이 줄어드는 방향이라 1차 승인으로 끝낸다 — 급할 때 막지 못하면 안 된다.
+    const isSensitiveGrant = target.action === 'grant_env_access'
+      && SUPER_ENVS.includes(String(target.payload?.environment || ''))
+
+    const needsSuper = isDelete || isSensitiveGrant
+
+    // 최고 관리자가 아니면 실제 AWS 작업을 하지 않고 1차 승인으로만 넘긴다.
+    if (needsSuper && !isSuper) {
       const { data: staged, error: stageErr } = await supabase
         .from('aws_requests')
         .update({
@@ -431,7 +503,8 @@ serve(async (req) => {
     }
 
     // 실행 대상 상태: 일반 신청은 pending, 삭제는 pending 또는 1차 승인된 것.
-    const fromStatuses = isDelete ? ['pending', 'awaiting_super'] : ['pending']
+    // 2차 승인이 필요한 건은 awaiting_super 상태에서 넘어온다.
+    const fromStatuses = needsSuper ? ['pending', 'awaiting_super'] : ['pending']
 
     // 원자적 전환 (동시 승인 중복 적용 방지)
     const { data: claimed, error: claimErr } = await supabase
@@ -465,6 +538,8 @@ serve(async (req) => {
         result = await handleDeleteSgRules(new EC2Client({ region, credentials }), claimed)
       } else if (claimed.action === 'delete_waf_rules') {
         result = await handleDeleteWafRules(claimed, credentials, region)
+      } else if (ENV_ACCESS_ACTIONS.includes(claimed.action)) {
+        result = await handleEnvAccess(new IAMClient({ region, credentials }), claimed)
       } else if (claimed.resource_type === 'security_group') {
         result = await handleSg(new EC2Client({ region, credentials }), claimed)
       } else if (claimed.resource_type === 'waf_web_acl') {

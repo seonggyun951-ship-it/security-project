@@ -113,16 +113,25 @@ function RequestQueue() {
         alert('적용 실패: ' + data.error)
         notify(`❌ **적용 실패**\n${actionLabel}: ${reqName}${by}\n오류: ${data.error}`)
       } else if (data.staged) {
-        // 삭제 신청을 일반 관리자가 승인한 경우 — 실제 삭제는 아직 일어나지 않았다.
-        alert('1차 승인되었습니다. 2차 승인 후 삭제됩니다.')
-        notify(`🕓 **삭제 1차 승인**\n${actionLabel}: ${reqName}${by}\n→ 최고 관리자 최종 승인 대기 중`)
+        // 일반 관리자가 2차 승인 대상(삭제, prod·db 권한 부여)을 승인한 경우.
+        // 실제 작업은 아직 일어나지 않았다.
+        const what = isDeleteAction(req?.action) ? '삭제' : '부여'
+        alert(`1차 승인되었습니다. 2차 승인 후 ${what}됩니다.`)
+        notify(`🕓 **1차 승인**\n${actionLabel}: ${reqName}${by}\n→ 최고 관리자 최종 승인 대기 중`)
       } else {
         // IAM은 신청자가 요청한 것과 다르게 승인할 수 있으므로, 실제 처리 결과를 남긴다.
         const keyLine = req?.resource_type === 'iam_user' && !isDeleteAction(req?.action)
           ? `\n액세스 키: ${opts?.issueKey ? '발급함' : '발급 안 함'}`
           : ''
-        const title = isDeleteAction(req?.action) ? '🗑️ **삭제 완료**' : '✅ **승인 + 적용 완료**'
-        notify(`${title}\n${actionLabel}: ${reqName}${by}${keyLine}`)
+        // 환경 권한은 처리 후 그 사람이 현재 가진 환경을 함께 남긴다
+        const envLine = data.result?.current_env_groups
+          ? `\n현재 권한: ${data.result.current_env_groups.join(', ') || '없음'}`
+          : ''
+        const title = isDeleteAction(req?.action) ? '🗑️ **삭제 완료**'
+          : req?.action === 'grant_env_access' ? '🔑 **환경 권한 부여됨**'
+            : req?.action === 'revoke_env_access' ? '🔒 **환경 권한 회수됨**'
+              : '✅ **승인 + 적용 완료**'
+        notify(`${title}\n${actionLabel}: ${reqName}${by}${keyLine}${envLine}`)
         if (data.result?.access_key_id && data.result?.secret_access_key) setRevealKey(data.result)
       }
     }

@@ -14,7 +14,23 @@ export const RESOURCE_META = {
   ec2_instance:     { label: 'EC2 인스턴스' },
   internet_gateway: { label: 'Internet Gateway' },
   route_table:      { label: '라우팅 테이블' },
+  env_access:       { label: '환경 접근 권한' },
 }
+
+// 환경별 접근 권한. Terraform으로 만들어 둔 그룹·역할과 짝이 맞아야 한다
+// (terraform/envs/iam). 그룹에 들어가면 그 역할을 맡아 1시간짜리 임시 키를 받는다.
+export const ENVIRONMENTS = [
+  { key: 'dev',  label: '개발 (vpc-dev)',   can: '생성·수정·삭제', needsSuper: false },
+  { key: 'qa',   label: 'QA (vpc-qa)',      can: '생성·수정 (삭제 불가)', needsSuper: false },
+  { key: 'prod', label: '운영 (vpc-prod)',  can: '조회만', needsSuper: true },
+  { key: 'db',   label: '개인정보 (vpc-db)', can: '조회만', needsSuper: true },
+]
+
+export const envMeta = (key) => ENVIRONMENTS.find((e) => e.key === key)
+
+// IAM만으로는 "db는 소수에게만"을 표현할 수 없어 승인 절차로 지킨다.
+// 실제 강제는 Edge Function이 하고, 이건 화면 안내용이다.
+export const envNeedsSuper = (key) => !!envMeta(key)?.needsSuper
 
 export const ACTION_LABEL = {
   create_sg:            '신규 SG 생성',
@@ -30,11 +46,21 @@ export const ACTION_LABEL = {
   delete_iam_user:      'IAM 계정 삭제',
   delete_sg_rules:      'SG 규칙 삭제',
   delete_waf_rules:     'WAF 규칙 삭제',
+  grant_env_access:     '환경 권한 부여',
+  revoke_env_access:    '환경 권한 회수',
 }
 
 // 되돌릴 수 없어 최고 관리자 승인을 반드시 거치는 액션
 export const DELETE_ACTIONS = ['delete_iam_user', 'delete_sg_rules', 'delete_waf_rules']
 export const isDeleteAction = (a) => DELETE_ACTIONS.includes(a)
+
+// 2차 승인(최고 관리자)까지 거치는 신청인지.
+// 삭제 전부와, prod·db 환경 권한을 새로 주는 경우가 해당한다.
+// 실제 강제는 Edge Function이 하고 이건 화면 표시용이다.
+export function needsSuperApproval(r) {
+  if (isDeleteAction(r.action)) return true
+  return r.action === 'grant_env_access' && envNeedsSuper(r.payload?.environment)
+}
 
 // 배포된 IAM 정책이 딱 이 두 관리형 정책으로만 AttachUserPolicy 하도록 제한되어 있음
 export const IAM_READONLY_POLICIES = [
@@ -130,6 +156,17 @@ export function reqTitle(r) {
 
 export function reqDetailLines(r) {
   const p = r.payload || {}
+  if (r.action === 'grant_env_access' || r.action === 'revoke_env_access') {
+    const env = envMeta(p.environment)
+    const verb = r.action === 'grant_env_access' ? '부여' : '회수'
+    return [
+      `대상 IAM 사용자: ${p.user_name || '-'}`,
+      `환경: ${env?.label || p.environment}`,
+      `이 환경에서 할 수 있는 일: ${env?.can || '-'}`,
+      `그룹: env-${p.environment} (${verb})`,
+      `역할: env-${p.environment}-role — 맡으면 1시간짜리 임시 키 발급`,
+    ]
+  }
   if (r.action === 'create_sg' || r.action === 'add_rules') {
     return (p.rules || []).map(sgRuleLabel)
   }
@@ -217,6 +254,19 @@ export function reqWarnings(r) {
     out.push('삭제 신청입니다. 되돌릴 수 없으며 최고 관리자 승인이 필요합니다.')
     if (r.action === 'delete_waf_rules') {
       out.push('차단 규칙을 제거하는 작업이라 보안이 느슨해집니다.')
+    }
+  }
+
+  if (r.action === 'grant_env_access') {
+    const env = envMeta(p.environment)
+    if (env?.needsSuper) {
+      out.push(`${env.label} 권한입니다. 최고 관리자 승인까지 받아야 부여됩니다.`)
+    }
+    if (p.environment === 'db') {
+      out.push('개인정보 환경입니다. 꼭 필요한 사람인지 확인하고 승인해주세요.')
+    }
+    if (p.environment === 'dev') {
+      out.push('dev 환경은 생성·수정·삭제가 모두 가능합니다.')
     }
   }
 
@@ -310,7 +360,7 @@ export function ReqDrawer({ r, busyId, onApprove, onReject, onClose, onRemove, i
   const warnings = reqWarnings(r)
   const busy = busyId === r.id
   const isDelete = isDeleteAction(r.action)
-  const actionable = r.status === 'pending' || (isDelete && r.status === 'awaiting_super')
+  const actionable = r.status === 'pending' || (needsSuperApproval(r) && r.status === 'awaiting_super')
 
   return (
       <aside className="rv">
@@ -374,6 +424,19 @@ export function ReqDrawer({ r, busyId, onApprove, onReject, onClose, onRemove, i
                   {busy ? '처리 중...' : '1차 승인'}
                 </button>
               )
+            ) : needsSuperApproval(r) ? (
+              // prod·db 환경 권한 부여 — 삭제와 같은 2단계 승인을 거친다
+              isSuper ? (
+                <button className="ac-btn" style={{ flex: 1 }} disabled={busy} onClick={() => onApprove(r.id)}>
+                  {busy ? '처리 중...' : r.status === 'awaiting_super' ? '최종 승인 후 부여' : '승인 후 부여'}
+                </button>
+              ) : r.status === 'awaiting_super' ? (
+                <span className="rt-hold" style={{ flex: 1 }}>최고 관리자 승인을 기다리는 중입니다.</span>
+              ) : (
+                <button className="ac-btn" style={{ flex: 1 }} disabled={busy} onClick={() => onApprove(r.id)}>
+                  {busy ? '처리 중...' : '1차 승인'}
+                </button>
+              )
             ) : r.resource_type === 'iam_user' ? (
               <>
                 <button className="ac-btn" style={{ flex: 1 }} disabled={busy}
@@ -415,7 +478,7 @@ export function ReqCard({ r, busyId, onApprove, onReject, onRemove, isSuper = fa
   const busy = busyId === r.id
   const isDelete = isDeleteAction(r.action)
   // 삭제는 pending(신청 직후)과 awaiting_super(1차 승인됨) 두 상태에서 처리 대상이다.
-  const actionable = r.status === 'pending' || (isDelete && r.status === 'awaiting_super')
+  const actionable = r.status === 'pending' || (needsSuperApproval(r) && r.status === 'awaiting_super')
   return (
     <div className="ac-req">
       <div className="ac-req-top">
