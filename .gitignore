@@ -25,6 +25,9 @@ terraform/.env
 terraform/node_modules
 terraform/req_*.tf
 
+# RAG 생성물 — 스크립트로 언제든 다시 만들 수 있다
+scripts/rag/*-dataset.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
