@@ -159,12 +159,15 @@ export function reqDetailLines(r) {
   if (r.action === 'grant_env_access' || r.action === 'revoke_env_access') {
     const env = envMeta(p.environment)
     const verb = r.action === 'grant_env_access' ? '부여' : '회수'
+    // 세션 시간(키 수명)은 여기 적지 않는다. 만료일과 나란히 두면 어느 쪽이 진짜
+    // 사용 기간인지 헷갈리고, 값이 Terraform에 있어 화면 문구와 어긋나기도 쉽다.
+    // 만료일은 아래 '신청 정보'에 따로 표시된다.
     return [
       `대상 IAM 사용자: ${p.user_name || '-'}`,
       `환경: ${env?.label || p.environment}`,
       `이 환경에서 할 수 있는 일: ${env?.can || '-'}`,
       `그룹: env-${p.environment} (${verb})`,
-      `역할: env-${p.environment}-role — 맡으면 1시간짜리 임시 키 발급`,
+      `역할: env-${p.environment}-role`,
     ]
   }
   if (r.action === 'create_sg' || r.action === 'add_rules') {

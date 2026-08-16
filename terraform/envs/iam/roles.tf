@@ -62,9 +62,12 @@ resource "aws_iam_role" "env" {
   # description은 두지 않는다 — IAM이 ASCII/Latin-1만 받아 한글을 거부한다.
   assume_role_policy = data.aws_iam_policy_document.assume.json
 
-  # 임시 키가 살아 있는 시간. 만료되면 다시 맡아야 한다.
-  # CLI는 프로필에 role_arn을 적어두면 알아서 갱신한다.
-  max_session_duration = 3600 # 1시간
+  # 임시 키가 살아 있는 시간. 하루 근무 동안 한 번만 맡으면 되도록 잡았다.
+  # 신청서의 '사용 기간'(1일~3개월)과는 다른 값이다 — 그쪽은 이 역할을 맡을 자격이
+  # 유지되는 기간이고, 이건 한 번 맡아서 받은 키의 수명이다.
+  # AWS 상한이 12시간이라 며칠짜리 키는 애초에 만들 수 없다.
+  # CLI는 프로필에 role_arn을 적어두면 만료 시 알아서 다시 받아온다.
+  max_session_duration = 28800 # 8시간
 
   tags = {
     Environment = each.key
