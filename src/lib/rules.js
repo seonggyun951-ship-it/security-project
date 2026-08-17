@@ -51,7 +51,7 @@ export function parsePortRange(portStr) {
 }
 
 // 웹 서비스용이라 전체 개방이어도 지적하지 않는 포트
-const WEB_PORTS = [80, 443]
+export const WEB_PORTS = [80, 443]
 
 // 열린 포트 구간 하나를 판정한다.
 //
@@ -315,6 +315,25 @@ export const REQUEST_POLICY = {
   MAX_RULES: 50,
   SENSITIVE_PORTS: [22, 3389, 3306, 5432, 1433, 6379, 27017],
 }
+
+// 환경별 접근 권한. Terraform으로 만들어 둔 그룹·역할과 짝이 맞아야 한다
+// (terraform/envs/iam). 그룹에 들어가면 그 역할을 맡아 임시 키를 받는다.
+//
+// aws.jsx가 아니라 여기 두는 이유: JSX 파일에 있으면 Node에서 import할 수 없어
+// 학습 자료를 만들 때 값을 손으로 옮겨 적게 된다. 그러면 정책을 바꿨을 때
+// 문서만 옛날 값으로 남는다.
+export const ENVIRONMENTS = [
+  { key: 'dev',  label: '개발 (vpc-dev)',   can: '생성·수정·삭제', needsSuper: false },
+  { key: 'qa',   label: 'QA (vpc-qa)',      can: '생성·수정 (삭제 불가)', needsSuper: false },
+  { key: 'prod', label: '운영 (vpc-prod)',  can: '조회만', needsSuper: true },
+  { key: 'db',   label: '개인정보 (vpc-db)', can: '조회만', needsSuper: true },
+]
+
+export const envMeta = (key) => ENVIRONMENTS.find((e) => e.key === key)
+
+// IAM만으로는 "db는 소수에게만"을 표현할 수 없어 승인 절차로 지킨다.
+// 실제 강제는 Edge Function이 하고, 이건 화면 안내용이다.
+export const envNeedsSuper = (key) => !!envMeta(key)?.needsSuper
 
 // 신청 폼의 규칙 { direction, protocol, from_port, to_port, cidr } 을
 // 점검 엔진이 읽는 AWS 응답 형태로 바꾼다.

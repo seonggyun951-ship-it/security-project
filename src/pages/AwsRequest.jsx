@@ -11,6 +11,7 @@ import { ACTION_LABEL, ReqCard, reqTitle } from '../lib/aws'
 import { checkRequest, SEVERITY_LABEL } from '../lib/rules'
 import { SgForm, WafForm, IamUserForm } from './forms/AwsForms'
 import { EnvAccessForm } from './forms/EnvAccessForm'
+import CheckResultModal from '../components/CheckResultModal'
 import { SgDeleteForm, WafDeleteForm, IamDeleteForm } from './forms/DeleteForms'
 
 // 리소스 타입별 신청 페이지 — 라우트에서 resourceType을 넘겨 재사용
@@ -33,6 +34,7 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
   const [listError, setListError] = useState(null)
   const [optionsError, setOptionsError] = useState(null)
   const [mode, setMode] = useState('create') // 'create' | 'env' | 'delete'
+  const [checkModal, setCheckModal] = useState(null) // 접수 전 점검 결과 창
   const [cancelingId, setCancelingId] = useState(null)
 
   const cancel = async (r) => {
@@ -90,25 +92,28 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
     fetchOptions()
   }, [resourceType])
 
-  const submitRequest = async (req) => {
-    // 접수 전에 규칙 엔진으로 한 번 거른다.
-    //   위험 → 접수하지 않고 신청자가 바로 고치게 한다 (관리자를 기다릴 이유가 없다)
-    //   주의 → 접수하되 사유를 함께 저장해 관리자가 보고 판단하게 한다
+  // 접수 전에 규칙 엔진으로 한 번 거른다.
+  //   위험 → 접수하지 않고 신청자가 바로 고치게 한다 (관리자를 기다릴 이유가 없다)
+  //   주의 → 사유를 보여주고 확인받은 뒤 접수. 사유는 payload에 실어 관리자에게 넘긴다
+  // 창이 뜨면 여기서 답을 기다린다. 폼은 이 결과를 보고 입력을 지울지 정하므로,
+  // 창을 거친 접수도 끝까지 기다려 알려줘야 한다. 그러지 않으면 값이 남아 두 번 신청된다.
+  const submitRequest = (req) => new Promise((resolve) => {
     const check = checkRequest(req.action, req.payload)
+
     if (check?.verdict === 'reject') {
-      const lines = check.findings
-        .filter((f) => f.severity === 'high')
-        .map((f) => `· ${f.title}\n  ${f.why}`)
-        .join('\n\n')
-      alert(`신청할 수 없는 내용이 있습니다.\n\n${lines}\n\n수정 후 다시 신청해주세요.`)
-      return false
+      setCheckModal({ mode: 'blocked', findings: check.findings, request: req, resolve })
+      return
     }
     const warnings = check?.findings.filter((f) => f.severity === 'medium') || []
     if (warnings.length > 0) {
-      const lines = warnings.map((f) => `· ${f.title}`).join('\n')
-      if (!confirm(`아래 항목은 관리자가 직접 확인합니다.\n\n${lines}\n\n이대로 신청할까요?`)) return false
+      setCheckModal({ mode: 'confirm', findings: check.findings, request: req, resolve })
+      return
     }
+    doSubmit(req, []).then(resolve)
+  })
 
+  // 실제 접수. 점검을 통과했거나 신청자가 주의 항목을 확인한 뒤에만 불린다.
+  const doSubmit = async (req, warnings) => {
     setSubmitting(true)
     let me
     try {
@@ -162,6 +167,24 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
 
   return (
     <div className="ac-page">
+      {checkModal && (
+        <CheckResultModal
+          mode={checkModal.mode}
+          findings={checkModal.findings}
+          request={checkModal.request}
+          onCancel={() => {
+            checkModal.resolve(false) // 폼은 값을 그대로 두고 고칠 수 있게 한다
+            setCheckModal(null)
+          }}
+          onProceed={async () => {
+            const { request, findings, resolve } = checkModal
+            const warnings = findings.filter((f) => f.severity === 'medium')
+            setCheckModal(null)
+            resolve(await doSubmit(request, warnings))
+          }}
+        />
+      )}
+
       <h2 className="ac-title">{meta.title}</h2>
       <p className="ac-sub">{meta.sub} 승인자 검토 후 실제 AWS에 반영됩니다.</p>
 

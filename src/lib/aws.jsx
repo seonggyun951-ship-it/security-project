@@ -1,7 +1,8 @@
 // AWS 자동화 신청/승인 공통 모듈 — 신청자 페이지와 승인자 페이지가 함께 사용
 import { elapsedLabel, isAged } from './date'
 import { summarizePayload } from './discord'
-import { checkRequest } from './rules'
+import { checkRequest, ENVIRONMENTS, envMeta, envNeedsSuper } from './rules'
+import ExplainPanel from '../components/ExplainPanel'
 
 export const RESOURCE_META = {
   security_group:   { label: 'Security Group' },
@@ -17,20 +18,10 @@ export const RESOURCE_META = {
   env_access:       { label: '환경 접근 권한' },
 }
 
-// 환경별 접근 권한. Terraform으로 만들어 둔 그룹·역할과 짝이 맞아야 한다
-// (terraform/envs/iam). 그룹에 들어가면 그 역할을 맡아 1시간짜리 임시 키를 받는다.
-export const ENVIRONMENTS = [
-  { key: 'dev',  label: '개발 (vpc-dev)',   can: '생성·수정·삭제', needsSuper: false },
-  { key: 'qa',   label: 'QA (vpc-qa)',      can: '생성·수정 (삭제 불가)', needsSuper: false },
-  { key: 'prod', label: '운영 (vpc-prod)',  can: '조회만', needsSuper: true },
-  { key: 'db',   label: '개인정보 (vpc-db)', can: '조회만', needsSuper: true },
-]
-
-export const envMeta = (key) => ENVIRONMENTS.find((e) => e.key === key)
-
-// IAM만으로는 "db는 소수에게만"을 표현할 수 없어 승인 절차로 지킨다.
-// 실제 강제는 Edge Function이 하고, 이건 화면 안내용이다.
-export const envNeedsSuper = (key) => !!envMeta(key)?.needsSuper
+// 환경 정의는 rules.js에 있다 (Node에서도 읽어야 해서).
+// 이 파일 안에서도 쓰므로 가져와서 다시 내보낸다 —
+// `export ... from`만 쓰면 재수출은 되지만 이 파일 안에서는 쓸 수 없다.
+export { ENVIRONMENTS, envMeta, envNeedsSuper }
 
 export const ACTION_LABEL = {
   create_sg:            '신규 SG 생성',
@@ -411,6 +402,9 @@ export function ReqDrawer({ r, busyId, onApprove, onReject, onClose, onRemove, i
               {r.status === 'rejected' ? '거부 사유: ' : r.status === 'cancelled' ? '취소 사유: ' : ''}{r.error_message}
             </div>
           )}
+
+          {/* 판정 근거를 자연어로. 누를 때만 부른다 — 목록을 넘길 때마다 부르면 호출 한도가 금방 찬다 */}
+          <ExplainPanel request={r} />
         </div>
 
         {actionable && onApprove && (

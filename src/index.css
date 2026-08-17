@@ -1311,3 +1311,160 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 @media (max-width: 400px) {
   .module-grid { grid-template-columns: 1fr; }
 }
+
+/* ─── 판정 설명 (RAG) ─────────────────────────────── */
+/* 승인 화면 드로어 안. 관리자가 눌렀을 때만 나타난다. */
+
+.xp { margin-top: 14px; }
+
+.xp-run { width: 100%; }
+
+.xp-loading {
+  padding: 12px;
+  font-size: .82rem;
+  color: var(--ink-3);
+  background: var(--soft);
+  border-radius: var(--r-sm);
+  text-align: center;
+}
+
+.xp-retry { margin-top: 8px; width: 100%; }
+
+.xp-result {
+  border: 1px solid var(--line-2);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+
+.xp-text {
+  padding: 12px;
+  font-size: .85rem;
+  line-height: 1.65;
+  color: var(--ink);
+  background: var(--soft);
+  white-space: pre-wrap;
+}
+
+.xp-toggle {
+  width: 100%;
+  padding: 7px 12px;
+  font: inherit;
+  font-size: .76rem;
+  color: var(--ink-3);
+  background: none;
+  border: none;
+  border-top: 1px solid var(--line-2);
+  text-align: left;
+  cursor: pointer;
+}
+.xp-toggle:hover { color: var(--ink-2); background: var(--soft); }
+
+.xp-sources {
+  border-top: 1px solid var(--line-2);
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.xp-source {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: .74rem;
+  min-width: 0;
+}
+
+.xp-badge {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: .68rem;
+  font-weight: 600;
+  color: #fff;
+}
+.xp-badge-rule_engine  { background: var(--accent); }
+.xp-badge-aws_baseline { background: var(--wait); }
+.xp-badge-mitre        { background: var(--fail); }
+.xp-badge-owasp        { background: var(--super); }
+
+.xp-ref {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--mono);
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xp-sim {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+
+.xp-note {
+  padding: 7px 12px;
+  font-size: .72rem;
+  line-height: 1.5;
+  color: var(--ink-3);
+  border-top: 1px solid var(--line-2);
+}
+
+/* ─── 신청 전 점검 결과 창 ────────────────────────── */
+
+.cm { max-width: 30rem; }
+
+.cm-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.cm-tag {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: .72rem;
+  font-weight: 700;
+  color: #fff;
+}
+.cm-tag-block { background: var(--fail); }
+.cm-tag-warn  { background: var(--wait); }
+
+.cm-title {
+  font-size: .95rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.cm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cm-item {
+  padding: 10px 12px;
+  background: var(--soft);
+  border-radius: var(--r-sm);
+  border-left: 3px solid var(--line);
+}
+
+.cm-item-title {
+  font-size: .84rem;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.5;
+}
+
+.cm-item-why {
+  margin-top: 5px;
+  font-size: .79rem;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+
+.cm-actions { gap: 8px; }
