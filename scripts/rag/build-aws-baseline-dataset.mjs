@@ -1,4 +1,4 @@
-// AWS 보안 기준선을 지식 베이스용 문서로 만든다.
+// 클라우드 보안 기준선을 지식 베이스용 문서로 만든다 (AWS 기본, --provider로 변경).
 //
 // 규칙 엔진은 우리가 직접 짠 몇 가지만 본다(SG 포트·CIDR, S3 몇 항목, GCP 방화벽).
 // 실제 AWS 운영에서 지켜야 할 것은 훨씬 많다 — 키 순환, MFA, 로그 보존, 암호화 같은 것들.
@@ -9,16 +9,24 @@
 // (Prowler는 Apache 2.0)
 //
 // 사용법:
-//   node scripts/rag/build-aws-baseline-dataset.mjs           # 만들어서 파일로만
-//   node scripts/rag/build-aws-baseline-dataset.mjs --push    # 적재까지
+//   node scripts/rag/build-aws-baseline-dataset.mjs                    # AWS, 파일로만
+//   node scripts/rag/build-aws-baseline-dataset.mjs --push             # AWS 적재
+//   node scripts/rag/build-aws-baseline-dataset.mjs --provider gcp --push
 
 import { writeFileSync, existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
-const CACHE = resolve(HERE, '.cache-aws-baseline.json')
-const OUT = resolve(HERE, 'aws-baseline-dataset.json')
+// 제공자별로 캐시와 결과 파일을 나눈다.
+const argAt = process.argv.indexOf('--provider')
+const PROVIDER = argAt > -1 ? process.argv[argAt + 1] : 'aws'
+if (!['aws', 'gcp', 'azure', 'kubernetes'].includes(PROVIDER)) {
+  console.error('지원하지 않는 provider:', PROVIDER); process.exit(1)
+}
+const SOURCE = PROVIDER === 'aws' ? 'aws_baseline' : PROVIDER + '_baseline'
+const CACHE = resolve(HERE, `.cache-${PROVIDER}-baseline.json`)
+const OUT = resolve(HERE, `${PROVIDER}-baseline-dataset.json`)
 const TREE = 'https://api.github.com/repos/prowler-cloud/prowler/git/trees/master?recursive=1'
 const RAW = 'https://raw.githubusercontent.com/prowler-cloud/prowler/master'
 const FN_URL = 'https://phqiejtztwhychazikim.supabase.co/functions/v1/rag-index'
@@ -46,7 +54,7 @@ async function loadChecks() {
   if (!treeRes.ok) throw new Error(`목록 실패: ${treeRes.status}`)
   const tree = await treeRes.json()
   const paths = tree.tree
-    .filter((x) => x.path.startsWith('prowler/providers/aws/services/') && x.path.endsWith('.metadata.json'))
+    .filter((x) => x.path.startsWith(`prowler/providers/${PROVIDER}/services/`) && x.path.endsWith('.metadata.json'))
     .map((x) => x.path)
 
   console.log(`체크 ${paths.length}개 내려받는 중...`)
@@ -83,7 +91,7 @@ for (const c of checks) {
   // 검색에 걸릴 정보를 앞에 모으고, 위험과 조치를 함께 담는다.
   // "왜 문제냐"와 "그래서 어떻게 하냐"가 한 조각에 있어야 설명을 만들 때 쓸모가 있다.
   const content = [
-    `AWS 보안 기준 — ${title}`,
+    `${PROVIDER.toUpperCase()} 보안 기준 — ${title}`,
     `서비스: ${service} · 심각도: ${severity}`,
     desc ? `\n설명: ${desc.slice(0, 700)}` : '',
     risk ? `\n위험: ${risk.slice(0, 700)}` : '',
@@ -91,7 +99,7 @@ for (const c of checks) {
   ].filter(Boolean).join('\n')
 
   docs.push({
-    source: 'aws_baseline',
+    source: SOURCE,
     ref: c.CheckID,
     content,
     meta: {

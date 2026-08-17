@@ -403,8 +403,10 @@ export function ReqDrawer({ r, busyId, onApprove, onReject, onClose, onRemove, i
             </div>
           )}
 
-          {/* 판정 근거를 자연어로. 누를 때만 부른다 — 목록을 넘길 때마다 부르면 호출 한도가 금방 찬다 */}
-          <ExplainPanel request={r} />
+          {/* 판정 근거를 자연어로. 누를 때만 부른다 — 목록을 넘길 때마다 부르면 호출 한도가 금방 찬다.
+              key에 신청 id를 준다. 없으면 다른 신청을 눌러도 같은 컴포넌트가 재사용돼
+              먼저 만든 설명이 그대로 남는다. */}
+          <ExplainPanel key={r.id} request={r} />
         </div>
 
         {actionable && onApprove && (

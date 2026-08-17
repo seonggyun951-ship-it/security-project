@@ -30,7 +30,9 @@ const RETRIEVE = [
   { source: 'policy', count: 2, label: '우리 시스템의 정책' },
   { source: 'concept', count: 2, label: '관련 개념 (AWS 공식 문서)' },
   { source: 'aws_baseline', count: 2, label: 'AWS 보안 기준' },
+  { source: 'gcp_baseline', count: 1, label: 'GCP 보안 기준' },
   { source: 'mitre', count: 1, label: '공격 기법 (MITRE ATT&CK)' },
+  { source: 'mitigation', count: 1, label: '막는 방법 (MITRE 완화책)' },
   { source: 'owasp', count: 1, label: '보안 원칙 (OWASP)' },
 ]
 
