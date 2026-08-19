@@ -64,7 +64,10 @@ export default function VulnScan() {
   const analyze = () => {
     setError(''); setFindings(null); setExpanded(new Set()); setFilter('all')
     const raw = parseNuclei(input)
-    if (!raw || !raw.length) { setError('Nuclei 스캔 결과를 파싱할 수 없습니다. JSONL 또는 JSON 배열 형식인지 확인하세요.'); return }
+    if (!raw || !raw.length) {
+      setError('스캔 결과를 읽지 못했습니다. 한 줄에 하나씩(JSONL)이거나 배열 형식인지 확인해주세요. 각 항목에 template-id가 있어야 합니다.')
+      return
+    }
     setFindings(raw.map(normalize))
   }
 
@@ -75,17 +78,25 @@ export default function VulnScan() {
 
   return (
     <div className="vs-page">
-      <h2 className="vs-title">취약점 스캔</h2>
-      <p className="vs-sub">Nuclei 스캔 결과(JSONL 또는 JSON 배열)를 붙여넣으면 심각도별로 정리합니다.</p>
+      <h2 className="vs-title">취약점 스캔 결과 정리</h2>
+      <p className="vs-sub">
+        웹 서비스를 스캔한 결과를 붙여넣으면 심각도별로 정리합니다.
+      </p>
 
       <div className="vs-examples">
-        <div className="vs-example-label">CLI 명령어</div>
+        <div className="vs-example-label">
+          Nuclei로 스캔한 결과를 넣습니다. Nuclei는 오픈소스 웹 취약점 스캐너로,
+          아래 명령을 실행하면 나오는 JSON 파일 내용을 그대로 붙여넣으면 됩니다.
+        </div>
         <code>nuclei -u https://target.com -o results.json -json</code>
         <code>nuclei -l urls.txt -severity critical,high -json</code>
+        <div className="vs-example-note">
+          스캔 결과가 없다면 아래 <strong>샘플 로드</strong>를 눌러 예시로 확인해볼 수 있습니다.
+        </div>
       </div>
 
       <div className="vs-textarea-wrap">
-        <textarea className="vs-textarea" value={input} onChange={e => setInput(e.target.value)} placeholder="Nuclei JSONL 결과를 여기에 붙여넣으세요..." spellCheck={false} />
+        <textarea className="vs-textarea" value={input} onChange={e => setInput(e.target.value)} placeholder="스캔 결과 JSON을 여기에 붙여넣으세요. 한 줄에 하나씩(JSONL)이거나 배열 형식 모두 됩니다." spellCheck={false} />
         <button className="vs-sample-btn" onClick={() => { setInput(SAMPLE); setFindings(null); setError('') }}>샘플 로드</button>
       </div>
 

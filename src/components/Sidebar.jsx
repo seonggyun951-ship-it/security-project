@@ -31,6 +31,7 @@ export const NAV_GROUPS = [
       { title: '관리자 승인', path: '/cloud-automation', adminOnly: true, badge: 'aws', icon: '✓' },
       { title: '승인 이력', path: '/approval-history', adminOnly: true, icon: '☰' },
       { title: 'AWS 현황', path: '/aws-status', adminOnly: true, icon: '☁' },
+      { title: '보안 점검 결과', path: '/scan', icon: '◉' },
     ],
   },
   {

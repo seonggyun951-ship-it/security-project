@@ -4,13 +4,18 @@ import { checkRequest } from '../lib/rules'
 import { summarizePayload } from '../lib/discord'
 import { ACTION_LABEL } from '../lib/aws'
 
-// 규칙 엔진의 판정을 자연어로 풀어 보여준다.
+// 무엇이 왜 문제인지 자연어로 풀어 보여준다.
 //
-// 자동으로 부르지 않는다. 신청 하나당 몇 초가 걸리고 무료 티어에 호출 한도가 있어서,
-// 목록을 넘겨볼 때마다 부르면 금방 동난다. 관리자가 필요할 때 누르게 한다.
+// 자동으로 부르지 않는다. 한 번에 몇 초가 걸리고 무료 티어에 호출 한도가 있어서,
+// 목록을 넘겨볼 때마다 부르면 금방 동난다. 필요할 때 누르게 한다.
 //
-// 판정은 여기서 하지 않는다 — 위험한지는 rules.js가 이미 정했고, 그 결과를 그대로 넘긴다.
-export default function ExplainPanel({ request }) {
+// 판정은 여기서 하지 않는다 — 신청은 rules.js가, 점검은 Prowler가 이미 정했고
+// 그 결과를 그대로 넘긴다.
+//
+// 쓰는 곳이 둘이다.
+//   request  신청 검토 — 규칙 엔진 판정을 여기서 계산해 넘긴다
+//   finding  점검 결과 — 이미 나온 판정을 그대로 받는다
+export default function ExplainPanel({ request, finding }) {
   const [state, setState] = useState('idle') // idle | loading | done | error
   const [text, setText] = useState('')
   const [sources, setSources] = useState([])
@@ -21,17 +26,32 @@ export default function ExplainPanel({ request }) {
     setState('loading')
     setError('')
 
-    const check = checkRequest(request.action, request.payload)
-    const detail = summarizePayload(request.action, request.payload)
-    const actionLabel = ACTION_LABEL[request.action] || request.action
+    let body
+    if (finding) {
+      // 점검 결과. 체크 ID가 지식 베이스의 ref와 같은 값이라 검색이 정확히 걸린다.
+      body = {
+        summary: `AWS 보안 점검에서 걸린 항목 — ${finding.check_id}`,
+        findings: [{
+          severity: finding.severity,
+          title: finding.title || finding.check_id,
+          why: finding.detail || '',
+        }],
+        verdict: null,
+      }
+    } else {
+      const check = checkRequest(request.action, request.payload)
+      const detail = summarizePayload(request.action, request.payload)
+      const actionLabel = ACTION_LABEL[request.action] || request.action
+      body = {
+        summary: `${actionLabel}${detail ? ` — ${detail}` : ''}`,
+        findings: (check?.findings || []).map((f) => ({
+          severity: f.severity, title: f.title, why: f.why,
+        })),
+        verdict: check?.verdict ?? null,
+      }
+    }
 
-    const data = await callFunction('rag-explain', {
-      summary: `${actionLabel}${detail ? ` — ${detail}` : ''}`,
-      findings: (check?.findings || []).map((f) => ({
-        severity: f.severity, title: f.title, why: f.why,
-      })),
-      verdict: check?.verdict ?? null,
-    })
+    const data = await callFunction('rag-explain', body)
 
     if (!data.ok) {
       setError(data.error || '설명을 만들지 못했습니다')

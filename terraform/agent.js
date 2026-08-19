@@ -1,10 +1,11 @@
 /**
- * Terraform 로컬 에이전트
- * - Supabase에서 approved 상태의 인프라 신청을 폴링
- * - .tf 파일 자동 생성 → terraform apply 실행 → 결과를 DB에 반영
+ * 로컬 에이전트
+ * - Supabase에서 approved 상태의 인프라 신청을 폴링해 Terraform으로 적용
+ * - AWS 보안 점검(Prowler)을 하루 한 번, 그리고 적용 직후에 실행
  *
  * 사용법: node agent.js
  * 환경변수: SUPABASE_URL, SUPABASE_SERVICE_KEY (또는 .env 파일)
+ *          PROWLER_EXE — 없으면 보안 점검은 건너뛴다
  */
 
 import { createClient } from '@supabase/supabase-js'
@@ -12,6 +13,7 @@ import { execSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { runScan } from './scan.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -180,9 +182,9 @@ async function processApproved() {
 
   if (error) {
     console.error('폴링 에러:', error.message)
-    return
+    return 0
   }
-  if (!requests || requests.length === 0) return
+  if (!requests || requests.length === 0) return 0
 
   console.log(`\n[${new Date().toLocaleString('ko-KR')}] 처리 대기: ${requests.length}건`)
 
@@ -265,6 +267,9 @@ async function processApproved() {
       : '\n⚠️ 생성 ID 확인 실패 — 드롭다운 목록에 안 뜰 수 있습니다'
     await notifyDiscord(`🔧 **Terraform 적용 완료**\n${req.resource_type}: ${req.title || req.id}${idLine}`)
   }
+
+  // 적용이 있었으면 호출한 쪽이 점검을 한 번 돌린다 (조치가 먹혔는지 확인)
+  return requests.length
 }
 
 // terraform plan+apply는 폴링 간격(기본 15초)보다 오래 걸린다.
@@ -273,24 +278,66 @@ async function processApproved() {
 // 실행 중에는 새 폴링을 건너뛴다.
 let running = false
 
+// ---- 보안 점검 ----
+//
+// 하루 한 번 정기 점검하고, 신청이 적용된 직후에도 한 번 더 돈다.
+// 적용 직후 점검이 있어야 조치가 실제로 먹혔는지 바로 확인된다 —
+// 다음날까지 기다리면 고쳐졌는지 모른 채 하루를 보낸다.
+const SCAN_INTERVAL = Number(process.env.SCAN_INTERVAL) || 24 * 60 * 60 * 1000
+let lastScanAt = 0
+let scanning = false
+// 적용이 있었으면 다음 tick에서 점검을 한 번 돌린다. 여러 건이 연달아 적용돼도 한 번만 돈다.
+let scanRequested = false
+
+async function maybeScan(force = false) {
+  if (scanning) return
+  if (!process.env.PROWLER_EXE) return // 점검을 안 쓰는 환경이면 조용히 넘어간다
+  if (!force && Date.now() - lastScanAt < SCAN_INTERVAL) return
+
+  scanning = true
+  try {
+    console.log('🔍 보안 점검 시작...')
+    const r = await runScan(supabase, { notify: notifyDiscord })
+    lastScanAt = Date.now()
+    console.log(`   위반 ${r.failed} / 통과 ${r.passed} · 새로 ${r.new} · 해결 ${r.resolved}`)
+  } catch (e) {
+    console.error('보안 점검 실패:', e.message)
+    await notifyDiscord(`❌ **보안 점검 실패**\n${String(e.message).slice(0, 300)}`)
+  } finally {
+    scanning = false
+  }
+}
+
 async function tick() {
   if (running) return
   running = true
   try {
-    await processApproved()
+    const applied = await processApproved()
+    if (applied > 0) scanRequested = true
   } catch (e) {
     console.error('폴링 처리 중 예외:', e.message)
   } finally {
     running = false
   }
+
+  // 점검은 폴링 잠금 밖에서 돈다. 몇 분 걸릴 수 있어 그동안 신청 처리가 멈추면 안 된다.
+  if (scanRequested) {
+    scanRequested = false
+    await maybeScan(true)
+  } else {
+    await maybeScan()
+  }
 }
 
 // 시작
-console.log('🚀 Terraform 에이전트 시작')
+console.log('🚀 로컬 에이전트 시작')
 console.log(`   Supabase: ${SUPABASE_URL}`)
 console.log(`   Terraform: ${TERRAFORM_EXE}`)
 console.log(`   폴링 간격: ${POLL_INTERVAL / 1000}초`)
 console.log(`   작업 디렉토리: ${__dirname}`)
+console.log(`   보안 점검: ${process.env.PROWLER_EXE
+  ? `${SCAN_INTERVAL / 3600000}시간마다 + 적용 직후`
+  : '꺼짐 (PROWLER_EXE 미설정)'}`)
 console.log('   Ctrl+C로 종료\n')
 
 // 즉시 1회 실행 후 인터벌 (tick이 중복 실행을 막는다)

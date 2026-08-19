@@ -12,6 +12,7 @@ import PrivacyCheck from './pages/PrivacyCheck'
 import CloudCheck from './pages/CloudCheck'
 import CloudAutomation from './pages/CloudAutomation'
 import ApprovalHistory from './pages/ApprovalHistory'
+import ScanFindings from './pages/ScanFindings'
 import AwsRequest from './pages/AwsRequest'
 import AwsStatus from './pages/AwsStatus'
 import PhishingDetect from './pages/PhishingDetect'
@@ -115,6 +116,7 @@ export default function App() {
             <Route path="/cloud-automation" element={<AdminRoute><CloudAutomation /></AdminRoute>} />
             <Route path="/approval-history" element={<AdminRoute><ApprovalHistory /></AdminRoute>} />
             <Route path="/aws-status" element={<AdminRoute><AwsStatus /></AdminRoute>} />
+            <Route path="/scan" element={<ScanFindings />} />
             <Route path="/admin/users" element={<SuperAdminRoute><AdminUsers /></SuperAdminRoute>} />
             <Route path="/phishing" element={<PhishingDetect />} />
             <Route path="/gcp/firewall" element={<GcpRequest resourceType="firewall_rule" />} />

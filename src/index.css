@@ -1468,3 +1468,392 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 }
 
 .cm-actions { gap: 8px; }
+
+/* 취약점 스캔 — 무엇을 넣어야 하는지 설명하는 줄.
+   짧은 라벨(CLI 명령어)용으로 11px 대문자로 잡혀 있어 문장에는 맞지 않는다. */
+.vs-example-label {
+  font-size: .8rem;
+  text-transform: none;
+  letter-spacing: 0;
+  line-height: 1.65;
+  color: var(--ink-2);
+  margin-bottom: 8px;
+}
+.vs-example-note {
+  margin-top: 8px;
+  font-size: .78rem;
+  color: var(--ink-3);
+}
+
+/* ─── 보안 점검 결과 ──────────────────────────────── */
+/*
+   같은 체크가 리소스만 다르게 반복되므로 체크 단위로 접는다.
+   심각도만으로는 급한 것을 가릴 수 없어 경과일을 목록에 함께 둔다.
+*/
+
+.sf { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+
+/* 심각도 타일 */
+.sf-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.sf-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 10px 12px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  background: var(--panel);
+  border: 1px solid var(--line-2);
+  border-left: 3px solid var(--sf-c, var(--line));
+  border-radius: var(--r);
+}
+.sf-tile:hover { background: var(--soft); }
+.sf-tile.on { background: var(--accent-soft); border-color: var(--accent); border-left-color: var(--sf-c); }
+
+.sf-tile-n {
+  font-size: 1.45rem;
+  font-weight: 700;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  color: var(--sf-c, var(--ink));
+}
+.sf-tile-l { font-size: .74rem; color: var(--ink-3); }
+
+.sf-t-crit { --sf-c: var(--fail); }
+.sf-t-high { --sf-c: var(--fail); }
+.sf-t-med  { --sf-c: var(--wait); }
+.sf-t-low  { --sf-c: var(--ink-3); }
+
+/* 실행 정보 */
+.sf-runbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  font-size: .79rem;
+  color: var(--ink-2);
+  background: var(--panel);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r);
+}
+.sf-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--done); }
+.sf-sep { color: var(--line); }
+.sf-up { color: var(--fail); font-weight: 600; }
+.sf-down { color: var(--done); font-weight: 600; }
+.sf-prev { color: var(--ink-3); }
+
+/* 필터 */
+.sf-filters {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.sf-select {
+  font: inherit;
+  font-size: .79rem;
+  padding: 5px 9px;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+}
+.sf-tabs { margin-left: auto; display: flex; gap: 4px; }
+
+/* 목록 */
+.sf-row {
+  background: var(--panel);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r);
+  margin-bottom: 6px;
+  overflow: hidden;
+}
+.sf-row.is-muted { opacity: .6; }
+
+.sf-rowhead {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto auto;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 10px 13px;
+  font: inherit;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.sf-rowhead:hover { background: var(--soft); }
+
+.sf-sev {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: .75rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.sf-sev i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+.sf-s-crit, .sf-s-high { color: var(--fail); }
+.sf-s-crit i, .sf-s-high i { background: var(--fail); }
+.sf-s-med { color: var(--wait); }
+.sf-s-med i { background: var(--wait); }
+.sf-s-low { color: var(--ink-3); }
+.sf-s-low i { background: var(--ink-3); }
+
+.sf-name { min-width: 0; }
+.sf-name b {
+  display: block;
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sf-name > span {
+  font-size: .72rem;
+  color: var(--ink-3);
+  font-family: var(--mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+
+.sf-new {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--fail);
+  color: #fff;
+  font-size: .66rem;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+.sf-cnt {
+  min-width: 2rem;
+  padding: 2px 7px;
+  border-radius: 9px;
+  background: var(--soft);
+  font-size: .75rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+  text-align: center;
+}
+
+.sf-age {
+  font-size: .75rem;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.sf-age.old { color: var(--wait); font-weight: 600; }
+
+.sf-caret { color: var(--ink-3); width: 1rem; text-align: center; }
+
+/* 펼침 */
+.sf-body2 {
+  padding: 0 13px 12px;
+  background: var(--soft);
+  border-top: 1px solid var(--line-2);
+}
+.sf-why {
+  padding: 10px 0 8px;
+  font-size: .82rem;
+  line-height: 1.65;
+  color: var(--ink-2);
+}
+
+.sf-res { display: flex; flex-direction: column; gap: 4px; }
+.sf-resitem {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: 9px;
+  align-items: center;
+  padding: 6px 10px;
+  background: var(--panel);
+  border-radius: var(--r-sm);
+  font-size: .77rem;
+}
+.sf-resid {
+  font-family: var(--mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+}
+.sf-owner {
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: .71rem;
+  white-space: nowrap;
+}
+.sf-noowner { color: var(--ink-3); font-size: .71rem; white-space: nowrap; }
+
+.sf-act {
+  padding: 3px 9px;
+  font: inherit;
+  font-size: .73rem;
+  color: var(--ink-2);
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sf-act:hover:not(:disabled) { background: var(--bg); }
+.sf-act:disabled { opacity: .5; cursor: default; }
+
+.sf-holdnote {
+  margin-top: 9px;
+  padding: 8px 10px;
+  font-size: .77rem;
+  line-height: 1.55;
+  color: var(--ink-2);
+  background: var(--panel);
+  border-left: 3px solid var(--line);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+}
+
+@media (max-width: 900px) {
+  .sf-tiles { grid-template-columns: repeat(2, 1fr); }
+  .sf-tabs { margin-left: 0; width: 100%; }
+}
+
+/* 보류·예외 창 */
+.hd { max-width: 27rem; }
+.hd-title { font-size: 1.02rem; font-weight: 600; margin-bottom: 6px; }
+.hd-desc {
+  margin: 0 0 12px;
+  font-size: .81rem;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+.hd-target {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 11px;
+  margin-bottom: 12px;
+  background: var(--soft);
+  border-radius: var(--r-sm);
+}
+.hd-target-check { font-size: .82rem; font-weight: 600; }
+.hd-target-res { font-family: var(--mono); font-size: .74rem; color: var(--ink-3); }
+
+.hd-opts { display: flex; gap: 5px; flex-wrap: wrap; }
+.hd-opt {
+  flex: 1;
+  min-width: 3.6rem;
+  padding: 7px 10px;
+  font: inherit;
+  font-size: .8rem;
+  color: var(--ink-2);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.hd-opt:hover { background: var(--soft); }
+.hd-opt.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* 목록 안 버튼 묶음 */
+.sf-acts { display: flex; gap: 4px; }
+.sf-row.is-held { opacity: .68; }
+
+/* 점검 결과 — 리소스 표.
+   줄을 쌓으면 "14일째 / 보류 / 예외"가 줄마다 반복돼 읽히지 않는다.
+   머리글을 한 번만 두고 값만 흐르게 한다. */
+.sf-tblwrap {
+  overflow-x: auto;
+  background: var(--panel);
+  border-radius: var(--r-sm);
+}
+
+.sf-tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .78rem;
+  min-width: 42rem;
+}
+.sf-tbl th {
+  padding: 7px 11px;
+  text-align: left;
+  font-size: .69rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.sf-tbl td {
+  padding: 7px 11px;
+  border-bottom: 1px solid var(--line-2);
+  vertical-align: middle;
+}
+.sf-tbl tr:last-child td { border-bottom: none; }
+.sf-tbl tbody tr:hover { background: var(--soft); }
+
+.sf-c-sel { width: 2.2rem; padding-right: 0 !important; }
+.sf-c-sel input { cursor: pointer; }
+.sf-c-rid { font-family: var(--mono); color: var(--ink); white-space: nowrap; }
+.sf-c-env { color: var(--ink-2); white-space: nowrap; }
+.sf-c-num {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--ink-2);
+}
+.sf-c-num.old { color: var(--wait); font-weight: 600; }
+.sf-c-act { text-align: right; white-space: nowrap; }
+.sf-c-act .sf-act { margin-left: 3px; }
+
+.sf-who {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: .72rem;
+  white-space: nowrap;
+}
+.sf-who-none { color: var(--ink-3); }
+
+/* 선택했을 때 뜨는 줄 */
+.sf-selbar {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+  padding: 8px 11px;
+  margin-bottom: 8px;
+  font-size: .78rem;
+  color: var(--ink);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: var(--r-sm);
+}
+.sf-selbar b { color: var(--accent); }
+.sf-selacts { margin-left: auto; display: flex; gap: 5px; }
+.sf-selacts .sf-act { background: var(--panel); }
