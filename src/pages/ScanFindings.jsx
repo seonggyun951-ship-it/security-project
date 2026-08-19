@@ -114,7 +114,9 @@ export default function ScanFindings() {
     (!sevFilter || r.severity === sevFilter)
     && (!svcFilter || serviceOf(r) === svcFilter)
     && (!envFilter || r.environment === envFilter)
-    && (!dateFilter || localDateKey(r.first_seen_at) === dateFilter))
+    // 점검일 기준. 그날 점검에서 실제로 보인 것만 남긴다.
+    // (발견일 기준이면 "그날 처음 나온 것"만 걸려서 그날의 상태를 볼 수 없다)
+    && (!dateFilter || localDateKey(r.last_seen_at) === dateFilter))
 
   const groups = {}
   for (const r of shown) {
@@ -222,8 +224,9 @@ export default function ScanFindings() {
               {environments.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           )}
+          {/* 점검일 기준. 그날 점검에서 보인 것만 남긴다. */}
           <input type="date" className="sf-select" value={dateFilter}
-            title="이 날 처음 발견된 것만"
+            title="이 날 점검에서 나온 것만"
             onChange={(e) => setDateFilter(e.target.value)} />
           {dateFilter && (
             <button className="sf-act" onClick={() => setDateFilter('')}>날짜 해제</button>

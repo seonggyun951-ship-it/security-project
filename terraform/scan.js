@@ -156,8 +156,12 @@ export async function runScan(supabase, { notify } = {}) {
     const now = new Date().toISOString()
 
     // 이번에 본 (체크, 리소스) 목록. 여기 없는 기존 항목은 고쳐진 것이다.
-    const seen = []
-    const rows = []
+    //
+    // 같은 (체크, 리소스)가 결과에 두 번 나올 수 있다. 리전이 여러 개거나
+    // 한 리소스를 여러 관점에서 보는 체크가 겹칠 때 그렇다.
+    // upsert에 같은 키를 두 번 넘기면 Postgres가 거부하므로("cannot affect row a second time")
+    // 맵에 모아 하나로 합친다. 나중에 온 것이 이긴다 — 어느 쪽이든 같은 위반이다.
+    const byKey = new Map()
 
     for (const f of fails) {
       const res = (f.resources || [])[0] || {}
@@ -167,8 +171,7 @@ export async function runScan(supabase, { notify } = {}) {
       if (!checkId || !resourceId) continue
 
       const owner = owners.get(resourceId) || {}
-      seen.push(`${checkId}::${resourceId}`)
-      rows.push({
+      byKey.set(`${checkId}::${resourceId}`, {
         check_id: checkId,
         resource_id: resourceId,
         resource_arn: arn,
@@ -190,24 +193,37 @@ export async function runScan(supabase, { notify } = {}) {
       .select('check_id, resource_id')
       .is('resolved_at', null)
     const beforeKeys = new Set((before || []).map((b) => `${b.check_id}::${b.resource_id}`))
-    const seenKeys = new Set(seen)
+    const seenKeys = new Set(byKey.keys())
+    const rows = [...byKey.values()]
 
-    const newOnes = seen.filter((k) => !beforeKeys.has(k))
+    const newOnes = [...seenKeys].filter((k) => !beforeKeys.has(k))
 
-    if (rows.length > 0) {
+    // 한 번에 다 보내면 요청이 너무 커진다. 전체 서비스를 돌리면 수백 건이 나온다.
+    const CHUNK = 200
+    for (let i = 0; i < rows.length; i += CHUNK) {
       const { error } = await supabase
         .from('scan_findings')
-        .upsert(rows, { onConflict: 'check_id,resource_id' })
+        .upsert(rows.slice(i, i + CHUNK), { onConflict: 'check_id,resource_id' })
       if (error) throw error
     }
 
     // 이번에 안 보인 것 = 고쳐진 것. 조치가 실제로 먹혔는지 확인하는 부분이다.
+    //
+    // 체크마다 묶어서 한 번에 처리한다. 건별로 보내면 수백 번 왕복하게 된다.
     const goneKeys = [...beforeKeys].filter((k) => !seenKeys.has(k))
+    const goneByCheck = new Map()
     for (const key of goneKeys) {
-      const [check_id, resource_id] = key.split('::')
-      await supabase.from('scan_findings')
+      const [checkId, resourceId] = key.split('::')
+      if (!goneByCheck.has(checkId)) goneByCheck.set(checkId, [])
+      goneByCheck.get(checkId).push(resourceId)
+    }
+    for (const [checkId, resourceIds] of goneByCheck) {
+      const { error } = await supabase.from('scan_findings')
         .update({ resolved_at: now })
-        .eq('check_id', check_id).eq('resource_id', resource_id)
+        .eq('check_id', checkId)
+        .in('resource_id', resourceIds)
+        .is('resolved_at', null)
+      if (error) console.error(`해결 표시 실패 (${checkId}):`, error.message)
     }
 
     await supabase.from('scan_runs').update({
