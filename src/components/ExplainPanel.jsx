@@ -21,6 +21,7 @@ export default function ExplainPanel({ request, finding }) {
   const [sources, setSources] = useState([])
   const [error, setError] = useState('')
   const [showSources, setShowSources] = useState(false)
+  const [openSource, setOpenSource] = useState(null)
 
   const run = async () => {
     setState('loading')
@@ -59,7 +60,9 @@ export default function ExplainPanel({ request, finding }) {
       return
     }
     setText(data.explanation)
-    setSources(data.sources || [])
+    // 출처별로 뽑아 오므로 순서가 출처 순이다. 점수 순으로 바꿔야 무엇이 결정적이었는지 보인다.
+    setSources([...(data.sources || [])].sort((a, b) => (b.similarity ?? 0) - (a.similarity ?? 0)))
+    setOpenSource(null)
     setState('done')
   }
 
@@ -93,11 +96,22 @@ export default function ExplainPanel({ request, finding }) {
               </button>
               {showSources && (
                 <div className="xp-sources">
+                  {/* 12건쯤 나오므로 한 줄에 하나씩만 보이게 하고, 누른 것만 펼친다.
+                      전부 펼쳐두면 설명보다 근거가 길어져 아무도 안 읽는다. */}
                   {sources.map((s, i) => (
-                    <div key={i} className="xp-source">
-                      <span className={`xp-badge xp-badge-${s.source}`}>{SOURCE_LABEL[s.source] || s.source}</span>
-                      <span className="xp-ref">{s.ref}</span>
-                      <span className="xp-sim">{s.similarity}</span>
+                    <div key={i} className={`xp-source ${openSource === i ? 'is-open' : ''}`}>
+                      <button className="xp-source-head" onClick={() => setOpenSource(openSource === i ? null : i)}>
+                        <span className={`xp-badge xp-badge-${s.source}`}>{SOURCE_LABEL[s.source] || s.source}</span>
+                        <span className="xp-title">{s.title || s.ref}</span>
+                        <span className="xp-sim">{s.similarity}</span>
+                        <span className="xp-caret">{openSource === i ? '−' : '+'}</span>
+                      </button>
+                      {openSource === i && (
+                        <div className="xp-source-body">
+                          {s.excerpt && <p className="xp-excerpt">{s.excerpt}</p>}
+                          <span className="xp-ref">{s.ref}</span>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -115,9 +129,15 @@ export default function ExplainPanel({ request, finding }) {
   )
 }
 
+// 출처 이름은 전부 적어둔다. 빠뜨리면 화면에 'gcp_baseline' 같은 원본 값이 그대로 나온다.
 const SOURCE_LABEL = {
-  rule_engine: '판정 기준',
+  rule_engine: '판정 사례',
+  policy: '우리 정책',
+  concept: 'AWS 개념',
   aws_baseline: 'AWS 기준',
-  mitre: 'MITRE',
+  gcp_baseline: 'GCP 기준',
+  mitre: '공격 기법',
+  mitigation: '완화책',
   owasp: 'OWASP',
+  kev: '악용 취약점',
 }
