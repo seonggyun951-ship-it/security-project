@@ -284,7 +284,23 @@ let running = false
 // 적용 직후 점검이 있어야 조치가 실제로 먹혔는지 바로 확인된다 —
 // 다음날까지 기다리면 고쳐졌는지 모른 채 하루를 보낸다.
 const SCAN_INTERVAL = Number(process.env.SCAN_INTERVAL) || 24 * 60 * 60 * 1000
-let lastScanAt = 0
+
+// 실패했을 때 얼마 뒤에 다시 볼 것인가.
+//
+// 전에는 실패해도 시각을 남기지 않아 다음 폴링(15초)에 곧바로 다시 돌았다.
+// 안 풀리는 문제면 15초마다 실패 알림이 쌓인다. 절전에서 깨어난 직후가 그렇다 —
+// 에이전트는 먼저 살아나는데 Wi-Fi는 몇 초 늦어서 그 틈에 시작하면 실패한다.
+//
+// 10분씩 세 번(30분) 보고 그래도 안 되면 다음 정기 점검까지 기다린다.
+// 잠깐 네트워크가 없는 정도면 그 안에 회복되고, 고쳐야 풀리는 문제라면
+// 30분을 더 두드려도 마찬가지라 하루 쉬었다 다시 본다.
+const SCAN_RETRY_INTERVAL = 10 * 60 * 1000
+const SCAN_MAX_RETRIES = 3
+
+// 성공·실패 모두 '다음에 볼 시각'으로 남긴다. 마지막 성공 시각만 들고 있으면
+// 실패가 아무 흔적을 남기지 않아 곧바로 다시 돌게 된다.
+let nextScanAt = 0
+let scanFailures = 0
 let scanning = false
 // 적용이 있었으면 다음 tick에서 점검을 한 번 돌린다. 여러 건이 연달아 적용돼도 한 번만 돈다.
 let scanRequested = false
@@ -292,17 +308,29 @@ let scanRequested = false
 async function maybeScan(force = false) {
   if (scanning) return
   if (!process.env.PROWLER_EXE) return // 점검을 안 쓰는 환경이면 조용히 넘어간다
-  if (!force && Date.now() - lastScanAt < SCAN_INTERVAL) return
+  if (!force && Date.now() < nextScanAt) return
 
   scanning = true
   try {
     console.log('🔍 보안 점검 시작...')
     const r = await runScan(supabase, { notify: notifyDiscord })
-    lastScanAt = Date.now()
+    nextScanAt = Date.now() + SCAN_INTERVAL
+    scanFailures = 0
     console.log(`   위반 ${r.failed} / 통과 ${r.passed} · 새로 ${r.new} · 해결 ${r.resolved}`)
   } catch (e) {
-    console.error('보안 점검 실패:', e.message)
-    await notifyDiscord(`❌ **보안 점검 실패**\n${String(e.message).slice(0, 300)}`)
+    scanFailures++
+    const giveUp = scanFailures >= SCAN_MAX_RETRIES
+    nextScanAt = Date.now() + (giveUp ? SCAN_INTERVAL : SCAN_RETRY_INTERVAL)
+
+    const when = giveUp
+      ? `${SCAN_MAX_RETRIES}번 실패해 다음 정기 점검까지 기다립니다`
+      : `${SCAN_RETRY_INTERVAL / 60000}분 뒤 다시 시도합니다 (${scanFailures}/${SCAN_MAX_RETRIES})`
+    console.error(`보안 점검 실패: ${e.message} — ${when}`)
+    await notifyDiscord(`❌ **보안 점검 실패**\n${String(e.message).slice(0, 300)}\n${when}`)
+
+    // 포기했으면 실패 횟수를 되돌린다. 안 그러면 다음 정기 점검이 한 번 실패했을 때
+    // 재시도 없이 곧바로 또 하루를 건너뛴다.
+    if (giveUp) scanFailures = 0
   } finally {
     scanning = false
   }
