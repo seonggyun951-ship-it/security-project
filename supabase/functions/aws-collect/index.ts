@@ -285,6 +285,7 @@ serve(async (req) => {
       counts: {
         security_group: sgResults.length,
         vpc: vpcResults.length,
+        network_acl: naclResults.length,
         iam_role: roleResults.length,
         iam_policy: policyResults.length,
         iam_user: userResults.length,
