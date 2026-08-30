@@ -1,12 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { EC2Client, DescribeSecurityGroupsCommand, DescribeVpcsCommand } from 'npm:@aws-sdk/client-ec2@3'
+import { EC2Client, DescribeSecurityGroupsCommand, DescribeVpcsCommand, DescribeNetworkAclsCommand } from 'npm:@aws-sdk/client-ec2@3'
 import { IAMClient, ListRolesCommand, ListPoliciesCommand, ListUsersCommand, ListGroupsForUserCommand } from 'npm:@aws-sdk/client-iam@3'
 import { WAFV2Client, ListWebACLsCommand, GetWebACLCommand } from 'npm:@aws-sdk/client-wafv2@3'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-cron-secret'
 }
 
 // 객체 키 순서에 상관없이 비교하기 위한 정규화된 문자열화 (Postgres JSONB는 키 순서를 보존하지 않음)
@@ -59,6 +59,29 @@ async function collectVpcs(ec2) {
     region: null,
     raw_data: v,
   }))
+}
+
+// 네트워크 ACL — NACL 규칙 신청 화면의 드롭다운에 쓴다.
+// NACL은 이름 태그가 거의 없어 ID만 남는 경우가 많다. 어느 VPC의 기본 NACL인지가
+// 사실상의 이름이므로 그걸 만들어 넣는다 (acl-0123 만 보면 어느 환경인지 알 수 없다).
+async function collectNetworkAcls(ec2, vpcRows) {
+  const acls = await paginate(
+    (token) => ec2.send(new DescribeNetworkAclsCommand({ NextToken: token })),
+    (res) => res.NetworkAcls || [],
+    (res) => res.NextToken
+  )
+  const vpcName = Object.fromEntries(vpcRows.map((v) => [v.resource_id, v.resource_name]))
+  return acls.map((a) => {
+    const tag = (a.Tags || []).find((t) => t.Key === 'Name')?.Value
+    const where = vpcName[a.VpcId] || a.VpcId
+    return {
+      resource_type: 'network_acl',
+      resource_id: a.NetworkAclId,
+      resource_name: tag || `${where}${a.IsDefault ? ' 기본' : ''} (${a.NetworkAclId})`,
+      region: null,
+      raw_data: a,
+    }
+  })
 }
 
 async function collectIamRoles(iam) {
@@ -145,28 +168,36 @@ async function collectWafScope(waf, scope, region) {
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   try {
-    const authHeader = req.headers.get('Authorization') || ''
-    const token = authHeader.replace('Bearer ', '')
-    const userClient = createClient(Deno.env.get('SUPABASE_URL'), Deno.env.get('SUPABASE_ANON_KEY'), {
-      global: { headers: { Authorization: authHeader } }
-    })
-    const { data: { user }, error: authError } = await userClient.auth.getUser(token)
-    if (authError || !user) {
-      return new Response(JSON.stringify({ ok: false, error: '로그인이 필요합니다' }), {
-        headers: { ...cors, 'Content-Type': 'application/json' }, status: 401
-      })
-    }
+    // 부르는 쪽이 둘이다: 화면에서 관리자가 누르거나, pg_cron이 정기적으로 부르거나.
+    // 크론에는 로그인한 사람이 없으므로 CRON_SECRET 헤더로 대신 확인한다
+    // (expire-access와 같은 방식).
+    const cronSecret = Deno.env.get('CRON_SECRET')
+    const byCron = !!cronSecret && req.headers.get('x-cron-secret') === cronSecret
 
-    // 수집은 AWS 설정 전반(SG 규칙/IAM/WAF)을 읽어 저장하므로 관리자만 실행한다.
-    // 화면에서 메뉴를 감추는 것만으로는 이 함수를 직접 호출하는 걸 막지 못한다.
-    const adminCheck = createClient(Deno.env.get('SUPABASE_URL'), Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'))
-    const { data: adminRow, error: adminErr } = await adminCheck
-      .from('admins').select('user_id').eq('user_id', user.id).maybeSingle()
-    if (adminErr) throw adminErr
-    if (!adminRow) {
-      return new Response(JSON.stringify({ ok: false, error: '관리자만 수집할 수 있습니다' }), {
-        headers: { ...cors, 'Content-Type': 'application/json' }, status: 403
+    if (!byCron) {
+      const authHeader = req.headers.get('Authorization') || ''
+      const token = authHeader.replace('Bearer ', '')
+      const userClient = createClient(Deno.env.get('SUPABASE_URL'), Deno.env.get('SUPABASE_ANON_KEY'), {
+        global: { headers: { Authorization: authHeader } }
       })
+      const { data: { user }, error: authError } = await userClient.auth.getUser(token)
+      if (authError || !user) {
+        return new Response(JSON.stringify({ ok: false, error: '로그인이 필요합니다' }), {
+          headers: { ...cors, 'Content-Type': 'application/json' }, status: 401
+        })
+      }
+
+      // 수집은 AWS 설정 전반(SG 규칙/IAM/WAF)을 읽어 저장하므로 관리자만 실행한다.
+      // 화면에서 메뉴를 감추는 것만으로는 이 함수를 직접 호출하는 걸 막지 못한다.
+      const adminCheck = createClient(Deno.env.get('SUPABASE_URL'), Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'))
+      const { data: adminRow, error: adminErr } = await adminCheck
+        .from('admins').select('user_id').eq('user_id', user.id).maybeSingle()
+      if (adminErr) throw adminErr
+      if (!adminRow) {
+        return new Response(JSON.stringify({ ok: false, error: '관리자만 수집할 수 있습니다' }), {
+          headers: { ...cors, 'Content-Type': 'application/json' }, status: 403
+        })
+      }
     }
 
     const accessKeyId = Deno.env.get('AWS_ACCESS_KEY')
@@ -197,7 +228,11 @@ serve(async (req) => {
     ])
     const wafResults = [...wafRegional, ...wafCloudfront]
 
-    const rows = [...sgResults, ...vpcResults, ...roleResults, ...policyResults, ...userResults, ...wafResults]
+    // NACL 이름은 VPC 이름을 붙여 만들므로 VPC 수집이 끝난 뒤에 돈다.
+    const naclResults = await collectNetworkAcls(ec2, vpcResults)
+      .catch((e) => { console.error('NACL 수집 실패:', e); return [] })
+
+    const rows = [...sgResults, ...vpcResults, ...roleResults, ...policyResults, ...userResults, ...wafResults, ...naclResults]
 
     const supabase = createClient(Deno.env.get('SUPABASE_URL'), Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'))
 
@@ -219,6 +254,30 @@ serve(async (req) => {
       if (error) throw error
       changed++
     }
+
+    // 이번 수집에서 실제로 보인 리소스를 기록한다. 스냅샷은 덧붙이기만 하는 이력이라
+    // 삭제된 리소스도 마지막 행이 남는데, 이 표가 없으면 뷰가 그걸 계속 내보낸다.
+    // 시각은 한 번만 구해 전부에 같은 값을 넣는다 — 뷰가 '종류별 최대 시각과 같은 것'을
+    // 현재로 보므로, 수집 도중 초가 넘어가면 같은 회차가 둘로 갈린다.
+    if (rows.length > 0) {
+      const seenAt = new Date().toISOString()
+      const seen = rows.map((r) => ({
+        resource_type: r.resource_type, resource_id: r.resource_id, last_seen_at: seenAt,
+      }))
+      // 한 번에 다 보내면 payload가 커진다. 200개씩 나눈다.
+      for (let i = 0; i < seen.length; i += 200) {
+        const { error } = await supabase.from('aws_resource_seen')
+          .upsert(seen.slice(i, i + 200), { onConflict: 'resource_type,resource_id' })
+        if (error) throw error
+      }
+    }
+
+    // 수집이 끝났음을 남긴다. 승인 트리거가 세워둔 '수집 필요' 표시를 여기서 내린다.
+    // 실패하면 dirty가 남아 다음 주기에 다시 시도한다 — 그게 맞는 동작이라 위에서
+    // throw로 빠져나가면 이 줄에 오지 않는다.
+    await supabase.from('collect_state')
+      .update({ last_collected_at: new Date().toISOString(), dirty: false })
+      .eq('id', 1)
 
     return new Response(JSON.stringify({
       ok: true,
