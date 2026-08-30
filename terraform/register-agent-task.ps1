@@ -34,7 +34,16 @@ $settings = New-ScheduledTaskSettingsSet `
   -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 5) `
   -StartWhenAvailable
 
-# 콘솔 창을 띄우지 않는다. 확인은 logs\agent.log로 한다.
+# 작업 스케줄러 목록에서 이 작업을 숨긴다. 콘솔 창을 숨기는 옵션이 아니다 —
+# 이름 때문에 헷갈리기 쉬운데 창은 로그온 유형이 정한다.
+#
+# LogonType Interactive는 내 세션에서 돌기 때문에 cmd 창이 그대로 보인다.
+# 창까지 없애려면 S4U(세션 밖 실행)여야 하는데, 그 변경은 관리자 권한이 필요하다:
+#
+#   관리자 PowerShell에서
+#   Set-ScheduledTask -TaskName security-console-agent -Principal `
+#     (New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" `
+#      -LogonType S4U -RunLevel Limited)
 $settings.Hidden = $true
 
 Register-ScheduledTask -TaskName $name -Action $action -Trigger $trigger `
