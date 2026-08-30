@@ -12,6 +12,16 @@
 
 $ErrorActionPreference = 'Stop'
 
+# S4U로 등록하려면 관리자 권한이 필요하다. 일반 창에서 돌리면 Access denied만 나고
+# 왜 안 되는지 알기 어려우므로 먼저 걸러낸다.
+$admin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()
+         ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (-not $admin) {
+  Write-Host '관리자 권한으로 실행해야 합니다.' -ForegroundColor Yellow
+  Write-Host 'PowerShell을 관리자로 열고 다시 실행하세요.'
+  exit 1
+}
+
 $dir  = Split-Path -Parent $MyInvocation.MyCommand.Path
 $name = 'security-console-agent'
 $me   = "$env:USERDOMAIN\$env:USERNAME"
@@ -20,8 +30,17 @@ $action = New-ScheduledTaskAction -Execute "$dir\agent-service.cmd" -WorkingDire
 
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User $me
 
-# Limited — 관리자로 올릴 이유가 없다. Terraform도 Prowler도 사용자 권한으로 돈다.
-$principal = New-ScheduledTaskPrincipal -UserId $me -LogonType Interactive -RunLevel Limited
+# S4U — 내 세션이 아니라 세션 밖에서 돌린다.
+#
+# Interactive로 두면 cmd 창이 화면에 그대로 뜬다. 그 창은 닫으면 에이전트가 죽는데,
+# 닫으면 안 되는 창이 종일 떠 있는 건 사고를 부른다. S4U면 창 자체가 없다.
+# 자격증명은 비밀번호 없이 발급받으므로 저장할 것도 없다.
+#
+# 사용자 프로필 접근이 제한될까 걱정했지만 실제로는 문제없었다 —
+# ~/.aws/credentials도 Prowler도 정상으로 읽는다(점검 완주 확인).
+#
+# RunLevel Limited — 관리자로 올릴 이유가 없다. Terraform도 Prowler도 사용자 권한으로 돈다.
+$principal = New-ScheduledTaskPrincipal -UserId $me -LogonType S4U -RunLevel Limited
 
 # IgnoreNew            — 이미 떠 있으면 또 띄우지 않는다
 # AllowStartIfOnBatteries — 노트북이라 이걸 켜지 않으면 배터리일 때 아예 안 뜬다
@@ -34,16 +53,8 @@ $settings = New-ScheduledTaskSettingsSet `
   -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 5) `
   -StartWhenAvailable
 
-# 작업 스케줄러 목록에서 이 작업을 숨긴다. 콘솔 창을 숨기는 옵션이 아니다 —
-# 이름 때문에 헷갈리기 쉬운데 창은 로그온 유형이 정한다.
-#
-# LogonType Interactive는 내 세션에서 돌기 때문에 cmd 창이 그대로 보인다.
-# 창까지 없애려면 S4U(세션 밖 실행)여야 하는데, 그 변경은 관리자 권한이 필요하다:
-#
-#   관리자 PowerShell에서
-#   Set-ScheduledTask -TaskName security-console-agent -Principal `
-#     (New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" `
-#      -LogonType S4U -RunLevel Limited)
+# 작업 스케줄러 목록에서 이 작업을 숨긴다.
+# 콘솔 창을 숨기는 옵션이 아니다 — 이름 때문에 헷갈리기 쉬운데 창은 로그온 유형이 정한다.
 $settings.Hidden = $true
 
 Register-ScheduledTask -TaskName $name -Action $action -Trigger $trigger `
