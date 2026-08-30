@@ -75,9 +75,16 @@ export const PERIOD_OPTIONS = [
   { key: 'all', label: '전체' },
 ]
 
-// offset은 현재 기준 상대 위치 (-1 = 지난달/지난주)
+// offset은 현재 기준 상대 위치 (-1 = 어제/지난주/지난달)
 export function periodRange(mode, offset) {
   const now = new Date()
+  if (mode === 'day') {
+    const d = new Date(now)
+    d.setDate(d.getDate() + offset)
+    const label = offset === 0 ? '오늘'
+      : `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`
+    return { start: d, end: d, label }
+  }
   if (mode === 'month') {
     const s = new Date(now.getFullYear(), now.getMonth() + offset, 1)
     const e = new Date(s.getFullYear(), s.getMonth() + 1, 0)
@@ -93,6 +100,59 @@ export function periodRange(mode, offset) {
     return { start: s, end: e, label: `${fmt(s)} ~ ${fmt(e)}` }
   }
   return null
+}
+
+// 기간을 DB 조회 조건으로 쓸 때. 시작일 00:00:00 ~ 종료일 23:59:59.999를
+// ISO로 만든다. 날짜만 넘기면 종료일 당일 건이 통째로 빠진다.
+export function rangeToIso(range) {
+  if (!range) return null
+  const s = new Date(range.start.getFullYear(), range.start.getMonth(), range.start.getDate(), 0, 0, 0, 0)
+  const e = new Date(range.end.getFullYear(), range.end.getMonth(), range.end.getDate(), 23, 59, 59, 999)
+  return { from: s.toISOString(), to: e.toISOString() }
+}
+
+// 'YYYY-MM-DD' 문자열 하루짜리 기간
+export function dayRange(key) {
+  const d = new Date(key + 'T00:00:00')
+  return { start: d, end: d, label: key }
+}
+
+// 'YYYY-MM-DD'가 속한 주의 시작일(일요일). 주 시작 규칙은 여기 한 곳에만 둔다 —
+// periodRange('week')와 다르게 잡으면 주별 목록과 기간 이동이 어긋난다.
+export function weekStartKey(key) {
+  const d = new Date(key + 'T00:00:00')
+  d.setDate(d.getDate() - d.getDay())
+  return localDateKey(d)
+}
+
+// 날짜별 집계를 주 또는 월 단위로 묶는다.
+// [{ key, label, range, n, bad, applied, rejected, failed, cancelled }] — 최신 먼저.
+//
+// 주·월 함수를 DB에 따로 만들지 않고 일 단위 집계를 화면에서 묶는 이유:
+// 주 시작 요일 같은 규칙이 SQL과 화면 양쪽에 생기면 반드시 어긋난다.
+export function rollup(dayCounts, mode) {
+  const acc = {}
+  for (const [day, c] of Object.entries(dayCounts || {})) {
+    const key = mode === 'week' ? weekStartKey(day) : day.slice(0, 7)
+    if (!acc[key]) acc[key] = { key, n: 0, bad: 0, applied: 0, rejected: 0, failed: 0, cancelled: 0 }
+    for (const f of ['n', 'bad', 'applied', 'rejected', 'failed', 'cancelled']) {
+      acc[key][f] += c[f] || 0
+    }
+  }
+  return Object.values(acc)
+    .sort((a, b) => b.key.localeCompare(a.key))
+    .map((b) => {
+      if (mode === 'week') {
+        const s = new Date(b.key + 'T00:00:00')
+        const e = new Date(s); e.setDate(s.getDate() + 6)
+        const fmt = (d) => `${d.getMonth() + 1}/${d.getDate()}`
+        return { ...b, label: `${fmt(s)} ~ ${fmt(e)}`, sub: `${s.getFullYear()}년`, range: { start: s, end: e } }
+      }
+      const [y, m] = b.key.split('-').map(Number)
+      const s = new Date(y, m - 1, 1)
+      const e = new Date(y, m, 0)
+      return { ...b, label: `${y}년 ${m}월`, sub: `${e.getDate()}일`, range: { start: s, end: e } }
+    })
 }
 
 // 시각이 아니라 날짜 단위로 비교한다 (시분초 때문에 경계일이 빠지지 않도록)

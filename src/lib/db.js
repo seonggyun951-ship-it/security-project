@@ -14,6 +14,21 @@ export async function fetchRows(query, context) {
   return { rows: data || [], error: null }
 }
 
+// 페이지 단위 조회. fetchRows와 같지만 전체 건수(count)를 함께 돌려준다.
+//
+// 목록에 상한을 두는 이유는 한 번에 수만 건을 받아 그리면 화면이 멈추기 때문이고,
+// PostgREST 자체에도 최대 행 수 설정이 있다. 문제는 그걸 '조용히' 자르는 것이었다 —
+// 몇 건이 더 있는지 알아야 잘렸다는 사실이라도 보인다. count는 그래서 같이 받는다.
+// 호출부는 .range()로 페이지를 잡고, count와 비교해 '더 보기'를 띄운다.
+export async function fetchPage(query, context) {
+  const { data, error, count } = await query
+  if (error) {
+    console.error(`[${context}] 조회 실패:`, error.message)
+    return { rows: [], total: 0, error: `${context}을(를) 불러오지 못했습니다: ${error.message}` }
+  }
+  return { rows: data || [], total: count ?? (data || []).length, error: null }
+}
+
 // 쓰기(update/delete)용.
 // 주의: RLS가 막은 update/delete는 에러를 내지 않고 "0건 변경"으로 돌아온다.
 //       error만 확인하면 차단당했는데도 성공으로 보인다.

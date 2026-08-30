@@ -72,7 +72,7 @@ function statusSummary(items) {
   return STATUS_ORDER.filter((s) => c[s]).map((s) => ({ status: s, count: c[s], meta: GCP_REQ_STATUS_META[s] }))
 }
 
-function DayDetailModal({ date, items, busyId, onRemove, onClose }) {
+function DayDetailModal({ date, items, busyId, onClose }) {
   return (
     <div className="ac-datepop-backdrop" onClick={onClose}>
       <div className="ac-modal" onClick={(e) => e.stopPropagation()}>
@@ -82,7 +82,7 @@ function DayDetailModal({ date, items, busyId, onRemove, onClose }) {
         </div>
         <div className="ac-modal-body">
           <div className="ac-snapshot-list">
-            {items.map((r) => <GcpReqCard key={r.id} r={r} busyId={busyId} onRemove={onRemove} />)}
+            {items.map((r) => <GcpReqCard key={r.id} r={r} busyId={busyId} />)}
           </div>
         </div>
       </div>
@@ -90,7 +90,7 @@ function DayDetailModal({ date, items, busyId, onRemove, onClose }) {
   )
 }
 
-function HistoryList({ historyRequests, busyId, onRemove }) {
+function HistoryList({ historyRequests, busyId }) {
   const tKey = todayKey()
 
   const [category, setCategory] = useState('all')
@@ -177,7 +177,6 @@ function HistoryList({ historyRequests, busyId, onRemove }) {
           date={openDate}
           items={grouped.find(([d]) => d === openDate)?.[1] || []}
           busyId={busyId}
-          onRemove={onRemove}
           onClose={() => setOpenDate(null)}
         />
       )}
@@ -249,15 +248,8 @@ function RequestQueue() {
     setBusyId(null)
   }
 
-  const removeRequest = async (id) => {
-    if (!confirm('이 신청을 목록에서 삭제할까요?')) return
-    setBusyId(id)
-    const { ok, error } = await runWrite(
-      supabase.from('gcp_requests').delete().eq('id', id).select(), 'GCP 삭제')
-    setBusyId(null)
-    if (!ok) return alert(error)
-    await fetchRequests()
-  }
+  // 삭제 기능은 두지 않는다. 승인 이력은 감사 자료라 남아 있어야 하고,
+  // RLS의 DELETE 정책도 내려서 API를 직접 불러도 지워지지 않는다.
 
   return (
     <>
@@ -271,7 +263,7 @@ function RequestQueue() {
         {!loading && pendingRequests.length === 0 && <div className="ac-empty">대기중인 신청이 없습니다.</div>}
         <div className="ac-snapshot-list">
           {pendingRequests.map((r) => (
-            <GcpApprovalCard key={r.id} r={r} busyId={busyId} onApprove={approve} onReject={reject} onRemove={removeRequest} />
+            <GcpApprovalCard key={r.id} r={r} busyId={busyId} onApprove={approve} onReject={reject} />
           ))}
         </div>
       </div>
@@ -280,14 +272,14 @@ function RequestQueue() {
         <div className="ac-card-title">처리 이력</div>
         {!loading && historyRequests.length === 0 && <div className="ac-empty">이력이 없습니다.</div>}
         {!loading && historyRequests.length > 0 && (
-          <HistoryList historyRequests={historyRequests} busyId={busyId} onRemove={removeRequest} />
+          <HistoryList historyRequests={historyRequests} busyId={busyId} />
         )}
       </div>
     </>
   )
 }
 
-function GcpApprovalCard({ r, busyId, onApprove, onReject, onRemove }) {
+function GcpApprovalCard({ r, busyId, onApprove, onReject }) {
   const meta = GCP_REQ_STATUS_META[r.status] || { label: r.status, color: 'var(--ink-3)' }
   const detail = (() => {
     const p = r.payload || {}
@@ -321,11 +313,7 @@ function GcpApprovalCard({ r, busyId, onApprove, onReject, onRemove }) {
           <button className="ac-btn ac-btn-secondary" disabled={busy} onClick={() => onReject(r.id)}>거절</button>
         </div>
       )}
-      {(r.status === 'failed' || r.status === 'rejected') && onRemove && (
-        <div className="ac-req-actions">
-          <button className="ac-btn ac-btn-secondary" disabled={busy} onClick={() => onRemove(r.id)}>{busy ? '삭제 중...' : '목록에서 삭제'}</button>
-        </div>
-      )}
+      {/* 실패·거절 건도 지우지 않는다. 왜 실패했는지가 남아야 한다. */}
     </div>
   )
 }
