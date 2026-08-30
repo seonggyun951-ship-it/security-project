@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { fetchRows } from '../lib/db'
 import { useIsAdmin } from '../lib/auth'
@@ -6,7 +7,7 @@ import { elapsedLabel, localDateKey } from '../lib/date'
 import ErrorBanner from '../components/ErrorBanner'
 import ExplainPanel from '../components/ExplainPanel'
 import HoldDialog from '../components/HoldDialog'
-import { CHECK_LABEL, checkLabel, checkKind } from '../lib/scan'
+import { CHECK_LABEL, checkLabel, checkKind, remedyFor } from '../lib/scan'
 
 // 자동 점검 결과.
 //
@@ -39,6 +40,7 @@ const daysLeft = (iso) => Math.ceil((new Date(iso) - Date.now()) / 86400000)
 
 export default function ScanFindings() {
   const isAdmin = useIsAdmin()
+  const nav = useNavigate()
   const [rows, setRows] = useState([])
   const [runs, setRuns] = useState([])
   const [loading, setLoading] = useState(true)
@@ -50,6 +52,8 @@ export default function ScanFindings() {
   const [envFilter, setEnvFilter] = useState('')
   const [dateFilter, setDateFilter] = useState('')
   const [open, setOpen] = useState({})
+  // 처음 들어왔을 때 한 번만 마지막 점검일로 맞춘다. 그 뒤로는 사용자가 고른 날짜를 건드리지 않는다.
+  const dateInit = useRef(false)
   const [picked, setPicked] = useState([])   // 선택한 finding id
   const [busy, setBusy] = useState(false)
   const [hold, setHold] = useState(null)     // { kind, ids, label, resourceLabel }
@@ -71,6 +75,13 @@ export default function ScanFindings() {
     setRuns(r.rows)
     setError(f.error)
     setLoading(false)
+
+    // 기본은 마지막 점검일(점검이 매일 도니 보통 오늘). 전체를 펼치면 며칠 치가 섞여
+    // 지금 상태를 보기 어렵다. '날짜 해제'를 누르면 전체가 된다.
+    if (!dateInit.current && r.rows[0]) {
+      dateInit.current = true
+      setDateFilter(localDateKey(r.rows[0].started_at))
+    }
   }
 
   useEffect(() => { fetchAll() }, [])
@@ -116,7 +127,10 @@ export default function ScanFindings() {
     && (!envFilter || r.environment === envFilter)
     // 점검일 기준. 그날 점검에서 실제로 보인 것만 남긴다.
     // (발견일 기준이면 "그날 처음 나온 것"만 걸려서 그날의 상태를 볼 수 없다)
-    && (!dateFilter || localDateKey(r.last_seen_at) === dateFilter))
+    //
+    // 해결됨은 예외 — 해결된 건의 last_seen_at은 '마지막으로 보였던 날'이라 정의상
+    // 최근 점검일과 겹치지 않는다. 날짜를 걸면 탭이 늘 비어버린다.
+    && (tab === 'resolved' || !dateFilter || localDateKey(r.last_seen_at) === dateFilter))
 
   const groups = {}
   for (const r of shown) {
@@ -203,6 +217,7 @@ export default function ScanFindings() {
                   <span className="sf-prev">직전 {elapsedLabel(prevRun.started_at)} 전 · 위반 {prevRun.failed}</span>
                 </>
               )}
+              {isAdmin && <Link className="sf-histlink" to="/scan-history">이력 전체 보기 ›</Link>}
             </>
           ) : (
             <span>아직 점검 기록이 없습니다. 에이전트가 실행되면 결과가 쌓입니다.</span>
@@ -254,7 +269,10 @@ export default function ScanFindings() {
 
           {!loading && grouped.length === 0 && (
             <div className="ac-empty">
-              {tab === 'open' ? (lastRun ? '조치가 필요한 항목이 없습니다.' : '점검이 아직 실행되지 않았습니다.')
+              {tab === 'open'
+                ? (!lastRun ? '점검이 아직 실행되지 않았습니다.'
+                  : dateFilter ? `${dateFilter} 점검에서 나온 항목이 없습니다. 날짜를 해제하면 전체를 봅니다.`
+                    : '조치가 필요한 항목이 없습니다.')
                 : tab === 'defer' ? '보류한 항목이 없습니다.'
                   : tab === 'exception' ? '예외 처리한 항목이 없습니다.'
                     : '해결된 항목이 없습니다.'}
@@ -359,6 +377,20 @@ export default function ScanFindings() {
                                 <td className="sf-c-num">{elapsedLabel(it.last_seen_at)} 전</td>
                               )}
                               <td className="sf-c-act">
+                                {/* 이 항목을 앱에서 고칠 수 있으면 신청 화면으로 넘긴다.
+                                    대상과 규칙이 채워진 채로 열려 같은 내용을 다시 입력하지 않는다.
+                                    고칠 방법이 없는 항목(MFA 등록 등)에는 버튼이 뜨지 않는다. */}
+                                {!it.resolved_at && (() => {
+                                  const fix = remedyFor(g.check_id, it.resource_id)
+                                  if (!fix) return null
+                                  return (
+                                    <button className="sf-act sf-act-fix" disabled={busy}
+                                      title={fix.label}
+                                      onClick={() => nav(fix.to, { state: fix.state })}>
+                                      조치 신청
+                                    </button>
+                                  )
+                                })()}
                                 {isAdmin && !it.resolved_at && (
                                   held ? (
                                     <button className="sf-act" disabled={busy} onClick={() => release(it.id)}>해제</button>

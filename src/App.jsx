@@ -13,6 +13,8 @@ import CloudCheck from './pages/CloudCheck'
 import CloudAutomation from './pages/CloudAutomation'
 import ApprovalHistory from './pages/ApprovalHistory'
 import ScanFindings from './pages/ScanFindings'
+import ScanHistory from './pages/ScanHistory'
+import SecurityOverview from './pages/SecurityOverview'
 import AwsRequest from './pages/AwsRequest'
 import AwsStatus from './pages/AwsStatus'
 import PhishingDetect from './pages/PhishingDetect'
@@ -111,12 +113,16 @@ export default function App() {
             <Route path="/request/sg" element={<AwsRequest resourceType="security_group" />} />
             <Route path="/request/waf" element={<AwsRequest resourceType="waf_web_acl" />} />
             <Route path="/request/iam" element={<AwsRequest resourceType="iam_user" />} />
+            <Route path="/request/nacl" element={<AwsRequest resourceType="network_acl" />} />
             <Route path="/request/infra-network" element={<InfraRequest mode="network" />} />
             <Route path="/request/infra-compute" element={<InfraRequest mode="compute" />} />
             <Route path="/cloud-automation" element={<AdminRoute><CloudAutomation /></AdminRoute>} />
             <Route path="/approval-history" element={<AdminRoute><ApprovalHistory /></AdminRoute>} />
             <Route path="/aws-status" element={<AdminRoute><AwsStatus /></AdminRoute>} />
+            <Route path="/security" element={<AdminRoute><SecurityOverview /></AdminRoute>} />
             <Route path="/scan" element={<ScanFindings />} />
+            {/* scan_runs는 RLS가 관리자만 읽게 한다 — 화면도 같이 막는다 */}
+            <Route path="/scan-history" element={<AdminRoute><ScanHistory /></AdminRoute>} />
             <Route path="/admin/users" element={<SuperAdminRoute><AdminUsers /></SuperAdminRoute>} />
             <Route path="/phishing" element={<PhishingDetect />} />
             <Route path="/gcp/firewall" element={<GcpRequest resourceType="firewall_rule" />} />

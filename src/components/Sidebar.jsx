@@ -21,6 +21,7 @@ export const NAV_GROUPS = [
       { title: 'WAF', path: '/request/waf', icon: '⛉' },
       // 계정 생성 / 환경 권한 / 계정 삭제를 한 화면 안 탭으로 둔다
       { title: 'IAM 계정 · 권한', path: '/request/iam', icon: '⚿' },
+      { title: '네트워크 ACL', path: '/request/nacl', icon: '⛓' },
       { title: 'VPC / 서브넷', path: '/request/infra-network', icon: '⬡' },
       { title: 'EC2 인스턴스', path: '/request/infra-compute', icon: '▦' },
     ],
@@ -31,7 +32,9 @@ export const NAV_GROUPS = [
       { title: '관리자 승인', path: '/cloud-automation', adminOnly: true, badge: 'aws', icon: '✓' },
       { title: '승인 이력', path: '/approval-history', adminOnly: true, icon: '☰' },
       { title: 'AWS 현황', path: '/aws-status', adminOnly: true, icon: '☁' },
+      { title: '보안 현황', path: '/security', adminOnly: true, icon: '◈' },
       { title: '보안 점검 결과', path: '/scan', icon: '◉' },
+      { title: '점검 이력', path: '/scan-history', adminOnly: true, icon: '☰' },
     ],
   },
   {

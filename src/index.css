@@ -538,6 +538,29 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .ac-rule-table { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
 .ac-rule-row { display: grid; grid-template-columns: 1fr 1fr 1.2fr 1.5fr auto; gap: 8px; align-items: center; }
 .ac-rule-head { font-size: 11px; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.03em; padding: 0 2px; }
+/* NACL은 규칙 번호와 허용/거부가 더 붙어 칸이 두 개 많다(7칸).
+   .ac-input의 min-width가 140px이라 그대로 두면 카드 밖으로 삐져나간다.
+   칸 안에서는 min-width를 풀고, 그래도 좁으면 표만 가로로 스크롤시킨다. */
+.ac-nacl-wrap { overflow-x: auto; }
+.ac-nacl-wrap .ac-rule-table { min-width: 44rem; }
+.ac-nacl-row { grid-template-columns: 4.5rem 6rem 5.5rem 5.5rem 1.1fr 1.4fr auto; }
+.ac-nacl-row > * { min-width: 0; }
+.ac-nacl-row .ac-input { min-width: 0; padding: 9px 10px; }
+.ac-nacl-row > button { padding: 9px 12px; }
+/* 폼 안 안내문 — 규칙을 잘못 넣으면 통신이 끊기는 종류의 주의를 적는 자리 */
+.ac-note {
+  margin-top: 12px;
+  padding: 9px 12px;
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--ink-2);
+  background: var(--soft);
+  border-left: 3px solid var(--line);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+}
+.ac-note b { color: var(--ink); }
+.ac-note-warn { border-left-color: var(--fail); }
+.ac-note-warn b { color: var(--fail); }
 .ac-rule-del { padding: 10px 14px; white-space: nowrap; }
 /* WAF 폼: 관리형 규칙 체크리스트 */
 .ac-check-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
@@ -718,6 +741,93 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .ap-chip:hover { background: var(--soft); }
 .ap-chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 700; }
 .ap-body { flex: 1; overflow-y: auto; padding: 0; }
+/* 목록 아래 '더 보기' — 몇 건이 남았는지 버튼에 같이 적는다 */
+.ap-more { display: flex; justify-content: center; padding: 14px 16px 20px; }
+.ap-more span { font-weight: 400; opacity: .75; }
+
+/* ── 승인 이력: 주·월 묶음과 전체 요약 ─────────────────
+   주별·월별은 한 줄이 한 묶음이다. 건수와 상태가 한 줄에 다 보여야
+   어느 주가 문제였는지 훑어서 찾을 수 있다. */
+.ah-buckets { display: flex; flex-direction: column; gap: 6px; padding: 12px 16px; }
+.ah-bucket {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 11px 13px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  background: var(--panel);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r);
+}
+.ah-bucket:hover { background: var(--soft); border-color: var(--line); }
+.ah-b-label { min-width: 0; }
+.ah-b-label b { display: block; font-size: .88rem; font-weight: 600; color: var(--ink); }
+.ah-b-label > span { font-size: .72rem; color: var(--ink-3); }
+.ah-b-n {
+  font-size: .8rem;
+  font-weight: 700;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ah-stat { display: flex; gap: 8px; font-size: .75rem; color: var(--ink-3); white-space: nowrap; }
+.ah-ok { color: var(--done); }
+.ah-bad { color: var(--fail); }
+
+.ah-sum { padding: 4px 16px 20px; }
+.ah-sum-tiles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.ah-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 1px solid var(--line-2);
+  border-left: 3px solid var(--line);
+  border-radius: var(--r);
+}
+.ah-tile b { font-size: 1.3rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink); }
+.ah-tile span { font-size: .73rem; color: var(--ink-3); }
+.ah-t-ok { border-left-color: var(--done); }
+.ah-t-ok b { color: var(--done); }
+.ah-t-bad { border-left-color: var(--fail); }
+.ah-t-bad b { color: var(--fail); }
+.ah-sum-note { margin-top: 10px; font-size: .78rem; line-height: 1.6; color: var(--ink-3); }
+
+/* 오른쪽 패널의 하루 요약 */
+.rd-label {
+  font-size: .69rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 2px 0 6px;
+}
+.ah-daysum + .rd-label { margin-top: 12px; }
+.ah-daysum { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+.ah-dayrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 11px;
+  font-size: .82rem;
+  color: var(--ink-2);
+  background: var(--soft);
+  border-radius: var(--r-sm);
+}
+.ah-dayrow b { font-size: .95rem; font-variant-numeric: tabular-nums; color: var(--ink); }
+.ah-dayrow.ah-ok b { color: var(--done); }
+.ah-dayrow.ah-bad b { color: var(--fail); }
+.ah-dayrow.is-zero { opacity: .5; }
+
+@media (max-width: 640px) {
+  .ah-sum-tiles { grid-template-columns: repeat(2, 1fr); }
+  .ah-bucket { grid-template-columns: 1fr auto; row-gap: 6px; }
+}
 /* 목록 안에서는 표가 카드 테두리를 또 그리지 않는다 */
 .ap-body .rt-scroll { border: none; border-radius: 0; box-shadow: none; }
 
@@ -907,6 +1017,13 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
   .ac-rule-row > *:nth-child(3) { grid-area: port; }
   .ac-rule-row > *:nth-child(4) { grid-area: cidr; }
   .ac-rule-row > *:nth-child(5) { grid-area: del; }
+
+  /* NACL 표는 칸이 7개라 위 grid-template-areas가 맞지 않는다.
+     좁은 화면에서는 접는 대신 가로 스크롤로 둔다 — 규칙 번호·방향·허용/거부가
+     한 줄에 같이 보여야 어떤 규칙인지 읽히기 때문이다. */
+  .ac-nacl-row { grid-template-areas: none; }
+  .ac-nacl-row > * { grid-area: auto !important; }
+  .ac-nacl-wrap .ac-rule-head { display: grid; }
 }
 .ac-btn { background: var(--accent); color: var(--panel); border: none; border-radius: var(--r); padding: 10px 22px; font-size: 14px; font-weight: 700; cursor: pointer; transition: background 0.15s; }
 .ac-btn:hover:not(:disabled) { background: var(--accent-2); }
@@ -1211,6 +1328,60 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .vs-meta-grid { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin-bottom: 8px; }
 .vs-meta-k { font-size: 11px; color: var(--ink-3); font-weight: 700; text-transform: uppercase; align-self: start; padding-top: 1px; }
 .vs-meta-v { font-size: 12px; color: var(--ink-2); font-family: var(--mono); word-break: break-all; }
+/* KEV 대조 — 스캐너 심각도와 별개로 "지금 실제로 쓰이는가"를 표시한다 */
+.vs-kevbar {
+  background: rgba(239,68,68,0.08);
+  border: 1px solid var(--fail);
+  border-radius: var(--r);
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  margin-bottom: 14px;
+}
+.vs-kevbar b { color: var(--fail); }
+.vs-kevbar.is-busy { background: var(--soft); border-color: var(--line); color: var(--ink-3); }
+.vs-kevbar.is-err { background: var(--soft); border-color: var(--wait); color: var(--wait); }
+
+.vs-kev-filter { border-color: var(--fail); color: var(--fail); }
+.vs-kev-filter[data-on="1"] { background: rgba(239,68,68,0.1); }
+
+.vs-kev-badge {
+  background: var(--fail);
+  color: #fff;
+  border-radius: var(--r-sm);
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.vs-kev-badge.is-ransom { background: #7f1d1d; }
+
+.vs-kevbox {
+  border: 1px solid var(--fail);
+  border-radius: var(--r-sm);
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+.vs-kevbox-h {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--fail);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  margin-bottom: 8px;
+}
+.vs-kevbox-h span { font-weight: 400; color: var(--ink-3); text-transform: none; letter-spacing: 0; }
+.vs-kevbox .vs-meta-grid { margin-bottom: 0; }
+.vs-kevfix {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+.vs-kevfix b { color: var(--ink); margin-right: 5px; }
+
 .vs-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .vs-tag { background: var(--panel); border: 1px solid var(--line); color: var(--ink-3); border-radius: var(--r); padding: 2px 10px; font-size: 11px; }
 
@@ -1367,13 +1538,25 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
   gap: 5px;
 }
 
-.xp-source {
+/* 근거 한 건 = 한 줄. 열두 건쯤 나오므로 제목만 보이고, 누른 것만 펼친다. */
+.xp-source { min-width: 0; border-radius: var(--r-sm); }
+.xp-source.is-open { background: var(--panel); }
+
+.xp-source-head {
   display: flex;
   align-items: center;
   gap: 7px;
+  width: 100%;
+  padding: 3px 5px;
+  font: inherit;
   font-size: .74rem;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
   min-width: 0;
 }
+.xp-source-head:hover { background: var(--panel); border-radius: var(--r-sm); }
 
 .xp-badge {
   flex: none;
@@ -1384,18 +1567,40 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
   color: #fff;
 }
 .xp-badge-rule_engine  { background: var(--accent); }
+.xp-badge-policy       { background: var(--accent-2); }
+.xp-badge-concept      { background: var(--ink-3); }
 .xp-badge-aws_baseline { background: var(--wait); }
+.xp-badge-gcp_baseline { background: var(--wait); }
 .xp-badge-mitre        { background: var(--fail); }
+.xp-badge-mitigation   { background: var(--done); }
 .xp-badge-owasp        { background: var(--super); }
+.xp-badge-kev          { background: #7f1d1d; }
 
-.xp-ref {
+/* 자료의 첫 줄. 식별자만으로는 무슨 내용인지 알 수 없어서 제목을 앞에 둔다. */
+.xp-title {
   flex: 1;
   min-width: 0;
-  font-family: var(--mono);
   color: var(--ink-2);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.xp-caret { flex: none; color: var(--ink-3); width: .9rem; text-align: center; }
+
+.xp-source-body { padding: 2px 10px 9px 10px; }
+.xp-excerpt {
+  margin: 0 0 6px;
+  font-size: .74rem;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+
+.xp-ref {
+  font-family: var(--mono);
+  font-size: .7rem;
+  color: var(--ink-3);
+  word-break: break-all;
 }
 
 .xp-sim {
@@ -1551,6 +1756,8 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .sf-up { color: var(--fail); font-weight: 600; }
 .sf-down { color: var(--done); font-weight: 600; }
 .sf-prev { color: var(--ink-3); }
+.sf-histlink { margin-left: auto; color: var(--accent); text-decoration: none; white-space: nowrap; }
+.sf-histlink:hover { text-decoration: underline; }
 
 /* 필터 */
 .sf-filters {
@@ -1718,6 +1925,9 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
   white-space: nowrap;
 }
 .sf-act:hover:not(:disabled) { background: var(--bg); }
+/* 조치 신청 — 보류·예외와 달리 실제로 고치러 가는 버튼이라 눈에 띄게 둔다 */
+.sf-act-fix { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+.sf-act-fix:hover:not(:disabled) { background: var(--panel); }
 .sf-act:disabled { opacity: .5; cursor: default; }
 
 .sf-holdnote {
@@ -1734,6 +1944,281 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 @media (max-width: 900px) {
   .sf-tiles { grid-template-columns: repeat(2, 1fr); }
   .sf-tabs { margin-left: 0; width: 100%; }
+}
+
+/* ── 점검 이력 ─────────────────────────────────────────
+   실행 하나가 한 줄. 언제 돌았고 그때 몇 건이 늘고 줄었는지가 한 줄에 다 들어가야
+   여러 실행을 위아래로 훑으며 조치가 먹혔는지 볼 수 있다. */
+
+.sh-rowhead {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto auto auto;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 10px 13px;
+  font: inherit;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.sh-rowhead:hover { background: var(--soft); }
+
+.sh-st {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: .75rem;
+  font-weight: 700;
+  white-space: nowrap;
+  min-width: 4.4rem;
+}
+.sh-st i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+.sh-st-ok { color: var(--done); }
+.sh-st-ok i { background: var(--done); }
+.sh-st-bad { color: var(--fail); }
+.sh-st-bad i { background: var(--fail); }
+.sh-st-run { color: var(--wait); }
+.sh-st-run i { background: var(--wait); }
+
+.sh-when { min-width: 0; }
+.sh-when b {
+  display: block;
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.sh-when > span {
+  display: block;
+  font-size: .72rem;
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sh-num {
+  font-size: .76rem;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.sh-num b { font-weight: 700; color: var(--ink); }
+.sh-fail { color: var(--fail) !important; }
+
+.sh-delta {
+  display: flex;
+  gap: 6px;
+  font-size: .76rem;
+  min-width: 5rem;
+  justify-content: flex-end;
+  white-space: nowrap;
+}
+.sh-same { color: var(--ink-3); }
+.sh-note {
+  grid-column: span 3;
+  font-size: .74rem;
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 위반 추이 — 값 자체보다 오르내림이 보이면 된다 */
+.sh-trend {
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  background: var(--panel);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r);
+}
+.sh-trend-label {
+  font-size: .74rem;
+  font-weight: 600;
+  color: var(--ink-2);
+  margin-bottom: 8px;
+}
+.sh-trend-label span { font-weight: 400; color: var(--ink-3); margin-left: 5px; }
+
+.sh-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 68px;
+  overflow-x: auto;
+}
+.sh-bar-wrap {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 3px;
+  height: 100%;
+  min-width: 20px;
+  flex: 1 1 0;
+}
+.sh-bar {
+  width: 100%;
+  max-width: 34px;
+  background: var(--fail);
+  border-radius: 2px 2px 0 0;
+  opacity: .75;
+}
+.sh-bar-wrap:hover .sh-bar { opacity: 1; }
+.sh-bar-n {
+  font-size: .66rem;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 900px) {
+  .sh-rowhead { grid-template-columns: auto 1fr auto; row-gap: 6px; }
+  .sh-delta { justify-content: flex-start; }
+}
+
+/* ── 보안 현황 (요약 화면) ─────────────────────────────
+   점검 결과·환경별 분포·점검 기록을 한 화면에서 훑고, 상세는 눌러서 들어간다.
+   전에는 셋이 따로 있어서 어디를 봐야 전체가 보이는지 알 수 없었다.
+
+   면은 쓰되 남발하지 않는다. 큰 덩어리 넷만 패널을 갖고 그 안에서는
+   테두리 대신 간격과 얇은 선으로 나눈다. */
+
+/* 심각도 4단계. Prowler가 쓰는 영어 표기를 그대로 둔다 — 옮기면 원본과 대조가 어렵다.
+   빨강→주황→노랑→회색으로 이어지는 한 계열이라 순서가 색으로도 읽힌다. */
+:root {
+  --sv-crit: #a01f2e;
+  --sv-high: #b6591f;
+  --sv-med:  #8a7318;
+  --sv-low:  #5e6773;
+  --sv-crit-f: #a01f2e;
+  --sv-high-f: #c26a2c;
+  --sv-med-f:  #c2a63c;
+  --sv-low-f:  #aeb6c1;
+}
+
+.ov { max-width: 1140px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; padding-bottom: 32px; }
+
+.ov-crumb { display: flex; align-items: center; gap: 9px; font-size: 12px; color: var(--ink-3); }
+.ov-crumb b { color: var(--ink); font-size: 15px; font-weight: 700; letter-spacing: -.01em; }
+.ov-crumb i { font-style: normal; color: var(--line); }
+
+.ov-panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+/* 머리 — 상태를 한 문장으로. 숫자를 흩어놓는 것보다 문장이 빨리 읽힌다. */
+.ov-hero { padding: 22px 24px 18px; display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 26px; align-items: start; }
+.ov-state { margin: 0; font-size: clamp(17px, 2vw, 22px); line-height: 1.5; letter-spacing: -.02em; color: var(--ink-2); text-wrap: balance; }
+.ov-state b { color: var(--ink); font-weight: 700; }
+.ov-state .cr { color: var(--sv-crit); font-weight: 700; }
+
+.ov-stale {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 5px 12px 5px 10px; border-radius: 999px;
+  font-size: 12.5px; font-weight: 700; white-space: nowrap;
+  color: var(--wait); background: var(--wait-bg); border: 1px solid var(--wait-line);
+}
+.ov-stale.is-ok { color: var(--done); background: var(--done-bg); border-color: var(--done); }
+.ov-stale i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+/* 심각도 띠 — 비율이 곧 그림이라 급한 게 얼마나 되는지 바로 보인다.
+   같은 크기 타일 넷으로 두면 숫자가 큰 Low가 먼저 눈에 들어온다. */
+.ov-ribbon { display: flex; height: 8px; margin: 18px 24px 0; gap: 2px; }
+.ov-ribbon i { display: block; height: 100%; border-radius: 999px; }
+
+.ov-legend { display: flex; gap: 24px; padding: 11px 24px 20px; flex-wrap: wrap; }
+.ov-leg {
+  display: flex; align-items: baseline; gap: 7px;
+  background: none; border: 0; border-bottom: 2px solid transparent;
+  padding: 2px 0; font: inherit; cursor: pointer;
+}
+.ov-leg:hover { border-bottom-color: var(--c); }
+.ov-leg .v { font-size: 18px; font-weight: 700; color: var(--c); font-variant-numeric: tabular-nums; }
+.ov-leg .k { font-size: 12.5px; color: var(--ink-3); }
+
+.sv-crit { --c: var(--sv-crit); --f: var(--sv-crit-f); }
+.sv-high { --c: var(--sv-high); --f: var(--sv-high-f); }
+.sv-med  { --c: var(--sv-med);  --f: var(--sv-med-f); }
+.sv-low  { --c: var(--sv-low);  --f: var(--sv-low-f); }
+
+.ov-split { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px; }
+
+.ov-head { display: flex; align-items: baseline; gap: 10px; padding: 15px 18px 11px; }
+.ov-head h2 { margin: 0; font-size: 13.5px; font-weight: 700; color: var(--ink); letter-spacing: -.01em; }
+.ov-head .sub { font-size: 12px; color: var(--ink-3); }
+.ov-head .link { margin-left: auto; font-size: 12.5px; color: var(--accent); text-decoration: none; border-bottom: 1px solid transparent; }
+.ov-head .link:hover { border-bottom-color: currentColor; }
+
+/* 환경 × 심각도 — 환경이 몇 줄뿐이라 한 표에 다 들어간다.
+   칸 진하기가 곧 건수라 어디에 몰려 있는지가 눈으로 먼저 잡힌다. */
+.ov-matrix { padding: 0 8px 12px; overflow-x: auto; }
+.ov-matrix table { width: 100%; border-collapse: collapse; min-width: 26rem; }
+.ov-matrix th {
+  font-size: 11px; font-weight: 700; color: var(--ink-3);
+  letter-spacing: .04em; text-align: center; padding: 0 0 8px; white-space: nowrap;
+}
+.ov-matrix th:first-child { text-align: left; padding-left: 10px; }
+.ov-matrix th:last-child { text-align: right; padding-right: 10px; }
+.ov-matrix td { padding: 0; }
+.ov-matrix tr td:first-child { font-size: 12.5px; color: var(--ink-2); padding-left: 10px; white-space: nowrap; }
+.ov-matrix tr:hover td { background: var(--soft); }
+.ov-cell {
+  display: flex; align-items: center; justify-content: center;
+  margin: 2px 3px; height: 29px; border-radius: 5px;
+  font-size: 12.5px; font-weight: 700; color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+.ov-cell.is-zero { background: transparent !important; color: var(--line); font-weight: 400; }
+.ov-tot { text-align: right; padding-right: 10px; font-size: 13px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+/* 점검 기록 */
+.ov-trend { padding: 2px 18px 16px; }
+.ov-spark { display: block; width: 100%; height: 92px; }
+.ov-note { margin: 9px 0 0; font-size: 12px; line-height: 1.7; color: var(--ink-3); }
+.ov-note b { color: var(--ink-2); }
+
+/* 미조치 항목 — 한 줄 40px, 왼쪽 색 띠로 심각도만 표시하고 나머지 장식은 뺀다 */
+.ov-row {
+  display: grid;
+  grid-template-columns: 3px 58px minmax(0, 1fr) 96px 38px 46px;
+  align-items: center; gap: 13px;
+  width: 100%; height: 40px; padding: 0;
+  background: none; border: 0; border-top: 1px solid var(--line-2);
+  font: inherit; text-align: left; color: inherit; cursor: pointer;
+}
+.ov-row:hover { background: var(--soft); }
+.ov-row .bar { align-self: stretch; background: var(--c); }
+.ov-row .sev { font-size: 11.5px; font-weight: 700; color: var(--c); padding-left: 13px; }
+.ov-row .title { min-width: 0; font-size: 13px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ov-row .where { font-size: 12px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ov-row .cnt { font-size: 12.5px; color: var(--ink-2); text-align: right; font-variant-numeric: tabular-nums; }
+.ov-row .age { font-size: 12px; color: var(--ink-3); text-align: right; padding-right: 14px; font-variant-numeric: tabular-nums; }
+
+.ov-tail { display: flex; gap: 10px; flex-wrap: wrap; }
+.ov-tail a {
+  flex: 1 1 168px; display: flex; align-items: baseline; gap: 9px;
+  padding: 12px 15px; text-decoration: none; color: inherit;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r);
+}
+.ov-tail a:hover { border-color: var(--ink-3); }
+.ov-tail .v { font-size: 17px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+.ov-tail .v.warn { color: var(--wait); }
+.ov-tail .k { font-size: 12.5px; color: var(--ink-3); }
+.ov-tail .go { margin-left: auto; color: var(--ink-3); }
+
+@media (max-width: 900px) {
+  .ov-split { grid-template-columns: 1fr; }
+  .ov-hero { grid-template-columns: 1fr; gap: 14px; }
+}
+@media (max-width: 620px) {
+  .ov-row { grid-template-columns: 3px 52px minmax(0, 1fr) 46px; }
+  .ov-row .where, .ov-row .cnt { display: none; }
 }
 
 /* 보류·예외 창 */

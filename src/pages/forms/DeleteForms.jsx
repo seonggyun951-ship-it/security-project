@@ -128,11 +128,37 @@ export function IamDeleteForm({ onSubmit, submitting }) {
 }
 
 // ---- SG 규칙 삭제 ----
-export function SgDeleteForm({ onSubmit, submitting }) {
+export function SgDeleteForm({ prefill, onSubmit, submitting }) {
   const { rows, loading, error, reload } = useDeletableRequests('security_group', ['create_sg', 'add_rules'], 'delete_sg_rules')
   const [targetId, setTargetId] = useState('')
   const [picked, setPicked] = useState([]) // 선택된 규칙 index
-  const [reason, setReason] = useState('')
+  const [reason, setReason] = useState(prefill?.reason || '')
+
+  // 점검 결과에서 넘어온 경우는 다른 길로 간다.
+  //
+  // 평소에는 "이 앱으로 신청했던 규칙"만 고를 수 있다. 무엇을 지우는지가 원본 신청에
+  // 기록돼 있어 확실하기 때문이다. 그런데 점검에 걸리는 SG는 콘솔에서 직접 만든 것이
+  // 대부분이라 원본 신청이 없다 — 그러면 고칠 방법이 아예 없어진다.
+  // 이 경우에만 대상과 규칙을 직접 지정해 신청한다. Edge Function은 sg_id와 규칙만
+  // 있으면 처리하므로 뒤쪽은 손댈 게 없다.
+  const fromScan = prefill?.check_id ? prefill : null
+
+  const submitFromScan = async () => {
+    if (!reason.trim()) return alert('삭제 사유는 필수입니다')
+    const ok = await onSubmit({
+      resource_type: 'security_group', action: 'delete_sg_rules',
+      title: fromScan.sg_id,
+      target_id: fromScan.sg_id,
+      payload: {
+        sg_id: fromScan.sg_id,
+        rules: fromScan.rules,
+        // 어느 점검에서 온 신청인지 남긴다. 승인자가 근거를 확인할 수 있어야 한다.
+        source_check_id: fromScan.check_id,
+      },
+      reason: reason.trim(),
+    })
+    if (ok) setReason('')
+  }
 
   const target = rows.find((r) => r.id === targetId)
   const rules = target?.payload?.rules || []
@@ -175,6 +201,47 @@ export function SgDeleteForm({ onSubmit, submitting }) {
       reason: reason.trim(),
     })
     if (ok) { setTargetId(''); setPicked([]); setReason(''); await reload() }
+  }
+
+  if (fromScan) {
+    return (
+      <>
+        <div className="ac-note ac-note-warn">
+          보안 점검 <b>{fromScan.check_id}</b>에서 걸린 규칙을 제거하는 신청입니다.
+          규칙을 빼는 것은 접근을 좁히는 방향이지만 <b>최고 관리자 승인이 있어야 실제로 적용됩니다.</b>
+        </div>
+
+        <div className="ac-form-row">
+          <div className="ac-field">
+            <label className="ac-label">대상 Security Group</label>
+            <input className="ac-input" value={fromScan.sg_id} readOnly />
+          </div>
+        </div>
+
+        <div className="ac-card-title" style={{ fontSize: 13, marginTop: 16 }}>제거할 규칙</div>
+        <div className="ac-check-list">
+          {fromScan.rules.map((rule, i) => (
+            <span key={i} className="ac-check active"><span>{sgRuleLabel(rule)}</span></span>
+          ))}
+        </div>
+
+        <div className="ac-note">
+          이 규칙이 실제로 그 SG에 있는지는 적용 단계에서 확인됩니다.
+          이미 없는 규칙이면 실패로 보지 않고 넘어갑니다.
+        </div>
+
+        <div className="ac-form-row" style={{ marginTop: 12 }}>
+          <div className="ac-field">
+            <label className="ac-label">삭제 사유 (필수)</label>
+            <input className="ac-input" value={reason} onChange={(e) => setReason(e.target.value)} />
+          </div>
+        </div>
+
+        <button className="ac-btn ac-btn-danger" onClick={submitFromScan} disabled={submitting}>
+          {submitting ? '신청 중...' : '삭제 신청'}
+        </button>
+      </>
+    )
   }
 
   return (
