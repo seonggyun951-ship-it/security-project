@@ -15,6 +15,7 @@ export const RESOURCE_META = {
   ec2_instance:     { label: 'EC2 인스턴스' },
   internet_gateway: { label: 'Internet Gateway' },
   route_table:      { label: '라우팅 테이블' },
+  network_acl:      { label: '네트워크 ACL' },
   env_access:       { label: '환경 접근 권한' },
 }
 
@@ -34,15 +35,26 @@ export const ACTION_LABEL = {
   create_ec2:           'EC2 인스턴스 생성',
   create_igw:           'Internet Gateway 생성',
   create_route_table:   '라우팅 테이블 생성',
+  add_nacl_rules:       'NACL 규칙 추가',
   delete_iam_user:      'IAM 계정 삭제',
   delete_sg_rules:      'SG 규칙 삭제',
   delete_waf_rules:     'WAF 규칙 삭제',
+  delete_nacl_rules:    'NACL 규칙 삭제',
   grant_env_access:     '환경 권한 부여',
   revoke_env_access:    '환경 권한 회수',
 }
 
-// 되돌릴 수 없어 최고 관리자 승인을 반드시 거치는 액션
-export const DELETE_ACTIONS = ['delete_iam_user', 'delete_sg_rules', 'delete_waf_rules']
+// NACL 규칙 표시용
+export const NACL_PROTOCOLS = [
+  { value: 'tcp', label: 'TCP' },
+  { value: 'udp', label: 'UDP' },
+  { value: 'icmp', label: 'ICMP' },
+  { value: '-1', label: '전체' },
+]
+
+// 되돌릴 수 없어 최고 관리자 승인을 반드시 거치는 액션.
+// NACL 규칙 삭제도 여기 넣는다 — 허용 규칙을 지우면 그 서브넷 통신이 즉시 끊긴다.
+export const DELETE_ACTIONS = ['delete_iam_user', 'delete_sg_rules', 'delete_waf_rules', 'delete_nacl_rules']
 export const isDeleteAction = (a) => DELETE_ACTIONS.includes(a)
 
 // 2차 승인(최고 관리자)까지 거치는 신청인지.
@@ -104,6 +116,16 @@ export function sgRuleLabel(r) {
   const port = r.from_port ? `${r.from_port}${r.to_port && r.to_port != r.from_port ? '-' + r.to_port : ''}` : '전체'
   const dir = r.direction === 'ingress' ? '인바운드' : '아웃바운드'
   return `${dir} ${r.protocol}:${port} ↔ ${r.cidr}`
+}
+
+// NACL은 SG와 달리 규칙 번호와 허용/거부가 있다. 번호가 낮은 것부터 먼저 맞는
+// 하나만 적용되므로 번호를 맨 앞에 둔다 — 순서가 곧 의미다.
+export function naclRuleLabel(r) {
+  const port = r.protocol === '-1' ? '전체'
+    : `${r.from_port ?? 0}${r.to_port != null && r.to_port !== r.from_port ? '-' + r.to_port : ''}`
+  const dir = r.direction === 'ingress' ? '인바운드' : '아웃바운드'
+  const act = r.action === 'deny' ? '거부' : '허용'
+  return `#${r.rule_no} ${dir} ${act} ${r.protocol}:${port} ↔ ${r.cidr}`
 }
 
 // ---- WAF 규칙 헬퍼 ----
@@ -215,6 +237,9 @@ export function reqDetailLines(r) {
     const routes = (p.routes || []).map((rt) => `${rt.cidr_block} → ${rt.gateway_id}`)
     return [`VPC: ${p.vpc_id}`, ...routes, `연결 서브넷: ${(p.subnet_ids || []).join(', ')}`]
   }
+  if (r.action === 'add_nacl_rules' || r.action === 'delete_nacl_rules') {
+    return [`대상 NACL: ${p.nacl_name || p.nacl_id}`, ...(p.rules || []).map(naclRuleLabel)]
+  }
   return []
 }
 
@@ -249,6 +274,15 @@ export function reqWarnings(r) {
     if (r.action === 'delete_waf_rules') {
       out.push('차단 규칙을 제거하는 작업이라 보안이 느슨해집니다.')
     }
+    if (r.action === 'delete_nacl_rules') {
+      out.push('NACL은 서브넷 전체에 걸립니다. 허용 규칙을 지우면 그 서브넷의 통신이 즉시 끊깁니다.')
+    }
+  }
+
+  // NACL은 스테이트리스라 규칙 하나가 응답 트래픽까지 좌우한다. 승인 전에 짚어준다.
+  if (r.action === 'add_nacl_rules') {
+    out.push('NACL은 SG와 달리 스테이트리스입니다. 응답이 돌아올 임시 포트(1024-65535)가 막혀 있으면 나가는 통신도 먹통이 됩니다.')
+    out.push('규칙 번호가 낮은 것부터 먼저 맞는 하나만 적용됩니다. 기존 규칙 사이 어디에 끼는지 확인해주세요.')
   }
 
   if (r.action === 'grant_env_access') {
@@ -340,7 +374,7 @@ export function ReqTable({ requests, onOpen, selectedId }) {
 //
 // 목록을 덮지 않고 옆에 나란히 있어서, 고르고 판단하고 다음으로 넘어가는 흐름이 끊기지 않는다.
 // 줄글이 아니라 항목별 서식으로 묶어 편지 본문처럼 읽히지 않게 한다.
-export function ReqDrawer({ r, busyId, onApprove, onReject, onClose, onRemove, isSuper = false }) {
+export function ReqDrawer({ r, busyId, onApprove, onReject, onClose, isSuper = false }) {
   // 상주형 패널 — 아무것도 고르지 않았을 때도 자리를 지킨다.
   if (!r) {
     return (
@@ -456,21 +490,15 @@ export function ReqDrawer({ r, busyId, onApprove, onReject, onClose, onRemove, i
           </div>
         )}
 
-        {/* 이력 화면에서 목록 정리용. 처리 대기중인 건에는 뜨지 않는다. */}
-        {!actionable && onRemove && (
-          <div className="rd-foot">
-            <button className="ac-btn ac-btn-secondary" style={{ flex: 1 }} disabled={busy} onClick={() => onRemove(r.id)}>
-              {busy ? '삭제 중...' : '목록에서 삭제'}
-            </button>
-          </div>
-        )}
+        {/* 이력에서 지우는 버튼은 두지 않는다 — 승인 이력은 감사 자료라 남아야 한다.
+            취소는 status를 'cancelled'로 바꿀 뿐 행은 남는다. */}
       </aside>
   )
 }
 
-// 신청 1건 카드 — 승인자는 onApprove/onReject/onRemove 전달, 신청자는 미전달(상태만 표시)
+// 신청 1건 카드 — 승인자는 onApprove/onReject 전달, 신청자는 미전달(상태만 표시)
 // isSuper: 최고 관리자 여부. 삭제 신청은 최고 관리자만 최종 실행할 수 있다.
-export function ReqCard({ r, busyId, onApprove, onReject, onRemove, isSuper = false }) {
+export function ReqCard({ r, busyId, onApprove, onReject, isSuper = false }) {
   const meta = REQ_STATUS_META[r.status] || { label: r.status, color: 'var(--ink-3)' }
   const detail = reqDetailLines(r)
   const warnings = reqWarnings(r)
@@ -551,11 +579,7 @@ export function ReqCard({ r, busyId, onApprove, onReject, onRemove, isSuper = fa
           <button className="ac-btn ac-btn-secondary" disabled={busy} onClick={() => onReject(r.id)}>거절</button>
         </div>
       )}
-      {(r.status === 'failed' || r.status === 'rejected') && onRemove && (
-        <div className="ac-req-actions">
-          <button className="ac-btn ac-btn-secondary" disabled={busy} onClick={() => onRemove(r.id)}>{busy ? '삭제 중...' : '목록에서 삭제'}</button>
-        </div>
-      )}
+      {/* 실패·거절 건도 지우지 않는다. 왜 실패했는지가 남아야 다음에 같은 실수를 안 한다. */}
     </div>
   )
 }

@@ -4,9 +4,10 @@ import {
   emptyRule, parsePortRange, normalizeCidr, emptyWafRule,
 } from '../../lib/aws'
 
-const SENSITIVE_PORTS = [22, 3389, 3306, 5432, 1433, 6379, 27017]
-const MIN_CIDR_PREFIX = 24
-const MAX_RULES = 50
+// 판정 상수와 규칙은 여기 두지 않는다. 규칙 엔진(lib/rules.js)이 접수 직전에
+// 검사하고 결과를 창으로 보여준다 — 폼이 같은 규칙을 한 벌 더 들고 있으면
+// 한쪽만 고쳐져 안내 문구와 실제 판정이 갈라진다.
+// (실제로 "특정 IP로 제한하세요"라는 문구가 이미 특정 IP로 제한한 신청에도 떴다)
 const EXPIRY_OPTIONS = [
   { value: '', label: '만료 없음 (영구)' },
   { value: '1', label: '1일' },
@@ -16,29 +17,6 @@ const EXPIRY_OPTIONS = [
   { value: '30', label: '1개월' },
   { value: '90', label: '3개월' },
 ]
-
-function validateSgRulesClient(rules) {
-  const warnings = []
-  for (const r of rules) {
-    if (r.cidr === '0.0.0.0/0' || r.cidr === '::/0') {
-      warnings.push(`전체 개방(${r.cidr})은 허용되지 않습니다`)
-    }
-    const prefix = parseInt((r.cidr || '').split('/')[1])
-    if (!isNaN(prefix) && prefix < MIN_CIDR_PREFIX) {
-      warnings.push(`CIDR ${r.cidr}: /${MIN_CIDR_PREFIX} 이상만 허용 (현재 /${prefix})`)
-    }
-    const ports = [r.from_port, r.to_port].filter((p) => p != null)
-    for (const port of ports) {
-      if (SENSITIVE_PORTS.includes(port) && r.direction === 'ingress') {
-        warnings.push(`포트 ${port}은 민감 포트입니다 (승인 시 추가 검토 대상)`)
-      }
-    }
-  }
-  if (rules.length > MAX_RULES) {
-    warnings.push(`규칙 수가 ${MAX_RULES}개를 초과합니다`)
-  }
-  return warnings
-}
 
 export function SgForm({ sgOptions, onSubmit, submitting }) {
   const [action, setAction] = useState('add_rules')
@@ -62,10 +40,8 @@ export function SgForm({ sgOptions, onSubmit, submitting }) {
     }))
     if (cleanRules.length === 0) return alert('규칙을 최소 1개 이상 입력해주세요 (CIDR 필수)')
 
-    const warnings = validateSgRulesClient(cleanRules)
-    const blocked = warnings.filter((w) => w.includes('허용되지 않습니다') || w.includes('이상만 허용') || w.includes('초과'))
-    if (blocked.length > 0) return alert('신청 불가:\n' + blocked.join('\n'))
-    if (warnings.length > 0 && !confirm('주의사항:\n' + warnings.join('\n') + '\n\n그래도 신청하시겠습니까?')) return
+    // 위험 판정은 여기서 하지 않는다. 접수 직전에 규칙 엔진이 검사하고
+    // 그 결과를 창으로 보여준다 (AwsRequest.submitRequest).
 
     const expiresAt = form.expires_in_days
       ? new Date(Date.now() + Number(form.expires_in_days) * 86400000).toISOString()

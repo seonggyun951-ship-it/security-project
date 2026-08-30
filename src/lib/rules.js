@@ -310,24 +310,67 @@ export function analyzeConfig(data) {
 // 예전에는 이 검사가 aws-request-apply(승인 후 적용 시점)에만 있어서,
 // 관리자가 통과 못 할 신청인 줄 모르고 승인 버튼을 누르고 나서야 실패했다.
 
-export const REQUEST_POLICY = {
-  MIN_CIDR_PREFIX: 24,   // /24 이상만 허용 (/0~/23은 너무 넓다)
-  MAX_RULES: 50,
-  SENSITIVE_PORTS: [22, 3389, 3306, 5432, 1433, 6379, 27017],
-}
-
-// 환경별 접근 권한. Terraform으로 만들어 둔 그룹·역할과 짝이 맞아야 한다
-// (terraform/envs/iam). 그룹에 들어가면 그 역할을 맡아 임시 키를 받는다.
+// 환경별 접근 권한과 대역. Terraform으로 만들어 둔 VPC·그룹·역할과 짝이 맞아야 한다
+// (terraform/envs). 그룹에 들어가면 그 역할을 맡아 임시 키를 받는다.
 //
 // aws.jsx가 아니라 여기 두는 이유: JSX 파일에 있으면 Node에서 import할 수 없어
 // 학습 자료를 만들 때 값을 손으로 옮겨 적게 된다. 그러면 정책을 바꿨을 때
 // 문서만 옛날 값으로 남는다.
+//
+// cidr은 terraform/envs/{env}/main.tf의 값과 같아야 한다. 거기서 바꾸면 여기도 바꾼다.
 export const ENVIRONMENTS = [
-  { key: 'dev',  label: '개발 (vpc-dev)',   can: '생성·수정·삭제', needsSuper: false },
-  { key: 'qa',   label: 'QA (vpc-qa)',      can: '생성·수정 (삭제 불가)', needsSuper: false },
-  { key: 'prod', label: '운영 (vpc-prod)',  can: '조회만', needsSuper: true },
-  { key: 'db',   label: '개인정보 (vpc-db)', can: '조회만', needsSuper: true },
+  { key: 'dev',  label: '개발 (vpc-dev)',   cidr: '10.10.0.0/16',   can: '생성·수정·삭제', needsSuper: false },
+  { key: 'qa',   label: 'QA (vpc-qa)',      cidr: '10.20.0.0/16',   can: '생성·수정 (삭제 불가)', needsSuper: false },
+  { key: 'prod', label: '운영 (vpc-prod)',  cidr: '172.16.0.0/16',  can: '조회만', needsSuper: true },
+  { key: 'db',   label: '개인정보 (vpc-db)', cidr: '192.168.0.0/16', can: '조회만', needsSuper: true },
 ]
+
+export const REQUEST_POLICY = {
+  MIN_CIDR_PREFIX: 24,   // /24 이상만 허용 (/0~/23은 너무 넓다)
+  MAX_RULES: 50,
+  SENSITIVE_PORTS: [22, 3389, 3306, 5432, 1433, 6379, 27017],
+
+  // 사내망 — 우리가 만들어 쓰는 환경 VPC 대역.
+  //
+  // 이게 없으면 "SSH를 어디에 여는가"를 구분할 수 없다. 사내 대역에 여는 것과
+  // 인터넷 공인 IP에 여는 것은 위험이 다른데, 예전에는 둘 다 똑같이
+  // "특정 IP로 제한하거나 VPN을 사용하세요"라고 안내했다 — 이미 특정 IP로 제한한
+  // 신청에도 그 문구가 떴다.
+  //
+  // RFC1918 사설 대역 전체(10/8 등)로 잡지 않는다. "사설이니까 아마 내부겠지"가 아니라
+  // "우리가 만든 VPC"가 근거가 되도록 ENVIRONMENTS에서 그대로 가져온다.
+  // 목록을 따로 적어두면 환경이 늘거나 대역이 바뀔 때 한쪽만 고쳐진다.
+  //
+  // prod는 이 중 유일하게 외부에 서비스를 여는 환경이지만, 그건 80/443을
+  // 인터넷에 여는 이야기이고(WEB_PORTS 예외로 이미 허용된다) 여기 목록과는 다른 축이다.
+  // 여기는 "이 대역에서 들어오는 트래픽이 사내인가"만 본다.
+  //
+  // 사무실 고정 공인 IP처럼 사설 대역이 아닌데 신뢰하는 주소가 생기면 여기 덧붙인다.
+  INTERNAL_CIDRS: ENVIRONMENTS.map((e) => e.cidr),
+}
+
+// IPv4 CIDR 포함 관계. inner가 outer 안에 완전히 들어가면 true.
+// 형식이 IPv4 CIDR이 아니면(IPv6 등) false — 모르면 내부로 치지 않는다.
+export function cidrContains(outer, inner) {
+  const v4 = /^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/
+  if (!v4.test(outer || '') || !v4.test(inner || '')) return false
+
+  const toInt = (ip) => ip.split('.')
+    .reduce((acc, o) => ((acc << 8) >>> 0) + (Number(o) & 255), 0) >>> 0
+
+  const [oIp, oPfxRaw] = outer.split('/')
+  const [iIp, iPfxRaw] = inner.split('/')
+  const oPfx = oPfxRaw === undefined ? 32 : Number(oPfxRaw)
+  const iPfx = iPfxRaw === undefined ? 32 : Number(iPfxRaw)
+  if (oPfx > 32 || iPfx > 32) return false
+  if (iPfx < oPfx) return false   // inner가 더 넓으면 포함될 수 없다
+
+  const mask = oPfx === 0 ? 0 : (0xFFFFFFFF << (32 - oPfx)) >>> 0
+  return ((toInt(oIp) & mask) >>> 0) === ((toInt(iIp) & mask) >>> 0)
+}
+
+export const isInternalCidr = (cidr) =>
+  REQUEST_POLICY.INTERNAL_CIDRS.some((net) => cidrContains(net, cidr))
 
 export const envMeta = (key) => ENVIRONMENTS.find((e) => e.key === key)
 
@@ -376,13 +419,140 @@ export function checkSgRules(rules = []) {
     const from = r.from_port
     const to = r.to_port ?? from
     const hit = REQUEST_POLICY.SENSITIVE_PORTS.filter((p) => p >= from && p <= to)
+
+    // 여기 오는 규칙은 이미 대역이 좁혀져 있다(전체 개방은 위에서 걸러졌다).
+    // 남은 질문은 "어디에 여는가"다 — 사내망이냐 인터넷 공인 대역이냐로 갈린다.
+    // 예전에는 둘을 구분하지 않고 "특정 IP로 제한하세요"라고만 해서,
+    // 이미 특정 IP로 제한한 신청에도 맞지 않는 문구가 떴다.
+    const internal = isInternalCidr(cidr)
+
     for (const port of hit) {
       const info = DANGEROUS_PORTS[port]
-      findings.push({
+      const what = `포트 ${port}(${info?.name || ''})`
+      findings.push(internal ? {
+        severity: 'low',
+        title: `${what}을 사내망에만 엽니다`,
+        detail: `${cidr} → ${r.protocol}:${port} · 사내 VPC 대역`,
+        why: '우리 VPC 안에서만 닿는 대역입니다. 다만 내부가 한 번 뚫리면 옆으로 번지는 경로가 되니, 필요한 대역만 남기세요.',
+      } : {
         severity: 'medium',
-        title: `포트 ${port}(${info?.name || ''}) 인바운드는 관리자 확인이 필요합니다`,
-        detail: `${cidr} → ${r.protocol}:${port}`,
-        why: info?.why || '민감 포트는 허용 대역이 좁아도 관리자가 직접 확인합니다.',
+        title: `${what}을 사내망 밖에 엽니다`,
+        detail: `${cidr} → ${r.protocol}:${port} · 등록된 사내 대역이 아님`,
+        why: `${cidr}는 우리가 만든 VPC 대역 밖입니다. 실제로 통제되는 대역이 맞는지 확인하고, 사무실 고정 IP처럼 계속 쓸 곳이면 사내 대역 목록에 등록하세요.`,
+      })
+    }
+  }
+
+  if (rules.length > REQUEST_POLICY.MAX_RULES) {
+    findings.push({
+      severity: 'high',
+      title: `규칙이 ${rules.length}개입니다`,
+      detail: `한 번에 ${REQUEST_POLICY.MAX_RULES}개까지 신청할 수 있습니다`,
+      why: '규칙이 많으면 검토가 어렵고 실수가 섞이기 쉽습니다. 나눠서 신청하세요.',
+    })
+  }
+
+  return findings
+}
+
+// 네트워크 ACL 규칙 점검.
+//
+// SG와 두 가지가 다르다:
+//   1) deny 규칙이 있다. 막는 규칙은 넓을수록 좋으므로 CIDR·포트 검사를 적용하지 않는다.
+//   2) 스테이트리스다. 나간 요청의 응답이 자동으로 돌아오지 않아 임시 포트(1024-65535)
+//      인바운드를 열어야 하는데, 그 범위 안에 민감 포트가 여럿 들어 있다
+//      (3389 RDP, 3306 MySQL, 5432 PostgreSQL, 1433 MSSQL, 6379 Redis, 27017 MongoDB).
+//      NACL은 규칙 번호가 낮은 것부터 먼저 맞는 하나만 적용하므로, 더 낮은 번호에
+//      거부 규칙이 있으면 그 포트는 열리지 않는다. 그 유무를 같이 보고 판정한다.
+export function checkNaclRules(rules = []) {
+  const findings = []
+
+  // 이 규칙보다 앞 번호에서 해당 포트를 막고 있는지.
+  // 기존 NACL에 이미 있을 수도 있으므로, 없다고 곧바로 '위험'으로 보지는 않는다.
+  const deniedBefore = (r, port) => rules.some((d) =>
+    d.action === 'deny' && d.direction === r.direction && Number(d.rule_no) < Number(r.rule_no)
+    && (d.protocol === '-1' || ((d.from_port ?? 0) <= port && (d.to_port ?? 65535) >= port)))
+
+  for (const r of rules) {
+    if (r.action === 'deny') continue      // 막는 규칙은 넓어도 문제가 아니다
+    if (r.direction === 'egress') continue // 나가는 쪽은 SG와 마찬가지로 검사하지 않는다
+
+    const cidr = String(r.cidr || '')
+    const isPublic = cidr === '0.0.0.0/0' || cidr === '::/0'
+    const from = r.from_port ?? 0
+    const to = r.to_port ?? from
+    const allPorts = r.protocol === '-1' || (from <= 0 && to >= 65535)
+    const label = `#${r.rule_no} 인바운드`
+
+    if (isPublic && allPorts) {
+      findings.push({
+        severity: 'high',
+        title: `${label}: 모든 포트를 인터넷에 허용합니다`,
+        detail: `${cidr} → 전체 포트`,
+        why: '기본 NACL이 이 상태라 점검에 걸립니다. 필요한 포트만 남기세요.',
+      })
+      continue
+    }
+
+    if (!isPublic) {
+      // 등록된 사내 대역은 폭을 문제 삼지 않는다.
+      //
+      // NACL에서 "VPC 전체(/16)를 허용"은 예외가 아니라 기본 구성이다. 스테이트리스라
+      // 내부 통신도 명시적으로 열어야 하고, 그 대상은 VPC CIDR 자체다.
+      // /24 규칙은 '너무 넓은 외부 대역'을 막으려는 것이라 여기에 적용하면 우리가 쓰는
+      // 구성이 그대로 반려된다. (보안 그룹은 대상이 인스턴스 단위라 그대로 둔다)
+      if (!isInternalCidr(cidr)) {
+        const prefix = parseInt(cidr.split('/')[1])
+        if (!isNaN(prefix) && prefix < REQUEST_POLICY.MIN_CIDR_PREFIX) {
+          findings.push({
+            severity: 'high',
+            title: `${label}: CIDR ${cidr} 범위가 너무 넓습니다`,
+            detail: `현재 /${prefix} — /${REQUEST_POLICY.MIN_CIDR_PREFIX} 이상만 허용됩니다`,
+            why: `/${prefix}는 IP ${Math.pow(2, 32 - prefix).toLocaleString()}개를 포함합니다.`,
+          })
+        }
+      }
+      continue // 특정 대역이면 민감 포트까지는 보지 않는다 (SG와 같은 기준)
+    }
+
+    // 0.0.0.0/0 허용 + 포트가 지정된 경우
+    const hit = REQUEST_POLICY.SENSITIVE_PORTS.filter((p) => p >= from && p <= to).sort((a, b) => a - b)
+    if (hit.length === 0) continue
+
+    const portLabel = (p) => `${p}(${DANGEROUS_PORTS[p]?.name || ''})`
+
+    // 임시 포트 범위는 스테이트리스 NACL에 반드시 필요해서 열 수밖에 없다.
+    // 그 안에 민감 포트가 딸려 들어오는 건 의도가 아니라 부수 효과이므로,
+    // 포트마다 따로 지적하지 않고 한 줄로 묶는다. 여섯 줄이 쌓이면 읽지 않게 된다.
+    const ephemeral = from >= 1024 && to >= 65535
+    if (ephemeral) {
+      const exposed = hit.filter((p) => !deniedBefore(r, p))
+      const blocked = hit.filter((p) => deniedBefore(r, p))
+      findings.push(exposed.length === 0 ? {
+        severity: 'low',
+        title: `${label}: 임시 포트를 열지만 민감 포트는 앞에서 모두 거부됩니다`,
+        detail: `${from}-${to} · 앞 번호에서 거부: ${blocked.map(portLabel).join(', ')}`,
+        why: 'NACL은 번호가 낮은 규칙부터 먼저 맞는 하나만 적용합니다. 의도한 구성입니다.',
+      } : {
+        severity: 'medium',
+        title: `${label}: 임시 포트 범위에 민감 포트 ${exposed.length}개가 들어 있습니다`,
+        detail: `${from}-${to}에 포함: ${exposed.map(portLabel).join(', ')}`
+          + (blocked.length > 0 ? ` · 앞 번호에서 이미 거부: ${blocked.map(portLabel).join(', ')}` : ''),
+        why: '나간 요청의 응답을 받으려면 임시 포트를 열어야 하지만, 그 범위에 위 포트가 함께 들어갑니다. '
+          + '더 낮은 번호에 거부 규칙을 함께 신청하면 그 포트만 막을 수 있습니다.',
+      })
+      continue
+    }
+
+    // 범위를 콕 집어 연 경우는 부수 효과가 아니라 의도다. 포트별로 짚는다.
+    for (const port of hit) {
+      if (deniedBefore(r, port)) continue   // 앞 번호에서 막히므로 실제로 열리지 않는다
+      const info = DANGEROUS_PORTS[port]
+      findings.push({
+        severity: 'high',
+        title: `${label}: 포트 ${portLabel(port)}이 인터넷에 열립니다`,
+        detail: `${cidr} → ${r.protocol}:${from === to ? from : `${from}-${to}`}`,
+        why: info?.why || '민감 포트는 인터넷 전체에 열지 않습니다.',
       })
     }
   }
@@ -414,6 +584,10 @@ export function requestVerdict(findings) {
 export function checkRequest(action, payload = {}) {
   if (action === 'create_sg' || action === 'add_rules') {
     const findings = checkSgRules(payload.rules || [])
+    return { findings, verdict: requestVerdict(findings) }
+  }
+  if (action === 'add_nacl_rules') {
+    const findings = checkNaclRules(payload.rules || [])
     return { findings, verdict: requestVerdict(findings) }
   }
   return null

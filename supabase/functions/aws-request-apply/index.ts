@@ -8,6 +8,8 @@ import {
   RevokeSecurityGroupEgressCommand,
   CreateSecurityGroupCommand,
   CreateTagsCommand,
+  CreateNetworkAclEntryCommand,
+  DeleteNetworkAclEntryCommand,
 } from 'npm:@aws-sdk/client-ec2@3'
 import {
   WAFV2Client,
@@ -82,6 +84,116 @@ function validateSgRules(rules) {
     errors.push(`규칙 수가 ${MAX_RULES_PER_SG}개를 초과합니다`)
   }
   return errors
+}
+
+// ---- 네트워크 ACL 가드레일 ----
+//
+// SG와 판정이 다른 부분만 둔다 (같은 규칙은 src/lib/rules.js의 checkNaclRules와 짝을 이룬다):
+//   · deny 규칙은 막는 쪽이라 검사하지 않는다. 넓을수록 좋다.
+//   · 임시 포트(1024-65535) 허용은 스테이트리스 NACL에 반드시 필요해 막지 않는다.
+//     대신 그 범위에 딸려 들어오는 3389는 신청 화면이 '주의'로 관리자에게 넘긴다.
+function validateNaclRules(rules) {
+  const errors = []
+  for (const r of (rules || [])) {
+    if (r.action === 'deny') continue
+    if (r.direction !== 'ingress') continue
+
+    const from = r.from_port ?? 0
+    const to = r.to_port ?? from
+    const isPublic = r.cidr === '0.0.0.0/0' || r.cidr === '::/0'
+    const allPorts = r.protocol === '-1' || (from <= 0 && to >= 65535)
+
+    if (isPublic && allPorts) {
+      errors.push(`#${r.rule_no}: 모든 포트를 인터넷에 허용할 수 없습니다`)
+      continue
+    }
+    if (isPublic) continue // 포트가 지정된 전체 개방은 신청 화면 판정에 맡긴다
+
+    const prefix = parseInt((r.cidr || '').split('/')[1])
+    if (!isNaN(prefix) && prefix < MIN_CIDR_PREFIX) {
+      errors.push(`#${r.rule_no}: CIDR ${r.cidr}은 /${MIN_CIDR_PREFIX} 이상만 허용됩니다`)
+    }
+  }
+  if ((rules || []).length > MAX_RULES_PER_SG) {
+    errors.push(`규칙 수가 ${MAX_RULES_PER_SG}개를 초과합니다`)
+  }
+  return errors
+}
+
+// AWS는 프로토콜을 번호로 받는다. '-1'은 전체.
+const NACL_PROTO_NUM = { tcp: '6', udp: '17', icmp: '1', '-1': '-1' }
+
+const toNaclEntry = (naclId, r) => ({
+  NetworkAclId: naclId,
+  RuleNumber: Number(r.rule_no),
+  Egress: r.direction === 'egress',
+  RuleAction: r.action === 'deny' ? 'deny' : 'allow',
+  Protocol: NACL_PROTO_NUM[r.protocol] ?? String(r.protocol),
+  CidrBlock: r.cidr,
+  // 프로토콜이 전체(-1)면 포트 개념이 없다. PortRange를 함께 보내면 AWS가 거부한다.
+  PortRange: r.protocol === '-1' || r.from_port == null
+    ? undefined
+    : { From: Number(r.from_port), To: Number(r.to_port ?? r.from_port) },
+})
+
+async function handleNaclRules(ec2, req) {
+  const p = req.payload || {}
+  const naclId = p.nacl_id
+  if (!naclId) throw new Error('nacl_id가 없습니다')
+
+  const errors = validateNaclRules(p.rules)
+  if (errors.length > 0) throw new Error('가드레일 위반: ' + errors.join('; '))
+
+  const rules = p.rules || []
+  if (rules.length === 0) throw new Error('추가할 규칙이 없습니다')
+
+  const added = []
+  for (const r of rules) {
+    try {
+      await ec2.send(new CreateNetworkAclEntryCommand(toNaclEntry(naclId, r)))
+      added.push(r.rule_no)
+    } catch (e) {
+      // 같은 번호가 이미 있으면 AWS가 거부한다. 무엇을 고쳐야 하는지 알려준다 —
+      // 규칙 번호는 방향별로 하나씩이라 덮어쓰려면 Replace를 써야 하는데,
+      // 있는 규칙을 말없이 바꾸면 승인한 내용과 실제가 달라진다.
+      if (String(e).includes('NetworkAclEntryAlreadyExists')) {
+        throw new Error(`#${r.rule_no}(${r.direction}) 번호가 이미 사용 중입니다. 다른 번호로 신청하거나 기존 규칙을 먼저 삭제하세요.`)
+      }
+      throw e
+    }
+  }
+  return { nacl_id: naclId, added_rule_numbers: added }
+}
+
+async function handleDeleteNaclRules(ec2, req) {
+  const p = req.payload || {}
+  const naclId = p.nacl_id
+  if (!naclId) throw new Error('nacl_id가 없습니다')
+  const rules = p.rules || []
+  if (rules.length === 0) throw new Error('삭제할 규칙이 없습니다')
+
+  // 기본 NACL의 마지막 거부 규칙(32767)은 지울 수 없고, 지워서도 안 된다.
+  for (const r of rules) {
+    if (Number(r.rule_no) === 32767) throw new Error('32767번은 AWS가 관리하는 기본 거부 규칙이라 삭제할 수 없습니다')
+  }
+
+  const deleted = []
+  const missing = []
+  for (const r of rules) {
+    try {
+      await ec2.send(new DeleteNetworkAclEntryCommand({
+        NetworkAclId: naclId,
+        RuleNumber: Number(r.rule_no),
+        Egress: r.direction === 'egress',
+      }))
+      deleted.push(r.rule_no)
+    } catch (e) {
+      // 이미 없는 규칙이면 목적(그 규칙이 없는 상태)은 달성돼 있다. 실패로 보지 않는다.
+      if (String(e).includes('InvalidNetworkAclEntry.NotFound')) { missing.push(r.rule_no); continue }
+      throw e
+    }
+  }
+  return { nacl_id: naclId, deleted_rule_numbers: deleted, already_absent: missing }
 }
 
 // ---- Security Group ----
@@ -340,7 +452,7 @@ async function handleEnvAccess(iam, req) {
 // 삭제는 되돌릴 수 없어 최고 관리자만 실행할 수 있다(아래 serve에서 검사).
 // 신청 시점에 원본 신청의 payload를 그대로 복사해두므로, 무엇을 지울지가 정확히 특정된다.
 
-const DELETE_ACTIONS = ['delete_iam_user', 'delete_sg_rules', 'delete_waf_rules']
+const DELETE_ACTIONS = ['delete_iam_user', 'delete_sg_rules', 'delete_waf_rules', 'delete_nacl_rules']
 
 async function handleDeleteIamUser(iam, req) {
   const p = req.payload || {}
@@ -538,6 +650,10 @@ serve(async (req) => {
         result = await handleDeleteSgRules(new EC2Client({ region, credentials }), claimed)
       } else if (claimed.action === 'delete_waf_rules') {
         result = await handleDeleteWafRules(claimed, credentials, region)
+      } else if (claimed.action === 'delete_nacl_rules') {
+        result = await handleDeleteNaclRules(new EC2Client({ region, credentials }), claimed)
+      } else if (claimed.action === 'add_nacl_rules') {
+        result = await handleNaclRules(new EC2Client({ region, credentials }), claimed)
       } else if (ENV_ACCESS_ACTIONS.includes(claimed.action)) {
         result = await handleEnvAccess(new IAMClient({ region, credentials }), claimed)
       } else if (claimed.resource_type === 'security_group') {

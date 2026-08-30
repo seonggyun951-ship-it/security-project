@@ -58,6 +58,13 @@ export function summarizePayload(action, payload) {
   if (action === 'delete_waf_rules') {
     return `대상 ACL: ${p.web_acl_name || ''}, 규칙 제거: ${(p.rule_names || []).join(', ')}`
   }
+  // NACL — 규칙 번호가 곧 적용 순서라 번호를 함께 적는다
+  if (action === 'add_nacl_rules' || action === 'delete_nacl_rules') {
+    const verb = action === 'add_nacl_rules' ? '추가' : '제거'
+    const rules = (p.rules || []).map((r) =>
+      `#${r.rule_no} ${r.direction === 'ingress' ? '인' : '아웃'} ${r.action === 'deny' ? '거부' : '허용'} ${r.cidr || ''}`)
+    return `대상 NACL: ${p.nacl_name || p.nacl_id || ''}, ${rules.join(', ')} ${verb}`
+  }
   // VPC
   if (action === 'create_vpc') return `CIDR: ${p.cidr_block || ''}`
   // Subnet

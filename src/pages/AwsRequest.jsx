@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { notify, summarizePayload } from '../lib/discord'
 import { requireUser, currentUserId } from '../lib/auth'
@@ -13,17 +14,20 @@ import { SgForm, WafForm, IamUserForm } from './forms/AwsForms'
 import { EnvAccessForm } from './forms/EnvAccessForm'
 import CheckResultModal from '../components/CheckResultModal'
 import { SgDeleteForm, WafDeleteForm, IamDeleteForm } from './forms/DeleteForms'
+import { NaclForm, NaclDeleteForm } from './forms/NaclForms'
 
 // 리소스 타입별 신청 페이지 — 라우트에서 resourceType을 넘겨 재사용
 const PAGE_META = {
   security_group: { title: 'Security Group 신청', sub: '신규 SG 생성 또는 기존 SG에 인바운드/아웃바운드 규칙 추가를 신청합니다.' },
   waf_web_acl:    { title: 'WAF 신청', sub: '신규 Web ACL 생성 또는 기존 Web ACL에 차단 규칙 추가를 신청합니다.' },
   iam_user:       { title: 'IAM 계정 · 권한 신청', sub: '읽기 전용 계정 발급과, dev/qa/prod/db 환경 접근 권한의 부여·회수를 신청합니다.' },
+  network_acl:    { title: '네트워크 ACL 신청', sub: '서브넷 앞단에서 트래픽을 걸러내는 NACL 규칙의 추가·삭제를 신청합니다.' },
 }
 
 export default function AwsRequest({ resourceType = 'security_group' }) {
   const [sgOptions, setSgOptions] = useState([])
   const [aclOptions, setAclOptions] = useState([])
+  const [naclOptions, setNaclOptions] = useState([])
   const [userOptions, setUserOptions] = useState([]) // 환경 권한 신청의 대상 IAM 사용자
   const [myRequests, setMyRequests] = useState([])
   const [loading, setLoading] = useState(true)
@@ -33,7 +37,12 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
   const [detailReq, setDetailReq] = useState(null)
   const [listError, setListError] = useState(null)
   const [optionsError, setOptionsError] = useState(null)
-  const [mode, setMode] = useState('create') // 'create' | 'env' | 'delete'
+  // 점검 결과 화면에서 '조치 신청'으로 넘어오면 무엇을 고칠지가 함께 온다.
+  // 그 값으로 탭을 맞추고 폼을 채워, 신청자가 같은 내용을 다시 입력하지 않게 한다.
+  const location = useLocation()
+  const prefill = location.state?.prefill || null
+
+  const [mode, setMode] = useState(prefill?.mode || 'create') // 'create' | 'env' | 'delete'
   const [checkModal, setCheckModal] = useState(null) // 접수 전 점검 결과 창
   const [cancelingId, setCancelingId] = useState(null)
 
@@ -69,6 +78,7 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
     setSgOptions(dedupeByResource(rows.filter((s) => s.resource_type === 'security_group')))
     setAclOptions(dedupeByResource(rows.filter((s) => s.resource_type === 'waf_web_acl')))
     setUserOptions(dedupeByResource(rows.filter((s) => s.resource_type === 'iam_user')))
+    setNaclOptions(dedupeByResource(rows.filter((s) => s.resource_type === 'network_acl')))
     setOptionsError(error)
   }
 
@@ -236,12 +246,14 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
               {resourceType === 'security_group' && <SgForm sgOptions={sgOptions} onSubmit={submitRequest} submitting={submitting} />}
               {resourceType === 'waf_web_acl' && <WafForm aclOptions={aclOptions} onSubmit={submitRequest} submitting={submitting} />}
               {resourceType === 'iam_user' && <IamUserForm onSubmit={submitRequest} submitting={submitting} />}
+              {resourceType === 'network_acl' && <NaclForm naclOptions={naclOptions} prefill={prefill} onSubmit={submitRequest} submitting={submitting} />}
             </>
           ) : (
             <>
-              {resourceType === 'security_group' && <SgDeleteForm onSubmit={submitRequest} submitting={submitting} />}
+              {resourceType === 'security_group' && <SgDeleteForm prefill={prefill} onSubmit={submitRequest} submitting={submitting} />}
               {resourceType === 'waf_web_acl' && <WafDeleteForm onSubmit={submitRequest} submitting={submitting} />}
               {resourceType === 'iam_user' && <IamDeleteForm onSubmit={submitRequest} submitting={submitting} />}
+              {resourceType === 'network_acl' && <NaclDeleteForm naclOptions={naclOptions} onSubmit={submitRequest} submitting={submitting} />}
             </>
           )}
         </div>
