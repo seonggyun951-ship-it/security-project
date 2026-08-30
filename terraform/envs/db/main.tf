@@ -29,11 +29,11 @@ module "vpc" {
 
   name        = "vpc-db"
   environment = "db"
-  cidr        = "10.4.0.0/16"
+  cidr        = "192.168.0.0/16"
 
   private_subnets = {
-    "ap-northeast-2a" = "10.4.1.0/24"
-    "ap-northeast-2c" = "10.4.2.0/24"
+    "ap-northeast-2a" = "192.168.1.0/24"
+    "ap-northeast-2c" = "192.168.2.0/24"
   }
 }
 

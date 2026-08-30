@@ -26,3 +26,12 @@ variable "private_subnets" {
   type        = map(string)
   default     = {}
 }
+
+# 기본 NACL에서 SSH(22)를 열어줄 출발지. 비워 두면 22가 아예 안 열린다.
+# 0.0.0.0/0을 넣으면 점검(ec2_networkacl_allow_ingress_tcp_port_22)에 걸리므로
+# 접속할 곳의 주소를 /32로 적는다.
+variable "admin_cidr" {
+  description = "SSH를 허용할 관리자 CIDR (예: 1.2.3.4/32). null이면 열지 않음"
+  type        = string
+  default     = null
+}

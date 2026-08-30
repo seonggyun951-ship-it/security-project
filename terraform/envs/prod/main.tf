@@ -23,16 +23,16 @@ module "vpc" {
 
   name        = "vpc-prod"
   environment = "prod"
-  cidr        = "10.3.0.0/16"
+  cidr        = "172.16.0.0/16"
 
   public_subnets = {
-    "ap-northeast-2a" = "10.3.1.0/24"
-    "ap-northeast-2c" = "10.3.2.0/24"
+    "ap-northeast-2a" = "172.16.1.0/24"
+    "ap-northeast-2c" = "172.16.2.0/24"
   }
 
   private_subnets = {
-    "ap-northeast-2a" = "10.3.11.0/24"
-    "ap-northeast-2c" = "10.3.12.0/24"
+    "ap-northeast-2a" = "172.16.11.0/24"
+    "ap-northeast-2c" = "172.16.12.0/24"
   }
 }
 

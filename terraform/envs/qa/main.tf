@@ -22,11 +22,11 @@ module "vpc" {
 
   name        = "vpc-qa"
   environment = "qa"
-  cidr        = "10.2.0.0/16"
+  cidr        = "10.20.0.0/16"
 
   public_subnets = {
-    "ap-northeast-2a" = "10.2.1.0/24"
-    "ap-northeast-2c" = "10.2.2.0/24"
+    "ap-northeast-2a" = "10.20.1.0/24"
+    "ap-northeast-2c" = "10.20.2.0/24"
   }
 }
 
