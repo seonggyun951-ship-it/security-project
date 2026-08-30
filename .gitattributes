@@ -1,0 +1,8 @@
+# 배치 파일은 cmd.exe가 읽는다. cmd는 UTF-8도 BOM도 이해하지 못하고
+# 시스템 코드페이지(한국어 Windows는 CP949)로 해석하며, 줄바꿈도 CRLF여야 한다.
+# LF로 두면 줄 구분을 못 해 주석(rem)까지 명령으로 실행하려 든다.
+#
+# 저장소에는 UTF-8로 담고, 내려받을 때 CP949로 풀어 준다.
+# 이렇게 해야 GitHub에서 한글 주석이 깨지지 않으면서 실행도 된다.
+*.cmd text eol=crlf working-tree-encoding=CP949
+*.bat text eol=crlf working-tree-encoding=CP949

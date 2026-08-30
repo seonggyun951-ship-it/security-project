@@ -40,3 +40,6 @@ scripts/rag/.cache-*
 *.njsproj
 *.sln
 *.sw?
+
+# 작업 스케줄러 등록 파일 (사용자 계정·절대 경로가 들어간다)
+terraform/agent-task.xml
