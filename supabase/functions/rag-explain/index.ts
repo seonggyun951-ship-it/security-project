@@ -95,7 +95,10 @@ serve(async (req) => {
     // verdict  : 'reject' | 'warn' | 'pass' (있으면 문장에 반영한다)
     const {
       summary, findings = [], verdict = null, question = null, model = CHAT_MODEL,
-      // 화면이 짚어 준 인증기준 번호(['2.6.6'] 등). 있으면 검색보다 이쪽을 믿는다.
+      // 화면이 짚어 준 근거. { ismsp: ['2.6.6'], mitre: ['T1021.004'], owasp: [...] }
+      // 있으면 그 출처는 검색하지 않고 이쪽을 그대로 쓴다.
+      pinned_refs = null,
+      // 예전 이름. 인증기준만 넘기던 시절의 호출을 위해 남겨 둔다.
       ismsp_refs = null,
     } = await req.json()
     if (!summary && !question) {
@@ -124,33 +127,47 @@ serve(async (req) => {
     }
     const embedding = JSON.stringify((await embedRes.json()).data[0].embedding)
 
-    // 어긋난 인증기준을 화면이 지정해 보낸 경우, 그 항목은 검색하지 않고 그대로 가져온다.
+    // 화면이 근거를 지정해 보낸 경우, 그 출처는 검색하지 않고 그대로 가져온다.
     //
-    // 체크와 인증기준의 대응은 src/lib/scan.js의 ISMSP_MAP에 손으로 맞춰 두었다.
-    // 유사도로 더듬으면 관련 있는 것과 없는 것이 같은 점수대(0.29~0.36)에 섞여 나오는데,
-    // 규제 항목은 틀리면 근거 자체가 무너진다. 아는 답이 있으면 찾지 않는다.
+    // 체크와 근거의 대응은 src/lib/scan.js의 ISMSP_MAP·ATTACK_MAP·OWASP_MAP에
+    // 손으로 맞춰 두었다. 유사도로 더듬으면 관련 있는 것과 없는 것이 같은
+    // 점수대(0.29~0.36)에 섞여 나온다. 특히 MITRE는 '공격자가 하는 행위'를 적은 것이라
+    // 어휘가 겹쳐도 방향이 반대인 기법이 잘 걸린다(방화벽이 열림 → '방화벽을 끄는' 기법).
+    // 아는 답이 있으면 찾지 않는다.
     //
     // 표를 여기에 복사해 두지 않는 이유: 두 벌이 되면 한쪽만 고쳐져 화면과 설명이 갈라진다.
-    const pinned = Array.isArray(ismsp_refs) ? ismsp_refs.filter((v) => typeof v === 'string') : []
-    let pinnedDocs: Array<Record<string, unknown>> = []
-    if (pinned.length > 0) {
+    const pins: Record<string, string[]> = {}
+    if (pinned_refs && typeof pinned_refs === 'object') {
+      for (const [src, refs] of Object.entries(pinned_refs)) {
+        if (Array.isArray(refs)) pins[src] = refs.filter((v) => typeof v === 'string')
+      }
+    } else if (Array.isArray(ismsp_refs)) {
+      pins.ismsp = ismsp_refs.filter((v: unknown) => typeof v === 'string')
+    }
+
+    // ISMS-P는 항목 번호로, 나머지는 ref로 찾는다. 저장할 때 ref를 '2.6.1 네트워크 접근'
+    // 형태로 만들어 두어서 번호만으로는 안 맞기 때문이다.
+    const pinnedBySource: Record<string, Array<Record<string, unknown>>> = {}
+    await Promise.all(Object.entries(pins).map(async ([src, refs]) => {
+      // 빈 배열은 '아직 안 정함'이 아니라 '살펴봤고 대응이 없다'는 뜻이다.
+      // 그때 검색으로 되돌리면 표에서 일부러 뺀 근거가 도로 딸려 들어온다
+      // (SSH 개방에 OWASP를 비워 뒀는데 'A05 Description'이 실려 오던 문제).
+      pinnedBySource[src] = []
+      if (!refs?.length) return
       // source까지 가져와야 한다. 응답의 출처 목록이 이 값을 그대로 쓴다.
       // 검색 결과와 달리 similarity가 없는데, 유사도로 고른 게 아니라 표가 지정한 것이라
       // 점수라는 개념 자체가 없다. 화면에서는 빈 값으로 나간다.
-      const { data, error } = await client
-        .from('knowledge')
-        .select('source, ref, content, meta')
-        .eq('source', 'ismsp')
-        .in('meta->>no', pinned)
+      const q = client.from('knowledge').select('source, ref, content, meta').eq('source', src)
+      const { data, error } = await (src === 'ismsp'
+        ? q.in('meta->>no', refs)
+        : q.in('ref', refs))
       if (error) throw error
-      pinnedDocs = data ?? []
-    }
+      pinnedBySource[src] = data ?? []
+    }))
 
     const groups = await Promise.all(RETRIEVE.map(async (r) => {
-      // 지정받은 인증기준이 있으면 ISMS-P는 검색을 건너뛴다.
-      if (r.source === 'ismsp' && pinnedDocs.length > 0) {
-        return { ...r, docs: pinnedDocs }
-      }
+      // 표가 그 출처를 다뤘으면 검색하지 않는다. 빈 배열도 표의 결론이므로 그대로 따른다.
+      if (r.source in pinnedBySource) return { ...r, docs: pinnedBySource[r.source] }
       const { data, error } = await client.rpc('match_knowledge', {
         query_embedding: embedding,
         match_count: r.count,

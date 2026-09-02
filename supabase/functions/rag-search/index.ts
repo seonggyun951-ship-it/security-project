@@ -43,6 +43,7 @@ serve(async (req) => {
     const {
       query, limit = 5, sources = null, min_similarity = 0,
       probe_model = null, probe_dimensions = null, probe_list = false, probe_chat = null,
+      probe_rerank = null,
     } = await req.json()
 
     // 모델 점검용 경로. 모델 이름과 차원을 받아 임베딩만 한 번 해보고 결과를 돌려준다.
@@ -58,6 +59,35 @@ serve(async (req) => {
       if (!r.ok) return json({ ok: false, status: r.status, error: text.slice(0, 300) })
       const ids = (JSON.parse(text).data || []).map((m) => m.id).sort()
       return json({ ok: true, count: ids.length, models: ids })
+    }
+
+    // 리랭킹 점검.
+    //
+    // 임베딩은 질의와 문서를 따로 벡터로 만들어 거리를 잰다. 그래서 층위가 다르면
+    // 뜻이 통해도 점수가 안 나온다 — MITRE·OWASP가 그렇다. 리랭커는 질의와 문서를
+    // 한 쌍으로 함께 넣어 채점하므로 그 한계를 넘는다.
+    //
+    // 모델 목록(/v1/models)에는 안 잡힌다. 리랭커는 /v1/ranking이라는 다른 문을 쓴다.
+    // 문서에 적혀 있어도 죽은 모델이 있으니 실제로 불러 봐야 안다.
+    if (probe_rerank) {
+      // 리랭커는 integrate.api가 아니라 ai.api 쪽 모델별 경로에 있다.
+      // 어느 형태가 맞는지는 불러 봐야 알아서 URL을 받게 해 뒀다.
+      const url = probe_rerank.url ||
+        'https://ai.api.nvidia.com/v1/retrieval/nvidia/reranking'
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: probe_rerank.model,
+          query: { text: probe_rerank.query || 'SSH 22번 포트를 인터넷 전체에 여는 것의 위험' },
+          passages: (probe_rerank.passages || [
+            'MITRE ATT&CK T1021.004 Remote Services: SSH — 공격자가 유효한 계정으로 SSH에 접속해 측면 이동한다',
+            'OWASP A10:2021 서버 측 요청 위조(SSRF) — 서버가 공격자가 지정한 주소로 요청을 보낸다',
+          ]).map((t) => ({ text: t })),
+        }),
+      })
+      const text = await r.text()
+      return json({ ok: r.ok, status: r.status, model: probe_rerank.model, body: text.slice(0, 800) })
     }
 
     // 생성 모델 점검. 응답 구조를 그대로 돌려준다 — 추론형 모델은 본문이 비고

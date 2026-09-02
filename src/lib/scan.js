@@ -225,6 +225,196 @@ export const ISMSP_MAP = {
   vpc_different_regions: [],           // 요구한다. AZ·리전 분산은 그 계획의 구현 수단일 뿐
 }
 
+// 이 설정이 공격자에게 어떻게 쓰이는지 — MITRE ATT&CK 기법과 OWASP 항목.
+//
+// ISMS-P가 "무엇을 갖춰야 하는가"라면 이쪽은 "안 갖추면 무엇을 당하는가"다.
+// 승인자에게는 후자가 더 와닿는다. 22번을 열어 달라는 신청에 "T1021.004 — 공격자가
+// 유효한 계정으로 SSH에 붙어 측면 이동한다"가 붙으면 위험이 구체적으로 읽힌다.
+//
+// **여기도 유사도로 붙이지 않는다.** 검색은 후보를 모아 주는 데까지만 썼다.
+// MITRE는 '공격자가 하는 행위'를 적은 것이라 '우리 설정 상태'와 방향이 어긋나는데,
+// 어휘가 겹쳐서 검색이 자꾸 엉뚱한 걸 1위로 올린다:
+//   방화벽이 열려 있음  → T1686.001 'Disable or Modify System Firewall'
+//   그 기법은 공격자가 방화벽을 *끄는* 행위다. 우리가 열어 둔 것과 다르다.
+//
+// 리랭커도 안 됐다. 텍스트 리랭커는 전부 종료됐고(2026-05-18, 08-25) 남은 VL 모델로
+// 재보니 임베딩보다 나빴다(0승 4패 3무).
+//
+// 붙이는 기준:
+//   1. 그 기법이 **이 설정 때문에 가능해지는가**. 결과가 비슷한 정도로는 안 붙인다.
+//   2. 하나만. ISMS-P와 같은 이유다.
+//   3. 대응이 없으면 빈 배열. MITRE에는 '저장 데이터를 암호화하라' 같은 통제 항목이
+//      아예 없다 — 공격 기법 목록이지 보안 기준이 아니다. 암호화·백업 계열이 다 비는 게 정상이다.
+export const ATTACK_MAP = {
+  // 열린 포트로 공격자가 실제로 하는 일.
+  ec2_networkacl_allow_ingress_tcp_port_22: ['T1021.004'],
+  ec2_securitygroup_allow_ingress_from_internet_to_tcp_port_22: ['T1021.004'],
+  ec2_networkacl_allow_ingress_tcp_port_3389: ['T1021.001'],
+  ec2_securitygroup_allow_ingress_from_internet_to_tcp_port_3389: ['T1021.001'],
+
+  // 전체 개방과 퍼블릭 IP는 특정 포트가 아니라 '노출된 서비스를 친다'는 쪽이다.
+  ec2_networkacl_allow_ingress_any_port: ['T1190'],
+  ec2_securitygroup_allow_ingress_from_internet_to_any_port: ['T1190'],
+  ec2_instance_public_ip: ['T1190'],
+
+  // 메타데이터 서비스에서 인스턴스 자격증명을 긁어가는 기법. 이 체크와 정확히 같은 얘기다.
+  ec2_instance_imdsv2_enabled: ['T1552.005'],
+
+  // 공개된 버킷에서 데이터를 가져간다.
+  s3_bucket_public_access: ['T1530'],
+  s3_account_level_public_access_blocks: ['T1530'],
+
+  // 약한 비밀번호 정책은 무차별 대입을 성립시킨다.
+  iam_password_policy_minimum_length_14: ['T1110'],
+  iam_password_policy_uppercase: ['T1110'],
+  iam_password_policy_lowercase: ['T1110'],
+  iam_password_policy_number: ['T1110'],
+  iam_password_policy_symbol: ['T1110'],
+  iam_password_policy_reuse_24: ['T1110'],
+  iam_password_policy_expires_passwords_within_90_days_or_less: ['T1110'],
+
+  // MFA가 없으면 훔친 자격증명 하나로 그대로 들어온다.
+  iam_root_mfa_enabled: ['T1078.004'],
+  iam_root_hardware_mfa_enabled: ['T1078.004'],
+  iam_user_mfa_enabled_console_access: ['T1078.004'],
+  iam_user_hardware_mfa_enabled: ['T1078.004'],
+  // 오래되거나 안 쓰는 키도 같은 통로다 — 유출돼도 아무도 모른다.
+  iam_rotate_access_key_90_days: ['T1078.004'],
+  iam_user_accesskey_unused: ['T1078.004'],
+  iam_no_root_access_key: ['T1078.004'],
+  iam_avoid_root_usage: ['T1078.004'],
+
+  // 권한 상승을 허용하는 정책.
+  iam_policy_allows_privilege_escalation: ['T1548'],
+  iam_inline_policy_allows_privilege_escalation: ['T1548'],
+  iam_user_administrator_access_policy: ['T1548'],
+  iam_aws_attached_policy_no_administrative_privileges: ['T1548'],
+
+  // 기록이 없으면 공격자가 지울 것도 없다. T1685.002는 공격자가 클라우드 로그를 끄는
+  // 기법인데, 애초에 안 켜져 있으면 그 수고 없이 같은 상태가 된다.
+  cloudtrail_multi_region_enabled: ['T1685.002'],
+  cloudtrail_multi_region_enabled_logging_management_events: ['T1685.002'],
+  cloudtrail_log_file_validation_enabled: ['T1685.002'],
+  cloudtrail_logs_s3_bucket_access_logging_enabled: ['T1685.002'],
+  cloudtrail_bedrock_logging_enabled: ['T1685.002'],
+  cloudtrail_kms_encryption_enabled: ['T1685.002'],
+  vpc_flow_logs_enabled: ['T1685.002'],
+  s3_bucket_server_access_logging_enabled: ['T1685.002'],
+
+  // ── 대응하는 공격 기법이 없는 것들 ──
+  // MITRE는 공격 기법 목록이지 보안 기준이 아니다. '암호화하라' '백업하라' 같은
+  // 통제는 여기 없다. 그래서 아래는 비는 게 맞다.
+  ec2_ebs_volume_encryption: [],       // 검색은 T1573(통신 암호화)을 올리는데 저장 암호화와 다르다
+  ec2_ebs_default_encryption: [],
+  s3_bucket_default_encryption: [],
+  s3_bucket_object_versioning: [],     // T1485.001은 공격자가 지우는 기법이지 백업 부재가 아니다
+  ec2_securitygroup_not_used: [],
+  ec2_securitygroup_with_many_ingress_egress_rules: [],
+  ec2_securitygroup_default_restrict_traffic: [],
+  ec2_elastic_ip_shodan: [],
+  vpc_subnet_no_public_ip_by_default: [],
+  vpc_endpoint_connections_trust_boundaries: [],
+  vpc_different_regions: [],
+  vpc_subnet_different_az: [],
+  iam_user_no_setup_initial_access_key: [],
+  iam_user_with_temporary_credentials: [],
+  iam_policy_attached_only_to_group_or_roles: [],
+  iam_user_access_not_stale_to_bedrock: [],
+  iam_role_access_not_stale_to_bedrock: [],
+  iam_user_access_not_stale_to_sagemaker: [],
+  iam_role_cross_service_confused_deputy_prevention: [],
+  iam_check_saml_providers_sts: [],
+  iam_securityaudit_role_created: [],
+  iam_support_role_created: [],
+}
+
+// OWASP는 항목(A05)이 아니라 소제목까지 찍어 지정한다.
+//
+// 'A05:2021 보안 설정 오류'는 이름만 보면 우리 점검 거의 전부에 걸릴 것 같지만,
+// 그렇게 붙이면 모든 발견에 같은 항목이 달려 아무 정보도 주지 못한다.
+// 문서가 Description / How to Prevent / Example Attack Scenarios 등으로 쪼개져 있으니
+// **조치에 도움이 되는 조각**만 고른다 — 대체로 'How to Prevent'다.
+//
+// OWASP는 웹 애플리케이션 취약점 분류라 인프라 설정과 층위가 어긋나는 곳이 많다.
+// 억지로 채우지 않고 정말 맞는 것만 남긴다.
+export const OWASP_MAP = {
+  // 불필요한 포트·서비스를 열어 두지 말라는 것이 A05의 예방 항목에 그대로 있다.
+  ec2_networkacl_allow_ingress_any_port: ['A05:2021 How to Prevent'],
+  ec2_securitygroup_allow_ingress_from_internet_to_any_port: ['A05:2021 How to Prevent'],
+  ec2_securitygroup_default_restrict_traffic: ['A05:2021 How to Prevent'],
+
+  // 기본값·불필요한 기능을 켜둔 채 두는 것도 같은 항목이다.
+  ec2_instance_imdsv2_enabled: ['A05:2021 How to Prevent'],
+  s3_account_level_public_access_blocks: ['A05:2021 How to Prevent'],
+
+  // 접근 통제가 무너진 상태 — 공개 버킷이 대표 사례다.
+  s3_bucket_public_access: ['A01:2021 How to Prevent'],
+
+  // 권한을 필요 이상으로 주는 것.
+  iam_user_administrator_access_policy: ['A01:2021 How to Prevent'],
+  iam_policy_allows_privilege_escalation: ['A01:2021 How to Prevent'],
+  iam_inline_policy_allows_privilege_escalation: ['A01:2021 How to Prevent'],
+  iam_aws_attached_policy_no_administrative_privileges: ['A01:2021 How to Prevent'],
+
+  // 인증 실패 — 약한 비밀번호와 MFA 부재가 A07의 예방 항목에 나온다.
+  iam_password_policy_minimum_length_14: ['A07:2021 How to Prevent'],
+  iam_password_policy_uppercase: ['A07:2021 How to Prevent'],
+  iam_password_policy_lowercase: ['A07:2021 How to Prevent'],
+  iam_password_policy_number: ['A07:2021 How to Prevent'],
+  iam_password_policy_symbol: ['A07:2021 How to Prevent'],
+  iam_password_policy_reuse_24: ['A07:2021 How to Prevent'],
+  iam_password_policy_expires_passwords_within_90_days_or_less: ['A07:2021 How to Prevent'],
+  iam_root_mfa_enabled: ['A07:2021 How to Prevent'],
+  iam_root_hardware_mfa_enabled: ['A07:2021 How to Prevent'],
+  iam_user_mfa_enabled_console_access: ['A07:2021 How to Prevent'],
+  iam_user_hardware_mfa_enabled: ['A07:2021 How to Prevent'],
+
+  // 기록·감시가 없는 상태.
+  cloudtrail_multi_region_enabled: ['A09:2021 How to Prevent'],
+  cloudtrail_multi_region_enabled_logging_management_events: ['A09:2021 How to Prevent'],
+  cloudtrail_log_file_validation_enabled: ['A09:2021 How to Prevent'],
+  cloudtrail_logs_s3_bucket_access_logging_enabled: ['A09:2021 How to Prevent'],
+  vpc_flow_logs_enabled: ['A09:2021 How to Prevent'],
+  s3_bucket_server_access_logging_enabled: ['A09:2021 How to Prevent'],
+
+  // 저장 데이터 암호화는 A02(암호화 실패)의 예방 항목에 명시돼 있다.
+  ec2_ebs_volume_encryption: ['A02:2021 How to Prevent'],
+  ec2_ebs_default_encryption: ['A02:2021 How to Prevent'],
+  s3_bucket_default_encryption: ['A02:2021 How to Prevent'],
+  cloudtrail_kms_encryption_enabled: ['A02:2021 How to Prevent'],
+
+  // ── 대응 없음 ──
+  // 웹 애플리케이션 취약점 분류라 인프라 운영 항목에는 닿지 않는 것이 많다.
+  ec2_networkacl_allow_ingress_tcp_port_22: [],   // A05는 '불필요한 포트'를 말하지 특정 서비스 노출이 아니다
+  ec2_networkacl_allow_ingress_tcp_port_3389: [],
+  ec2_securitygroup_allow_ingress_from_internet_to_tcp_port_22: [],
+  ec2_securitygroup_allow_ingress_from_internet_to_tcp_port_3389: [],
+  ec2_instance_public_ip: [],
+  ec2_securitygroup_not_used: [],
+  ec2_securitygroup_with_many_ingress_egress_rules: [],
+  ec2_elastic_ip_shodan: [],
+  vpc_subnet_no_public_ip_by_default: [],
+  vpc_endpoint_connections_trust_boundaries: [],
+  vpc_different_regions: [],
+  vpc_subnet_different_az: [],
+  s3_bucket_object_versioning: [],
+  cloudtrail_bedrock_logging_enabled: [],
+  iam_no_root_access_key: [],
+  iam_avoid_root_usage: [],
+  iam_rotate_access_key_90_days: [],
+  iam_user_accesskey_unused: [],
+  iam_user_no_setup_initial_access_key: [],
+  iam_user_with_temporary_credentials: [],
+  iam_policy_attached_only_to_group_or_roles: [],
+  iam_user_access_not_stale_to_bedrock: [],
+  iam_role_access_not_stale_to_bedrock: [],
+  iam_user_access_not_stale_to_sagemaker: [],
+  iam_role_cross_service_confused_deputy_prevention: [],
+  iam_check_saml_providers_sts: [],
+  iam_securityaudit_role_created: [],
+  iam_support_role_created: [],
+}
+
 // 화면과 설명에 쓸 이름표. 매핑에 등장하는 것만 둔다 —
 // 101개를 다 적으면 쓰지도 않는 표를 손으로 관리하게 된다.
 export const ISMSP_LABEL = {
@@ -245,6 +435,15 @@ export const ISMSP_LABEL = {
 // 체크 하나가 닿는 인증기준을 [{ no, title }]로. 없으면 빈 배열.
 export function ismspFor(checkId) {
   return (ISMSP_MAP[checkId] || []).map((no) => ({ no, title: ISMSP_LABEL[no] || '' }))
+}
+
+// 설명 생성에 넘길 근거 참조. 지식 베이스의 ref와 같은 값이라 그대로 조회할 수 있다.
+export function knowledgeRefsFor(checkId) {
+  return {
+    ismsp: ISMSP_MAP[checkId] || [],
+    mitre: ATTACK_MAP[checkId] || [],
+    owasp: OWASP_MAP[checkId] || [],
+  }
 }
 
 // 표에 없으면 ID를 다듬어 보여준다.
