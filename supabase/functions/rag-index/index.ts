@@ -93,7 +93,44 @@ serve(async (req) => {
     if (!key) return json({ ok: false, error: 'NIM_API_KEY가 설정되지 않았습니다' }, 500)
 
     // documents: [{ content, source, ref?, meta? }]
-    const { documents, reembed = null } = await req.json()
+    const { documents, reembed = null, prefix = null } = await req.json()
+
+    // 기존 문서 앞에 한국어 해설을 덧붙인다.
+    //
+    // MITRE·OWASP는 원문이 영어라 화면 발췌에도 설명 생성에도 영어 단락이 그대로 나갔다.
+    // 원문을 버리지 않고 앞에 우리 해설을 얹는다 — 발췌와 프롬프트가 모두 앞부분을
+    // 잘라 쓰므로 뒤에 붙이면 없는 것과 같다. 원문은 아래에 남아 근거로서 값을 유지한다.
+    //
+    // 여러 번 돌려도 겹쳐 쌓이지 않도록, 이미 해설이 있으면 그 부분만 갈아 끼운다.
+    if (Array.isArray(prefix) && prefix.length > 0) {
+      const MARK = '\n\n───\n'   // 해설과 원문의 경계
+      const done: string[] = []
+      const failed: Array<{ ref: string; error: string }> = []
+
+      for (const p of prefix) {
+        try {
+          const { data: rows, error: selErr } = await admin
+            .from('knowledge').select('id, content')
+            .eq('source', p.source).eq('ref', p.ref).limit(1)
+          if (selErr) throw selErr
+          if (!rows?.length) { failed.push({ ref: p.ref, error: '문서를 찾지 못했습니다' }); continue }
+
+          const cur = String(rows[0].content || '')
+          const original = cur.includes(MARK) ? cur.slice(cur.indexOf(MARK) + MARK.length) : cur
+          const content = `${p.content_prefix}${MARK}${original}`
+
+          const [vector] = await embed(key, [content], 'passage')
+          const { error: updErr } = await admin.from('knowledge')
+            .update({ content, embedding: JSON.stringify(vector) })
+            .eq('id', rows[0].id)
+          if (updErr) throw updErr
+          done.push(p.ref)
+        } catch (e) {
+          failed.push({ ref: p.ref, error: String(e).slice(0, 150) })
+        }
+      }
+      return json({ ok: failed.length === 0, updated: done.length, done, failed })
+    }
 
     // 재임베딩 — 임베딩 모델을 바꿨을 때 기존 자료의 벡터만 새로 채운다.
     //
