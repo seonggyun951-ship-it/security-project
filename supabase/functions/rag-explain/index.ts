@@ -27,17 +27,41 @@ const CHAT_MODEL = 'openai/gpt-oss-20b'
 const EMBED_MODEL = 'nvidia/nemotron-3-embed-1b'
 const DIMENSIONS = 2048
 
-// 출처를 섞어서 한 번에 뽑으면 규칙 엔진 문서가 상위를 다 차지한다.
-// 한국어라 한국어 질문과 가깝기 때문이다. 출처별로 따로 뽑아야 관점이 골고루 들어온다.
+// 출처를 섞어서 한 번에 뽑으면 규칙 엔진과 AWS 기준이 상위를 다 차지한다.
+// 질문과 같은 층위(구체적인 설정)라 점수가 높기 때문이다. 출처별로 따로 뽑아야
+// 관점이 골고루 들어온다.
+//
+// min은 출처마다 다르다. 하나의 값으로는 가를 수 없다는 걸 측정으로 확인했다:
+//   MFA 질문  → rule_engine 1위 's3-no-encryption'  0.219  (무관)
+//   NACL 질문 → ismsp 1위 '2.6.1 네트워크 접근'      0.228  (정답)
+// 점수가 거의 같은데 하나는 쓰레기이고 하나는 정답이다. 다만 같은 출처 안에서는
+// 관련과 무관이 잘 갈려서, 출처별로 자르면 대부분 걸러진다.
+//
+// 2026-09-02 측정 (질의 6개 × 출처별 상위 4건). 각 출처의 '무관한 1위'와
+// '관련 있는 1위' 사이에 값을 뒀다:
+//   rule_engine   무관 0.166~0.219 · 관련 0.533~0.695
+//   aws_baseline  무관 0.285       · 관련 0.404~0.733
+//   concept       무관 0.139~0.230 · 관련 0.368~0.558
+//   policy        무관 0.145~0.213 · 관련 0.382~0.499
+//   gcp_baseline  무관 0.242~0.254 · 관련 0.468~0.604
+//   mitigation    무관 0.222(M1055 '완화 불가') · 관련 0.378(M1032 다중 인증)
+//   ismsp         무관 0.146~0.183 · 관련 0.228~0.486
+//
+// mitre와 owasp는 이 방법으로 못 가른다 — 관련(0.340~0.364)과 무관(0.286~0.339)이
+// 같은 구간에 있고, owasp는 A10 SSRF 0.319(무관)와 A01 0.320(관련)이 붙어 있다.
+// 임계값을 올리면 맞는 것까지 잘리므로 낮게 두고 다른 방법을 찾아야 한다.
+//
+// 모델을 바꾸면 점수 분포가 통째로 달라지므로 이 값들을 다시 재야 한다.
 const RETRIEVE = [
-  { source: 'rule_engine', count: 2, label: '비슷한 신청의 판정 사례' },
-  { source: 'policy', count: 2, label: '우리 시스템의 정책' },
-  { source: 'concept', count: 2, label: '관련 개념 (AWS 공식 문서)' },
-  { source: 'aws_baseline', count: 2, label: 'AWS 보안 기준' },
-  { source: 'gcp_baseline', count: 1, label: 'GCP 보안 기준' },
-  { source: 'mitre', count: 1, label: '공격 기법 (MITRE ATT&CK)' },
-  { source: 'mitigation', count: 1, label: '막는 방법 (MITRE 완화책)' },
-  { source: 'owasp', count: 1, label: '보안 원칙 (OWASP)' },
+  { source: 'rule_engine',  count: 2, min: 0.35, label: '비슷한 신청의 판정 사례' },
+  { source: 'policy',       count: 2, min: 0.25, label: '우리 시스템의 정책' },
+  { source: 'concept',      count: 2, min: 0.25, label: '관련 개념 (AWS 공식 문서)' },
+  { source: 'aws_baseline', count: 2, min: 0.35, label: 'AWS 보안 기준' },
+  { source: 'gcp_baseline', count: 1, min: 0.30, label: 'GCP 보안 기준' },
+  { source: 'ismsp',        count: 2, min: 0.22, label: '국내 인증기준 (ISMS-P)' },
+  { source: 'mitre',        count: 1, min: 0.30, label: '공격 기법 (MITRE ATT&CK)' },
+  { source: 'mitigation',   count: 1, min: 0.30, label: '막는 방법 (MITRE 완화책)' },
+  { source: 'owasp',        count: 1, min: 0.25, label: '보안 원칙 (OWASP)' },
 ]
 
 const cors = {
@@ -102,16 +126,8 @@ serve(async (req) => {
         match_count: r.count,
         filter_sources: [r.source],
         // 억지로 끌어온 무관한 조각은 근거로 쓰지 않는다.
-        //
-        // 이 값은 임베딩 모델에 딸려 있다. 모델을 바꾸면 점수 분포가 통째로 달라지므로
-        // 다시 재야 한다. 이전 모델에서는 0.15였는데 nemotron-3에서는 전반적으로 낮게 나온다.
-        //
-        // 2026-08-26 측정 (질문 3개 × 출처 6개):
-        //   관련 있는 것  0.20 ~ 0.44
-        //   애매한 것     0.14 ~ 0.17
-        //   무관한 것     0.06 ~ 0.13  (예: 루트 MFA 질문에 policy 0.067, rule_engine 0.075)
-        // 무관한 무리의 위, 애매한 무리의 아래인 0.12로 잡았다.
-        min_similarity: 0.12,
+        // 기준값은 출처마다 다르다 — 근거와 측정값은 RETRIEVE 위 주석에 있다.
+        min_similarity: r.min,
       })
       if (error) throw error
       return { ...r, docs: data ?? [] }
