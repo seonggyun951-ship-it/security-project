@@ -115,6 +115,9 @@ export default function ExplainPanel({ request, finding }) {
                         <div className="xp-source-body">
                           {s.excerpt && <p className="xp-excerpt">{s.excerpt}</p>}
                           <span className="xp-ref">{s.ref}</span>
+                          {/* ISMS-P 안내서는 가공·인용 시 출처를 밝히도록 요구한다.
+                              발췌에서는 잘려 나가므로 함수가 따로 뽑아 준 값을 쓴다. */}
+                          {s.note && <span className="xp-note-src">{s.note}</span>}
                         </div>
                       )}
                     </div>

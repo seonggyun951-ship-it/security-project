@@ -1604,6 +1604,16 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
   color: var(--ink-3);
   word-break: break-all;
 }
+/* 원문이 요구하는 출처 표시. 발췌와 같은 크기면 본문처럼 읽히므로 한 단 낮춰 둔다. */
+.xp-note-src {
+  display: block;
+  margin-top: .35rem;
+  padding-top: .35rem;
+  border-top: 1px solid var(--line-2);
+  font-size: .68rem;
+  color: var(--ink-3);
+  line-height: 1.5;
+}
 
 .xp-sim {
   flex: none;

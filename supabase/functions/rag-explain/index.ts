@@ -261,12 +261,18 @@ serve(async (req) => {
       // 아는 사람은 없다). 첫 줄을 제목으로, 그 뒤를 발췌로 함께 보낸다.
       sources: groups.flatMap((g) => g.docs.map((d) => {
         const lines = String(d.content || '').split('\n').map((s) => s.trim()).filter(Boolean)
+        // 출처 표시는 발췌에서 잘려 나간다(문서 끝에 있는데 발췌는 앞 220자다).
+        // ISMS-P 안내서가 "가공·인용할 때는 출처를 밝혀" 달라고 요구하므로
+        // 따로 뽑아 화면이 항상 보여줄 수 있게 한다.
+        const noteAt = lines.findIndex((l) => l.startsWith('출처:'))
+        const body = noteAt >= 0 ? lines.slice(1, noteAt) : lines.slice(1)
         return {
           source: d.source,
           ref: d.ref,
           similarity: Number(d.similarity?.toFixed(3)),
           title: lines[0]?.slice(0, 120) || '',
-          excerpt: lines.slice(1).join(' ').slice(0, 220),
+          excerpt: body.join(' ').slice(0, 220),
+          note: noteAt >= 0 ? lines[noteAt] : null,
         }
       })),
       usage: chat.usage ?? null,
