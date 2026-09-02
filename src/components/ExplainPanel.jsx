@@ -3,6 +3,7 @@ import { callFunction } from '../lib/db'
 import { checkRequest } from '../lib/rules'
 import { summarizePayload } from '../lib/discord'
 import { ACTION_LABEL } from '../lib/aws'
+import { ismspFor } from '../lib/scan'
 
 // 무엇이 왜 문제인지 자연어로 풀어 보여준다.
 //
@@ -38,6 +39,10 @@ export default function ExplainPanel({ request, finding }) {
           why: finding.detail || '',
         }],
         verdict: null,
+        // 어긋난 인증기준은 유사도로 찾지 않고 손으로 맞춘 표에서 가져와 넘긴다.
+        // 검색으로 더듬으면 관련 있는 것과 없는 것이 같은 점수대에 섞여 나오는데,
+        // 규제 항목은 틀리면 근거 자체가 무너진다. 표가 있으니 정확한 것을 바로 준다.
+        ismsp_refs: ismspFor(finding.check_id).map((s) => s.no),
       }
     } else {
       const check = checkRequest(request.action, request.payload)

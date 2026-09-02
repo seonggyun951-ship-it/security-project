@@ -93,7 +93,11 @@ serve(async (req) => {
     // summary  : 무엇을 신청했는지 (한 줄)
     // findings : 규칙 엔진이 이미 내린 판정 [{ severity, title, why }]
     // verdict  : 'reject' | 'warn' | 'pass' (있으면 문장에 반영한다)
-    const { summary, findings = [], verdict = null, question = null, model = CHAT_MODEL } = await req.json()
+    const {
+      summary, findings = [], verdict = null, question = null, model = CHAT_MODEL,
+      // 화면이 짚어 준 인증기준 번호(['2.6.6'] 등). 있으면 검색보다 이쪽을 믿는다.
+      ismsp_refs = null,
+    } = await req.json()
     if (!summary && !question) {
       return json({ ok: false, error: 'summary 또는 question이 필요합니다' }, 400)
     }
@@ -120,7 +124,33 @@ serve(async (req) => {
     }
     const embedding = JSON.stringify((await embedRes.json()).data[0].embedding)
 
+    // 어긋난 인증기준을 화면이 지정해 보낸 경우, 그 항목은 검색하지 않고 그대로 가져온다.
+    //
+    // 체크와 인증기준의 대응은 src/lib/scan.js의 ISMSP_MAP에 손으로 맞춰 두었다.
+    // 유사도로 더듬으면 관련 있는 것과 없는 것이 같은 점수대(0.29~0.36)에 섞여 나오는데,
+    // 규제 항목은 틀리면 근거 자체가 무너진다. 아는 답이 있으면 찾지 않는다.
+    //
+    // 표를 여기에 복사해 두지 않는 이유: 두 벌이 되면 한쪽만 고쳐져 화면과 설명이 갈라진다.
+    const pinned = Array.isArray(ismsp_refs) ? ismsp_refs.filter((v) => typeof v === 'string') : []
+    let pinnedDocs: Array<Record<string, unknown>> = []
+    if (pinned.length > 0) {
+      // source까지 가져와야 한다. 응답의 출처 목록이 이 값을 그대로 쓴다.
+      // 검색 결과와 달리 similarity가 없는데, 유사도로 고른 게 아니라 표가 지정한 것이라
+      // 점수라는 개념 자체가 없다. 화면에서는 빈 값으로 나간다.
+      const { data, error } = await client
+        .from('knowledge')
+        .select('source, ref, content, meta')
+        .eq('source', 'ismsp')
+        .in('meta->>no', pinned)
+      if (error) throw error
+      pinnedDocs = data ?? []
+    }
+
     const groups = await Promise.all(RETRIEVE.map(async (r) => {
+      // 지정받은 인증기준이 있으면 ISMS-P는 검색을 건너뛴다.
+      if (r.source === 'ismsp' && pinnedDocs.length > 0) {
+        return { ...r, docs: pinnedDocs }
+      }
       const { data, error } = await client.rpc('match_knowledge', {
         query_embedding: embedding,
         match_count: r.count,

@@ -1838,6 +1838,17 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
   white-space: nowrap;
   display: block;
 }
+/* 어긋난 인증기준. 체크 ID와 같은 줄에 두되 색과 테두리로 갈라 놓는다.
+   여기만 본문 글꼴을 쓴다 — 한글 항목 이름이라 고정폭에서 자간이 벌어진다. */
+.sf-ismsp {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  margin-left: .5rem;
+  padding: .05rem .3rem;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
 
 .sf-new {
   display: inline-block;

@@ -7,7 +7,7 @@ import { elapsedLabel, localDateKey } from '../lib/date'
 import ErrorBanner from '../components/ErrorBanner'
 import ExplainPanel from '../components/ExplainPanel'
 import HoldDialog from '../components/HoldDialog'
-import { CHECK_LABEL, checkLabel, checkKind, remedyFor } from '../lib/scan'
+import { CHECK_LABEL, checkLabel, checkKind, remedyFor, ismspFor } from '../lib/scan'
 
 // 자동 점검 결과.
 //
@@ -292,7 +292,17 @@ export default function ScanFindings() {
                   <span className={`sf-sev sf-s-${m.key}`}><i />{m.label}</span>
                   <span className="sf-name">
                     <b>{label}{g.hasNew && tab === 'open' && <span className="sf-new">NEW</span>}</b>
-                    <span>{g.check_id} · {checkKind(g.check_id)}</span>
+                    <span>
+                      {g.check_id} · {checkKind(g.check_id)}
+                      {/* 어긋난 인증기준을 여기 붙인다. AWS 권고에서 그치지 않고
+                          국내 인증 기준까지 짚어 주면 조치의 근거가 달라진다.
+                          대응하는 항목이 없는 체크도 있어 그때는 아무것도 안 보인다. */}
+                      {ismspFor(g.check_id).map((s) => (
+                        <span key={s.no} className="sf-ismsp" title={`ISMS-P ${s.no} ${s.title}`}>
+                          ISMS-P {s.no} {s.title}
+                        </span>
+                      ))}
+                    </span>
                   </span>
                   <span className="sf-cnt">{g.items.length}</span>
                   <span className={`sf-age ${g.oldest >= 7 && tab === 'open' ? 'old' : ''}`}>
