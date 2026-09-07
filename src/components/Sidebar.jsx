@@ -61,10 +61,15 @@ export const NAV_GROUPS = [
     label: '보안 점검',
     items: [
       { title: '클라우드 설정 점검', path: '/cloud', icon: '⚑' },
-      { title: '취약점 스캔', path: '/vuln', icon: '⚠' },
       { title: '로그 분석', path: '/log', icon: '☰' },
-      { title: '개인정보 유출 체크', path: '/privacy', icon: '⚲' },
-      { title: '피싱 URL 탐지', path: '/phishing', icon: '⌗' },
+      // 아래 셋은 당분간 쓰지 않아 감춰 둔다. 지우지 않은 이유는 언제 다시 쓸지 몰라서다.
+      //   취약점 스캔 — 밖에서 쏘아 볼 대상 서버가 없다. EC2를 띄우면 그때 다시 꺼낸다.
+      //                 지식 베이스의 KEV 1,665건을 읽는 곳이 여기뿐이라 함께 잠든다.
+      //   개인정보 유출 체크 — HaveIBeenPwned가 유료라 진짜 데이터를 못 붙였다
+      //   피싱 URL 탐지 — 휴리스틱만 있고 VirusTotal·PhishTank를 안 붙였다
+      { title: '취약점 스캔', path: '/vuln', icon: '⚠', hidden: true },
+      { title: '개인정보 유출 체크', path: '/privacy', icon: '⚲', hidden: true },
+      { title: '피싱 URL 탐지', path: '/phishing', icon: '⌗', hidden: true },
     ],
   },
 ]
@@ -97,6 +102,9 @@ export default function Sidebar({ onLogout }) {
   // 권한 확인이 끝나기 전(isAdmin === null)에는 어느 쪽 전용 메뉴도 보여주지 않는다.
   // 잠깐이라도 관리자 메뉴가 스쳐 보이거나, 메뉴가 두 번 바뀌는 걸 막기 위함.
   const visible = (item) => {
+    // 당분간 안 쓰는 메뉴. 관리자·신청자 모두에게 감춘다.
+    // 화면과 라우트는 그대로 두었으므로 hidden만 지우면 되살아난다.
+    if (item.hidden) return false
     if (item.superOnly) return isSuper === true
     if (item.adminOnly) return isAdmin === true
     if (item.requesterOnly) return isAdmin === false
