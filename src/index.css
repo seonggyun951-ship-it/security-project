@@ -422,7 +422,8 @@ body {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--r);
-  color: var(--ink-2);
+  /* 붙여 넣은 JSON은 본문색으로. 보조색이면 자기가 넣은 내용이 흐리게 보인다. */
+  color: var(--ink);
   font-family: var(--mono);
   font-size: 13px;
   padding: 14px 16px;
@@ -559,8 +560,11 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .ac-form-row { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
 .ac-field { flex: 1; min-width: 140px; display: flex; flex-direction: column; gap: 4px; }
 .ac-label { font-size: 11px; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.03em; }
-.ac-input { flex: 1; min-width: 140px; width: 100%; background: var(--soft); border: 1px solid var(--line); border-radius: var(--r); color: var(--ink-2); font-size: 13px; padding: 10px 12px; outline: none; }
-.ac-input:focus { border-color: var(--accent); }
+/* 입력한 값은 본문색이어야 한다. 보조색(--ink-2)으로 두면 자기가 친 글자가
+   설명문처럼 흐리게 보인다. */
+.ac-input { flex: 1; min-width: 140px; width: 100%; background: var(--soft); border: 1px solid var(--line); border-radius: var(--r); color: var(--ink); font-size: 13px; padding: 10px 12px; outline: none; }
+.ac-input::placeholder { color: var(--ink-3); }
+.ac-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 
 .ac-rule-table { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
 .ac-rule-row { display: grid; grid-template-columns: 1fr 1fr 1.2fr 1.5fr auto; gap: 8px; align-items: center; }
@@ -1069,7 +1073,10 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 }
 .cc-btn:hover:not(:disabled), .la-btn:hover:not(:disabled),
 .vs-btn:hover:not(:disabled), .login-btn:hover:not(:disabled) { filter: brightness(1.12); }
-.ac-btn-secondary { background: var(--line); color: var(--ink-2); }
+/* 보조 버튼. --line은 흰색 12%라 어두운 바탕에서 면으로 안 보인다.
+   테두리를 세워 버튼임을 알린다. */
+.ac-btn-secondary { background: transparent; border: 1px solid var(--line); color: var(--ink-2); }
+.ac-btn-secondary:hover:not(:disabled) { background: rgba(255,255,255,.06); color: var(--ink); filter: none; }
 .ac-btn-secondary:hover:not(:disabled) { background: var(--line); }
 .ac-result { margin-top: 12px; padding: 10px 14px; border-radius: var(--r); font-size: 13px; line-height: 1.5; }
 .ac-result-ok { background: rgba(16,185,129,0.1); color: var(--done); border: 1px solid rgba(16,185,129,0.3); }
@@ -1115,7 +1122,9 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .ac-snapshot-type { color: var(--accent); font-size: 11px; background: var(--accent-soft); padding: 2px 8px; border-radius: var(--r-sm); }
 .ac-snapshot-time { color: var(--ink-3); font-size: 11px; }
 .ac-expand-icon { color: var(--ink-3); font-size: 11px; }
-.ac-snapshot-json { background: var(--soft); color: var(--accent-2); font-family: var(--mono); font-size: 11px; padding: 12px; margin: 0; overflow-x: auto; max-height: 300px; }
+/* 수집한 원본 JSON. --accent-2(짙은 보라)는 어두운 면 위에서 거의 안 읽힌다.
+   코드 블록이라 글자가 많으므로 밝은 쪽으로 올린다. */
+.ac-snapshot-json { background: var(--soft); color: #a5b4fc; font-family: var(--mono); font-size: 11px; padding: 12px; margin: 0; overflow-x: auto; max-height: 300px; }
 .ac-diff-line { white-space: pre; }
 .ac-diff-added { color: var(--done); background: rgba(74,222,128,0.12); }
 .ac-diff-removed { color: var(--fail); background: rgba(248,113,113,0.12); }
@@ -1168,7 +1177,7 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--r);
-  color: var(--ink-2);
+  color: var(--ink);
   font-family: var(--mono);
   font-size: 12px;
   padding: 14px 16px;
@@ -1341,7 +1350,7 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .vs-examples code { font-family: var(--mono); font-size: 12px; color: var(--accent-2); background: var(--soft); padding: 4px 8px; border-radius: var(--r-sm); display: block; }
 
 .vs-textarea-wrap { position: relative; margin-bottom: 12px; }
-.vs-textarea { width: 100%; height: 200px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); color: var(--ink-2); font-family: var(--mono); font-size: 12px; padding: 14px 16px; resize: vertical; outline: none; display: block; transition: border-color 0.15s; }
+.vs-textarea { width: 100%; height: 200px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); color: var(--ink); font-family: var(--mono); font-size: 12px; padding: 14px 16px; resize: vertical; outline: none; display: block; transition: border-color 0.15s; }
 .vs-textarea:focus { border-color: var(--accent); }
 .vs-textarea::placeholder { color: var(--ink-3); }
 .vs-sample-btn { position: absolute; top: 10px; right: 12px; background: var(--soft); border: 1px solid var(--accent); color: var(--accent); border-radius: var(--r-sm); padding: 4px 10px; font-size: 12px; cursor: pointer; }
