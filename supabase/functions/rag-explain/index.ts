@@ -87,6 +87,10 @@ serve(async (req) => {
     const { data: { user } } = await db.auth.getUser(token)
     const client = user ? db : createClient(url, token)
 
+    // 기록을 남길 때만 쓴다. explanations는 RLS로 넣기를 막아 두었다 —
+    // 클라이언트가 직접 쓰게 두면 실제로 생성되지 않은 기록이 섞여 학습 재료로서 값을 잃는다.
+    const admin = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
+
     const key = Deno.env.get('NIM_API_KEY')
     if (!key) return json({ ok: false, error: 'NIM_API_KEY가 설정되지 않았습니다' }, 500)
 
@@ -100,6 +104,9 @@ serve(async (req) => {
       pinned_refs = null,
       // 예전 이름. 인증기준만 넘기던 시절의 호출을 위해 남겨 둔다.
       ismsp_refs = null,
+      // 기록용. 무엇에 대한 설명인지 화면이 알려 준다 —
+      // summary 문구를 뜯어 짐작하면 문구를 바꿀 때마다 분류가 어긋난다.
+      kind = null, subject_id = null,
     } = await req.json()
     if (!summary && !question) {
       return json({ ok: false, error: 'summary 또는 question이 필요합니다' }, 400)
@@ -251,6 +258,49 @@ serve(async (req) => {
         + `완성 토큰: ${chat.usage?.completion_tokens})`)
     }
 
+    const sources = groups.flatMap((g) => g.docs.map((d) => {
+      const lines = String(d.content || '').split('\n').map((s) => s.trim()).filter(Boolean)
+      // 출처 표시는 발췌에서 잘려 나간다(문서 끝에 있는데 발췌는 앞 220자다).
+      // ISMS-P 안내서가 "가공·인용할 때는 출처를 밝혀" 달라고 요구하므로
+      // 따로 뽑아 화면이 항상 보여줄 수 있게 한다.
+      const noteAt = lines.findIndex((l) => l.startsWith('출처:'))
+      const body = noteAt >= 0 ? lines.slice(1, noteAt) : lines.slice(1)
+      return {
+        source: d.source,
+        ref: d.ref,
+        similarity: Number(d.similarity?.toFixed(3)),
+        title: lines[0]?.slice(0, 120) || '',
+        excerpt: body.join(' ').slice(0, 220),
+        note: noteAt >= 0 ? lines[noteAt] : null,
+      }
+    }))
+
+    // 무엇을 물었을 때 어떤 근거로 이렇게 답했는지 남긴다.
+    //
+    // 나중에 정제해 파인튜닝 재료로 쓰려면 이 쌍이 있어야 하는데, 지금 안 쌓으면
+    // 소급할 방법이 없다. 다만 **기록이 실패해도 설명은 그대로 내보낸다** —
+    // 설명은 이미 만들어졌고 사용자가 기다리는 것도 그것이다. 부수적인 기록 때문에
+    // 화면에 오류를 띄우는 건 앞뒤가 바뀐다.
+    try {
+      await admin.from('explanations').insert({
+        // 화면이 안 알려 주면 질문으로 본다. 세 값 중 하나만 들어가도록 표에 제약이 있다.
+        kind: ['request', 'finding', 'question'].includes(kind) ? kind : 'question',
+        subject_id: subject_id ?? null,
+        user_id: user?.id ?? null,
+        summary: summary ?? null,
+        question: question ?? null,
+        findings,
+        verdict,
+        sources,
+        pinned_refs: Object.keys(pins).length ? pins : null,
+        answer: explanation,
+        model,
+        usage: chat.usage ?? null,
+      })
+    } catch (e) {
+      console.error('설명 기록 실패(무시하고 진행):', e)
+    }
+
     return json({
       ok: true,
       explanation,
@@ -259,22 +309,8 @@ serve(async (req) => {
       // 이상한 답이 나왔을 때 어디서 온 것인지 추적할 수 있다.
       // 식별자만 돌려주면 무엇을 보고 쓴 설명인지 알 수 없다(T1021.004가 무슨 내용인지
       // 아는 사람은 없다). 첫 줄을 제목으로, 그 뒤를 발췌로 함께 보낸다.
-      sources: groups.flatMap((g) => g.docs.map((d) => {
-        const lines = String(d.content || '').split('\n').map((s) => s.trim()).filter(Boolean)
-        // 출처 표시는 발췌에서 잘려 나간다(문서 끝에 있는데 발췌는 앞 220자다).
-        // ISMS-P 안내서가 "가공·인용할 때는 출처를 밝혀" 달라고 요구하므로
-        // 따로 뽑아 화면이 항상 보여줄 수 있게 한다.
-        const noteAt = lines.findIndex((l) => l.startsWith('출처:'))
-        const body = noteAt >= 0 ? lines.slice(1, noteAt) : lines.slice(1)
-        return {
-          source: d.source,
-          ref: d.ref,
-          similarity: Number(d.similarity?.toFixed(3)),
-          title: lines[0]?.slice(0, 120) || '',
-          excerpt: body.join(' ').slice(0, 220),
-          note: noteAt >= 0 ? lines[noteAt] : null,
-        }
-      })),
+      // 기록에도 같은 값을 넣으므로 위에서 한 번만 만들어 쓴다.
+      sources,
       usage: chat.usage ?? null,
     })
   } catch (e) {

@@ -32,6 +32,9 @@ export default function ExplainPanel({ request, finding }) {
     if (finding) {
       // 점검 결과. 체크 ID가 지식 베이스의 ref와 같은 값이라 검색이 정확히 걸린다.
       body = {
+        // 무엇에 대한 설명인지 알려 준다. 기록에 남아 나중에 종류별로 갈라 볼 수 있다.
+        kind: 'finding',
+        subject_id: finding.check_id,
         summary: `AWS 보안 점검에서 걸린 항목 — ${finding.check_id}`,
         findings: [{
           severity: finding.severity,
@@ -49,6 +52,8 @@ export default function ExplainPanel({ request, finding }) {
       const detail = summarizePayload(request.action, request.payload)
       const actionLabel = ACTION_LABEL[request.action] || request.action
       body = {
+        kind: 'request',
+        subject_id: request.id,
         summary: `${actionLabel}${detail ? ` — ${detail}` : ''}`,
         findings: (check?.findings || []).map((f) => ({
           severity: f.severity, title: f.title, why: f.why,
