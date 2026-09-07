@@ -62,14 +62,10 @@ export const NAV_GROUPS = [
     items: [
       { title: '클라우드 설정 점검', path: '/cloud', icon: '⚑' },
       { title: '로그 분석', path: '/log', icon: '☰' },
-      // 아래 셋은 당분간 쓰지 않아 감춰 둔다. 지우지 않은 이유는 언제 다시 쓸지 몰라서다.
-      //   취약점 스캔 — 밖에서 쏘아 볼 대상 서버가 없다. EC2를 띄우면 그때 다시 꺼낸다.
-      //                 지식 베이스의 KEV 1,665건을 읽는 곳이 여기뿐이라 함께 잠든다.
-      //   개인정보 유출 체크 — HaveIBeenPwned가 유료라 진짜 데이터를 못 붙였다
-      //   피싱 URL 탐지 — 휴리스틱만 있고 VirusTotal·PhishTank를 안 붙였다
+      // 당분간 쓰지 않아 감춰 둔다. 지우지 않은 이유는 언제 다시 쓸지 몰라서다 —
+      // 밖에서 쏘아 볼 대상 서버가 없을 뿐이고, EC2를 띄우면 그때 다시 꺼낸다.
+      // 지식 베이스의 KEV 1,665건을 읽는 곳이 여기뿐이라 함께 잠든다.
       { title: '취약점 스캔', path: '/vuln', icon: '⚠', hidden: true },
-      { title: '개인정보 유출 체크', path: '/privacy', icon: '⚲', hidden: true },
-      { title: '피싱 URL 탐지', path: '/phishing', icon: '⌗', hidden: true },
     ],
   },
 ]
