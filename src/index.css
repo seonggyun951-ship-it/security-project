@@ -1,52 +1,67 @@
 /* ===== 디자인 토큰 =====
    색을 여기 한 곳에 모아둔다. 방향을 바꿀 때 이 블록만 고치면 된다.
 
-   회색에서 푸른 기를 빼고 미색을 아주 조금 섞었다.
-   Tailwind 기본 슬레이트(var(--ink-3), var(--line))가 "어디서 본 듯한" 인상의 주범이라,
-   같은 밝기라도 온도를 틀면 고른 색처럼 읽힌다.
+   어두운 바탕에 파랑→보라→핑크 그라디언트를 얹는다.
+   그라디언트는 브랜드와 지표 띠에만 쓰고, 나머지는 흰 글자와 얇은 흰 선으로 짠다.
+   면을 흰색 5%로 띄우고 테두리를 흰색 10%로 두면 카드가 배경에서 살짝 떠오른다.
 
-   장식용 강조색은 두지 않는다. 색은 상태와 위험도에만 쓰고,
-   주 버튼과 활성 상태는 먹색으로 처리한다. */
+   위험도 색은 어두운 바탕에서 읽히도록 밝은 쪽으로 올렸다.
+   밝은 테마의 짙은 빨강(#9c2d2d)을 그대로 쓰면 검정 위에서 뭉개진다. */
 :root {
-  /* 바탕 · 글자
-     바탕을 흰색보다 한 단계 낮춰서 흰 카드가 떠 보이게 한다.
-     밝은 바탕에 흰 카드를 얹으면 경계가 테두리에만 의존해 평면적으로 보인다. */
-  --bg:      #eceef1;  /* 페이지 바탕 */
-  --panel:   #ffffff;  /* 카드 면 */
-  --soft:    #f5f6f8;  /* 옅은 면 — 코드 블록, 보조 영역 */
-  --ink:     #0f131a;  /* 본문 진하게 */
-  --ink-2:   #464e5b;  /* 보조 텍스트 */
-  --ink-3:   #78808e;  /* 흐릿한 텍스트 */
-  --line:    #d4d8de;  /* 테두리 */
-  --line-2:  #e4e7eb;  /* 더 옅은 구분선 */
+  /* 바탕 · 글자 */
+  --bg:      #0c0c0c;  /* 페이지 바탕 */
+  --panel:   #141417;  /* 카드 면 — 배경보다 한 단계 밝게 */
+  --soft:    #1a1a1e;  /* 옅은 면 — 코드 블록, 표 머리, 보조 영역 */
+  --ink:     #ffffff;  /* 본문 */
+  --ink-2:   #a1a1aa;  /* 보조 텍스트 */
+  --ink-3:   #6b7280;  /* 흐릿한 텍스트 */
+  --line:    rgba(255,255,255,.12);  /* 테두리 */
+  --line-2:  rgba(255,255,255,.07);  /* 더 옅은 구분선 */
 
-  /* 사이드바 — 화면에서 가장 큰 색 면이라 여기가 인상을 좌우한다 */
-  --side:        #20262f;
-  --side-ink:    #a3acbb;
-  --side-brand:  #f0f3f7;
-  --side-dim:    #6b7482;
-  --side-on:     rgba(255,255,255,.10);
+  /* 사이드바 — 본문과 같은 검정에 오른쪽 선 하나로 나눈다 */
+  --side:        #0c0c0c;
+  --side-ink:    #a1a1aa;
+  --side-brand:  #ffffff;
+  --side-dim:    #6b7280;
+  --side-on:     rgba(255,255,255,.06);
   --side-on-ink: #ffffff;
-  --side-line:   #2b323d;
+  --side-line:   rgba(255,255,255,.1);
 
-  /* 조작 — 강청색. 상태색(주황·빨강·초록)과 부딪히지 않는 계열로 골랐다 */
-  --accent:   #3a5f8f;
-  --accent-2: #2d4b73;  /* hover */
-  --accent-soft: rgba(58,95,143,.10);
+  /* 그라디언트 — 이 앱의 얼굴.
+     세 색을 따로 두어 카드 왼쪽 띠에 위험도별로 나눠 쓸 수 있게 했다. */
+  --g1: #3b82f6;  /* 파랑  — Medium 이하 */
+  --g2: #8b5cf6;  /* 보라  — High */
+  --g3: #ec4899;  /* 핑크  — Critical */
+  --grad: linear-gradient(135deg, var(--g1), var(--g2), var(--g3));
 
-  /* 의미색 */
-  --wait:  #8f5510; --wait-bg:  #f7eddd; --wait-line: #e8d3ac;
-  --super: #553a9e; --super-bg: #ebe5f8;
-  --done:  #236240; --done-bg:  #e4efe8;
-  --fail:  #9c2d2d; --fail-bg:  #f7e6e6; --fail-line: #e9c9c9;
-  --off:   #6b7280; --off-bg:   #eef0f3;
+  /* 지표 띠의 밝기. 이 값만 바꾸면 띠 전체가 따라온다.
+     100%면 원색, 0%면 배경과 같아진다. 60% 아래로 내리면 글자를 흰색으로 뒤집어야
+     읽히므로 --band-ink도 함께 바꾼다. */
+  --band-tone: 75%;
+  --band-ink:  #ffffff;
+  --band: linear-gradient(135deg,
+    color-mix(in srgb, var(--g1) var(--band-tone), var(--bg)),
+    color-mix(in srgb, var(--g2) var(--band-tone), var(--bg)),
+    color-mix(in srgb, var(--g3) var(--band-tone), var(--bg)));
+
+  /* 조작 — 주 버튼은 그라디언트, 보조는 테두리만 */
+  --accent:   #8b5cf6;
+  --accent-2: #7c3aed;  /* hover */
+  --accent-soft: rgba(139,92,246,.14);
+
+  /* 의미색 — 어두운 바탕용으로 올렸다. bg는 색을 12% 정도만 깔아 면이 뜨지 않게 한다 */
+  --wait:  #fbbf24; --wait-bg:  rgba(251,191,36,.13); --wait-line: rgba(251,191,36,.3);
+  --super: #a78bfa; --super-bg: rgba(167,139,250,.13);
+  --done:  #4ade80; --done-bg:  rgba(74,222,128,.13);
+  --fail:  #f87171; --fail-bg:  rgba(248,113,113,.13); --fail-line: rgba(248,113,113,.3);
+  --off:   #6b7280; --off-bg:   rgba(255,255,255,.05);
 
   /* 모서리 — 두 가지만 쓴다 */
   --r:    8px;  /* 카드 · 패널 · 입력 */
   --r-sm: 5px;  /* 버튼 · 배지 · 칩 */
 
-  /* 깊이 — 아주 얕게. 바탕이 회색이라 이 정도로도 카드가 떠 보인다 */
-  --shadow: 0 1px 2px rgba(15,19,26,.05), 0 1px 3px rgba(15,19,26,.04);
+  /* 깊이 — 어두운 바탕에서는 그림자가 안 보인다. 면은 밝기 차와 테두리로 띄운다 */
+  --shadow: none;
 
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'D2Coding', monospace;
 }
