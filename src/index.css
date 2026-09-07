@@ -56,6 +56,17 @@
   --fail:  #f87171; --fail-bg:  rgba(248,113,113,.13); --fail-line: rgba(248,113,113,.3);
   --off:   #6b7280; --off-bg:   rgba(255,255,255,.05);
 
+  /* 색이 채워진 면 위에 얹는 글자.
+     원래는 이 자리에 var(--panel)을 썼다 — 밝은 테마에서는 패널이 흰색이라 맞아떨어졌지만
+     어두운 테마로 오면서 글자가 배경과 같이 어두워져 안 읽히게 됐다.
+     '패널 색'이 아니라 '채운 면 위의 글자'라는 뜻의 이름을 따로 둔다. */
+  --on-fill: #ffffff;
+
+  /* 밝은 의미색(노랑·초록·연빨강·연보라) 위에 얹는 글자.
+     어두운 테마에서는 상태색을 밝은 쪽으로 올렸기 때문에, 그 위에 흰 글자를 두면
+     대비가 나오지 않는다. 이런 면 위에서는 오히려 검정이 읽힌다. */
+  --on-bright: #0c0c0c;
+
   /* 모서리 — 두 가지만 쓴다 */
   --r:    8px;  /* 카드 · 패널 · 입력 */
   --r-sm: 5px;  /* 버튼 · 배지 · 칩 */
@@ -149,7 +160,7 @@ body {
 .sb.is-rail .sb-badge { position: absolute; top: 2px; right: 2px; min-width: 15px; height: 15px; font-size: 9px; padding: 0 3px; }
 .sb.is-rail .sb-logout { width: 40px; padding: 8px 0; text-align: center; }
 /* 대기중 건수 — 숫자만 갱신되고 페이지는 다시 그리지 않는다 */
-.sb-badge { flex-shrink: 0; background: var(--wait); color: #fff; font-size: 11px; font-weight: 800; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; font-variant-numeric: tabular-nums; }
+.sb-badge { flex-shrink: 0; background: var(--wait); color: var(--on-bright); font-size: 11px; font-weight: 800; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; font-variant-numeric: tabular-nums; }
 .sb-logout {
   margin-top: 16px; background: transparent; border: 1px solid var(--side-line);
   color: var(--side-dim); border-radius: var(--r-sm); padding: 8px 12px;
@@ -177,26 +188,27 @@ body {
 
 /* ===== 대시보드 요약 ===== */
 .dash-page { max-width: 100%; }
+/* 지표를 카드 격자가 아니라 전폭 띠 하나로. 보안 현황 화면과 같은 규칙이다 —
+   두 화면이 다른 방식으로 숫자를 보여주면 같은 앱으로 안 읽힌다. */
 .dash-stats {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px; margin-bottom: 20px;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0; margin-bottom: 20px;
+  background: var(--band); border-radius: var(--r); overflow: hidden;
 }
 .dash-stat {
   display: flex; align-items: center; gap: 12px;
-  background: var(--panel); border: 1px solid var(--line); border-radius: var(--r);
-  padding: 16px 18px;
+  background: none; border: 0; border-left: 1px solid rgba(255,255,255,.16); border-radius: 0;
+  padding: 18px 20px;
 }
+.dash-stat:first-child { border-left: 0; }
 .dash-stat.is-clickable { cursor: pointer; transition: border-color 0.12s; }
-.dash-stat.is-clickable:hover { border-color: var(--ink-3); }
-.dash-stat.tone-alert { border-color: var(--wait); }
-.dash-stat.tone-alert .dash-stat-value { color: var(--wait); }
-.dash-stat.tone-warn .dash-stat-value { color: var(--accent); }
-.dash-stat.tone-error { border-color: var(--fail); }
-.dash-stat.tone-error .dash-stat-value { color: var(--fail); }
-.dash-stat-icon { font-size: 22px; }
-.dash-stat-value { font-size: 26px; font-weight: 800; color: var(--ink); line-height: 1.1; }
-.dash-stat-unit { font-size: 13px; font-weight: 600; color: var(--ink-3); margin-left: 3px; }
-.dash-stat-label { font-size: 12px; color: var(--ink-2); margin-top: 4px; }
+/* 띠 위에서는 칸마다 테두리 색을 바꿔 강조하던 방식이 안 통한다.
+   대신 눌렀을 때 밝아지는 것으로만 반응을 준다. */
+.dash-stat.is-clickable:hover { background: rgba(255,255,255,.09); }
+.dash-stat-icon { font-size: 20px; opacity: .85; }
+.dash-stat-value { font-size: 30px; font-weight: 800; color: var(--band-ink); line-height: 1; letter-spacing: -.03em; }
+.dash-stat-unit { font-size: 13px; font-weight: 600; color: var(--band-ink); opacity: .6; margin-left: 3px; }
+.dash-stat-label { font-size: 10.5px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--band-ink); opacity: .7; margin-top: 6px; }
 
 .dash-row {
   display: flex; align-items: center; gap: 10px;
@@ -293,7 +305,7 @@ body {
 .login-error { color: var(--fail); font-size: 13px; }
 .login-btn {
   background: var(--accent);
-  color: var(--panel);
+  color: var(--on-fill);
   border: none;
   border-radius: var(--r);
   padding: 12px;
@@ -425,7 +437,7 @@ body {
 
 .cc-btn {
   background: var(--accent);
-  color: var(--panel);
+  color: var(--on-fill);
   border: none;
   border-radius: var(--r);
   padding: 12px 28px;
@@ -469,7 +481,7 @@ body {
 }
 .cc-counts { display: flex; gap: 8px; flex-wrap: wrap; }
 .cc-count {
-  color: var(--panel);
+  color: var(--on-fill);
   border-radius: 999px;
   padding: 4px 12px;
   font-size: 12px;
@@ -491,7 +503,7 @@ body {
   margin-bottom: 6px;
 }
 .cc-sev-badge {
-  color: var(--panel);
+  color: var(--on-fill);
   border-radius: var(--r-sm);
   padding: 2px 8px;
   font-size: 11px;
@@ -532,7 +544,7 @@ body {
 /* 지금 처리할 일이 있는 카드 — 화면의 주인공 */
 .ac-card-alert { border-color: var(--wait); box-shadow: 0 0 0 1px rgba(245,158,11,0.15); }
 .ac-card-alert .ac-card-title { font-size: 17px; }
-.ac-count-badge { background: var(--wait); color: var(--panel); font-size: 13px; font-weight: 800; min-width: 24px; height: 24px; padding: 0 7px; border-radius: var(--r); display: inline-flex; align-items: center; justify-content: center; }
+.ac-count-badge { background: var(--wait); color: var(--on-bright); font-size: 13px; font-weight: 800; min-width: 24px; height: 24px; padding: 0 7px; border-radius: var(--r); display: inline-flex; align-items: center; justify-content: center; }
 /* 참고용 보조 카드 — 한 단계 뒤로 */
 .ac-card-muted { background: var(--soft); border-color: var(--line); }
 .ac-card-muted .ac-card-title { color: var(--ink-2); font-size: 14px; }
@@ -609,11 +621,11 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .ac-minical-cell.has-data { background: var(--accent-soft); color: var(--ink); font-weight: 600; cursor: pointer; }
 .ac-minical-cell.has-data:hover { background: var(--line); }
 .ac-minical-cell.is-today { outline: 1.5px solid var(--accent); }
-.ac-minical-cell.is-selected { background: var(--accent); color: var(--panel); }
+.ac-minical-cell.is-selected { background: var(--accent); color: var(--on-fill); }
 .ac-minical-empty { visibility: hidden; }
 
 /* 되돌릴 수 없는 작업(삭제)용 버튼 */
-.ac-btn-danger { background: var(--fail); border-color: var(--fail); color: var(--panel); }
+.ac-btn-danger { background: var(--fail); border-color: var(--fail); color: var(--on-bright); }
 .ac-btn-danger:hover:not(:disabled) { background: var(--fail); border-color: var(--fail); }
 
 /* ===== 승인 대기 표 =====
@@ -901,7 +913,7 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .au-main { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .au-email { font-size: 14px; font-weight: 700; color: var(--ink); word-break: break-all; }
 .au-role { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: var(--r-sm); white-space: nowrap; }
-.au-role-super { background: var(--super); color: var(--panel); }
+.au-role-super { background: var(--super); color: var(--on-bright); }
 .au-role-admin { background: var(--super-bg); color: var(--super); }
 .au-role-user { background: var(--soft); color: var(--ink-2); }
 .au-self { font-size: 11px; color: var(--ink-3); }
@@ -1040,9 +1052,23 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
   .ac-nacl-row > * { grid-area: auto !important; }
   .ac-nacl-wrap .ac-rule-head { display: grid; }
 }
-.ac-btn { background: var(--accent); color: var(--panel); border: none; border-radius: var(--r); padding: 10px 22px; font-size: 14px; font-weight: 700; cursor: pointer; transition: background 0.15s; }
-.ac-btn:hover:not(:disabled) { background: var(--accent-2); }
+/* 주 버튼. 화면마다 접두어가 달라 정의가 흩어져 있는데(.ac- .cc- .la- .vs-),
+   전부 여기와 같은 규칙을 쓰도록 아래에 한꺼번에 묶어 두었다. */
+.ac-btn { background: var(--grad); color: #0c0c0c; border: none; border-radius: var(--r); padding: 10px 22px; font-size: 14px; font-weight: 700; cursor: pointer; transition: filter 0.15s; }
+/* 그라디언트는 hover에서 색을 바꿀 수 없다(배경이 이미지라 transition이 안 먹는다).
+   밝기로 반응을 준다. */
+.ac-btn:hover:not(:disabled) { filter: brightness(1.12); }
 .ac-btn:disabled { opacity: 0.4; cursor: default; }
+
+/* 화면마다 따로 만든 주 버튼들을 같은 모양으로 묶는다.
+   원래는 패딩과 글자 크기까지 제각각이었다(10px 22px · 12px 28px · 8px 16px). */
+.cc-btn, .la-btn, .vs-btn, .login-btn {
+  background: var(--grad); color: #0c0c0c; border: none;
+  border-radius: var(--r); font-weight: 700; cursor: pointer;
+  transition: filter 0.15s;
+}
+.cc-btn:hover:not(:disabled), .la-btn:hover:not(:disabled),
+.vs-btn:hover:not(:disabled), .login-btn:hover:not(:disabled) { filter: brightness(1.12); }
 .ac-btn-secondary { background: var(--line); color: var(--ink-2); }
 .ac-btn-secondary:hover:not(:disabled) { background: var(--line); }
 .ac-result { margin-top: 12px; padding: 10px 14px; border-radius: var(--r); font-size: 13px; line-height: 1.5; }
@@ -1074,9 +1100,9 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .ac-cal-cell:not(.has-data):not(.ac-cal-empty) { cursor: pointer; }
 .ac-cal-cell:not(.has-data):not(.ac-cal-empty):hover { background: rgba(148,163,184,0.08); }
 .ac-cal-cell.is-today { border: 1px solid var(--accent); }
-.ac-cal-cell.is-selected { background: var(--accent); color: var(--panel); }
+.ac-cal-cell.is-selected { background: var(--accent); color: var(--on-fill); }
 .ac-cal-count { font-size: 10px; color: var(--accent); font-weight: 700; height: 12px; }
-.ac-cal-cell.is-selected .ac-cal-count { color: var(--panel); }
+.ac-cal-cell.is-selected .ac-cal-count { color: var(--on-fill); }
 .ac-cal-empty { visibility: hidden; }
 .ac-datepop-actions { display: flex; flex-direction: column; gap: 8px; }
 .ac-empty { color: var(--ink-3); font-size: 13px; padding: 20px 0; text-align: center; }
@@ -1101,7 +1127,7 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 /* 카드 안의 행은 테두리 대신 배경으로 구분 — 테두리 중첩(박스 안 박스) 방지 */
 .ac-req { background: var(--soft); border: none; border-radius: var(--r); padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
 .ac-req-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.ac-req-status { color: var(--panel); font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: var(--r-sm); }
+.ac-req-status { color: var(--on-fill); font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: var(--r-sm); }
 .ac-req-title { color: var(--ink); font-size: 13px; font-weight: 600; }
 .ac-req-reason { color: var(--ink-2); font-size: 12px; }
 .ac-req-error { color: var(--fail); font-size: 12px; }
@@ -1170,7 +1196,7 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 
 .la-btn {
   background: var(--accent);
-  color: var(--panel);
+  color: var(--on-fill);
   border: none;
   border-radius: var(--r);
   padding: 12px 28px;
@@ -1230,7 +1256,7 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 }
 .la-counts { display: flex; gap: 8px; flex-wrap: wrap; }
 .la-count {
-  color: var(--panel);
+  color: var(--on-fill);
   border-radius: 999px;
   padding: 4px 12px;
   font-size: 12px;
@@ -1252,7 +1278,7 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
   user-select: none;
 }
 .la-sev-badge {
-  color: var(--panel);
+  color: var(--on-fill);
   border-radius: var(--r-sm);
   padding: 2px 8px;
   font-size: 11px;
@@ -1321,7 +1347,7 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .vs-sample-btn { position: absolute; top: 10px; right: 12px; background: var(--soft); border: 1px solid var(--accent); color: var(--accent); border-radius: var(--r-sm); padding: 4px 10px; font-size: 12px; cursor: pointer; }
 .vs-sample-btn:hover { background: var(--soft); }
 
-.vs-btn { background: var(--accent); color: var(--panel); border: none; border-radius: var(--r); padding: 12px 28px; font-size: 15px; font-weight: 700; cursor: pointer; margin-bottom: 20px; transition: background 0.15s; }
+.vs-btn { background: var(--accent); color: var(--on-fill); border: none; border-radius: var(--r); padding: 12px 28px; font-size: 15px; font-weight: 700; cursor: pointer; margin-bottom: 20px; transition: background 0.15s; }
 .vs-btn:hover:not(:disabled) { background: var(--accent-2); }
 .vs-btn:disabled { opacity: 0.4; cursor: default; }
 .vs-error { background: rgba(239,68,68,0.1); border: 1px solid var(--fail); color: var(--fail); border-radius: var(--r); padding: 12px 16px; font-size: 14px; margin-bottom: 16px; }
@@ -1333,7 +1359,7 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .vs-empty { color: var(--ink-3); text-align: center; padding: 40px 0; font-size: 14px; }
 .vs-finding { border-radius: var(--r); padding: 14px 16px; border-left-width: 4px; border-left-style: solid; }
 .vs-finding-top { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; cursor: pointer; user-select: none; }
-.vs-sev-badge { color: var(--panel); border-radius: var(--r-sm); padding: 2px 8px; font-size: 11px; font-weight: 700; white-space: nowrap; flex-shrink: 0; }
+.vs-sev-badge { color: var(--on-fill); border-radius: var(--r-sm); padding: 2px 8px; font-size: 11px; font-weight: 700; white-space: nowrap; flex-shrink: 0; }
 .vs-finding-name { font-size: 14px; font-weight: 700; color: var(--ink); flex: 1; }
 .vs-template-id { font-size: 11px; color: var(--ink-3); font-family: var(--mono); white-space: nowrap; }
 .vs-expand-icon { font-size: 10px; color: var(--ink-3); flex-shrink: 0; }
@@ -1363,7 +1389,7 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 
 .vs-kev-badge {
   background: var(--fail);
-  color: #fff;
+  color: var(--on-bright);
   border-radius: var(--r-sm);
   padding: 2px 8px;
   font-size: 11px;
@@ -1486,25 +1512,30 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 }
 .xp-source-head:hover { background: var(--panel); border-radius: var(--r-sm); }
 
+/* 근거 출처 배지.
+   어두운 테마로 오면서 의미색이 전부 밝아졌다(#fbbf24 · #4ade80 · #f87171).
+   그 위에 흰 글자를 얹으면 읽히지 않으므로 색을 뒤집는다 —
+   배경은 그 색을 옅게 깔고 글자와 테두리에 색을 준다.
+   배지가 열 개 가까이 한 줄에 서므로 채운 면으로 두면 화면이 시끄럽다. */
 .xp-badge {
   flex: none;
   padding: 1px 6px;
   border-radius: 3px;
   font-size: .68rem;
-  font-weight: 600;
-  color: #fff;
+  font-weight: 700;
+  border: 1px solid transparent;
 }
-.xp-badge-rule_engine  { background: var(--accent); }
-.xp-badge-policy       { background: var(--accent-2); }
-.xp-badge-concept      { background: var(--ink-3); }
-.xp-badge-aws_baseline { background: var(--wait); }
-.xp-badge-gcp_baseline { background: var(--wait); }
-.xp-badge-mitre        { background: var(--fail); }
-.xp-badge-mitigation   { background: var(--done); }
-.xp-badge-owasp        { background: var(--super); }
+.xp-badge-rule_engine  { background: var(--accent-soft); color: #a78bfa; border-color: rgba(139,92,246,.35); }
+.xp-badge-policy       { background: rgba(59,130,246,.13); color: #60a5fa; border-color: rgba(59,130,246,.35); }
+.xp-badge-concept      { background: rgba(255,255,255,.07); color: var(--ink-2); border-color: var(--line); }
+.xp-badge-aws_baseline { background: var(--wait-bg); color: var(--wait); border-color: var(--wait-line); }
+.xp-badge-gcp_baseline { background: var(--wait-bg); color: var(--wait); border-color: var(--wait-line); }
+.xp-badge-mitre        { background: var(--fail-bg); color: var(--fail); border-color: var(--fail-line); }
+.xp-badge-mitigation   { background: var(--done-bg); color: var(--done); border-color: rgba(74,222,128,.3); }
+.xp-badge-owasp        { background: var(--super-bg); color: var(--super); border-color: rgba(167,139,250,.3); }
 /* 국내 인증기준. 규제 근거라 '우리 정책'과 같은 계열로 묶어 둔다. */
-.xp-badge-ismsp        { background: var(--accent-2); }
-.xp-badge-kev          { background: #7f1d1d; }
+.xp-badge-ismsp        { background: rgba(236,72,153,.13); color: #f472b6; border-color: rgba(236,72,153,.35); }
+.xp-badge-kev          { background: rgba(248,113,113,.16); color: #fca5a5; border-color: rgba(248,113,113,.4); }
 
 /* 자료의 첫 줄. 식별자만으로는 무슨 내용인지 알 수 없어서 제목을 앞에 둔다. */
 .xp-title {
@@ -1576,8 +1607,8 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
   font-weight: 700;
   color: #fff;
 }
-.cm-tag-block { background: var(--fail); }
-.cm-tag-warn  { background: var(--wait); }
+.cm-tag-block { background: var(--fail); color: var(--on-bright); }
+.cm-tag-warn  { background: var(--wait); color: var(--on-bright); }
 
 .cm-title {
   font-size: .95rem;
@@ -1796,7 +1827,7 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
   padding: 1px 5px;
   border-radius: 3px;
   background: var(--fail);
-  color: #fff;
+  color: var(--on-bright);
   font-size: .66rem;
   font-weight: 700;
   vertical-align: middle;
@@ -2037,16 +2068,19 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
    테두리 대신 간격과 얇은 선으로 나눈다. */
 
 /* 심각도 4단계. Prowler가 쓰는 영어 표기를 그대로 둔다 — 옮기면 원본과 대조가 어렵다.
-   빨강→주황→노랑→회색으로 이어지는 한 계열이라 순서가 색으로도 읽힌다. */
+   어두운 바탕에 맞춰 밝은 쪽으로 올렸다. 밝은 테마의 짙은 빨강(#a01f2e)은
+   검정 위에서 거의 안 보인다.
+   앞의 셋은 브랜드 그라디언트의 세 색을 그대로 쓴다 — 핑크·보라·파랑 순서가
+   그대로 위험도 순서가 되므로 화면에 색이 두 벌 생기지 않는다. */
 :root {
-  --sv-crit: #a01f2e;
-  --sv-high: #b6591f;
-  --sv-med:  #8a7318;
-  --sv-low:  #5e6773;
-  --sv-crit-f: #a01f2e;
-  --sv-high-f: #c26a2c;
-  --sv-med-f:  #c2a63c;
-  --sv-low-f:  #aeb6c1;
+  --sv-crit: #ec4899;
+  --sv-high: #a78bfa;
+  --sv-med:  #60a5fa;
+  --sv-low:  #6b7280;
+  --sv-crit-f: #ec4899;
+  --sv-high-f: #8b5cf6;
+  --sv-med-f:  #3b82f6;
+  --sv-low-f:  #3f4654;
 }
 
 .ov { max-width: 1140px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; padding-bottom: 32px; }
@@ -2065,9 +2099,19 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 
 /* 머리 — 상태를 한 문장으로. 숫자를 흩어놓는 것보다 문장이 빨리 읽힌다. */
 .ov-hero { padding: 22px 24px 18px; display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 26px; align-items: start; }
-.ov-state { margin: 0; font-size: clamp(17px, 2vw, 22px); line-height: 1.5; letter-spacing: -.02em; color: var(--ink-2); text-wrap: balance; }
-.ov-state b { color: var(--ink); font-weight: 700; }
-.ov-state .cr { color: var(--sv-crit); font-weight: 700; }
+/* 화면을 여는 한 문장. 숫자만 그라디언트로 칠해 시선이 거기로 가게 한다.
+   문장 전체를 칠하면 읽기 힘들고, 안 칠하면 그냥 회색 화면이 된다. */
+.ov-state { margin: 0; font-size: clamp(19px, 2.2vw, 26px); font-weight: 700; line-height: 1.45; letter-spacing: -.025em; color: var(--ink-2); text-wrap: balance; }
+.ov-state b {
+  font-weight: 800;
+  background: var(--grad);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.ov-state .cr {
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--g3), #ff6b9d);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
 
 .ov-stale {
   display: inline-flex; align-items: center; gap: 7px;
@@ -2080,18 +2124,39 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 
 /* 심각도 띠 — 비율이 곧 그림이라 급한 게 얼마나 되는지 바로 보인다.
    같은 크기 타일 넷으로 두면 숫자가 큰 Low가 먼저 눈에 들어온다. */
-.ov-ribbon { display: flex; height: 8px; margin: 18px 24px 0; gap: 2px; }
-.ov-ribbon i { display: block; height: 100%; border-radius: 999px; }
+/* 심각도 비율. 아래 지표 띠 바로 위에 딱 붙여 한 덩어리로 읽히게 한다.
+   따로 떼어 놓으면 같은 정보가 두 번 나온 것처럼 보인다. */
+.ov-ribbon { display: flex; height: 4px; margin: 18px 0 0; gap: 0; }
+.ov-ribbon i { display: block; height: 100%; }
+.ov-ribbon + .ov-legend { margin-top: 0; }
 
-.ov-legend { display: flex; gap: 24px; padding: 11px 24px 20px; flex-wrap: wrap; }
-.ov-leg {
-  display: flex; align-items: baseline; gap: 7px;
-  background: none; border: 0; border-bottom: 2px solid transparent;
-  padding: 2px 0; font: inherit; cursor: pointer;
+/* 심각도 넷을 전폭 띠에 얹는다.
+   패널 안이 아니라 패널 폭을 꽉 채우는 면이라 화면에서 여기가 먼저 읽힌다.
+   밝기는 --band-tone 하나로 조절한다(지금 75%). 100%로 올리면 원색이 되고
+   그때는 글자가 안 읽히므로 --band-ink를 검정으로 뒤집어야 한다. */
+.ov-legend {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 0;
+  background: var(--band); color: var(--band-ink);
+  margin-top: 18px; padding: 0;
 }
-.ov-leg:hover { border-bottom-color: var(--c); }
-.ov-leg .v { font-size: 18px; font-weight: 700; color: var(--c); font-variant-numeric: tabular-nums; }
-.ov-leg .k { font-size: 12.5px; color: var(--ink-3); }
+/* 띠 안의 한 칸. 세로로 쌓고 왼쪽 정렬 — 숫자가 먼저, 이름이 아래.
+   칸 사이는 선을 긋지 않고 옅은 세로선으로만 나눈다. 그라디언트가 이어져 보여야 한다. */
+.ov-leg {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+  background: none; border: 0; border-left: 1px solid rgba(255,255,255,.16);
+  padding: 18px 20px; font: inherit; cursor: pointer; text-align: left;
+  transition: background .14s;
+}
+.ov-leg:first-child { border-left: 0; }
+.ov-leg:hover { background: rgba(255,255,255,.09); }
+.ov-leg .v {
+  font-size: 32px; font-weight: 800; letter-spacing: -.03em; line-height: 1;
+  color: var(--band-ink); font-variant-numeric: tabular-nums;
+}
+.ov-leg .k {
+  font-size: 10.5px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--band-ink); opacity: .7;
+}
 
 .sv-crit { --c: var(--sv-crit); --f: var(--sv-crit-f); }
 .sv-high { --c: var(--sv-high); --f: var(--sv-high-f); }
@@ -2125,7 +2190,9 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
   font-size: 12.5px; font-weight: 700; color: #fff;
   font-variant-numeric: tabular-nums;
 }
-.ov-cell.is-zero { background: transparent !important; color: var(--line); font-weight: 400; }
+/* 0인 칸. --line은 흰색 12%라 어두운 바탕에서 거의 사라진다.
+   0도 정보이므로 흐리되 보이기는 해야 한다. */
+.ov-cell.is-zero { background: transparent !important; color: var(--ink-3); font-weight: 400; }
 .ov-tot { text-align: right; padding-right: 10px; font-size: 13px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
 
 /* 점검 기록 */
