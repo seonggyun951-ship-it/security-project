@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { RESOURCE_META } from '../lib/aws'
+import { summarize, briefOf } from '../lib/snapshot'
 import { fetchRows, callFunction } from '../lib/db'
 import ErrorBanner from '../components/ErrorBanner'
 
@@ -38,6 +39,71 @@ function DiffView({ oldData, newData }) {
         </div>
       ))}
     </pre>
+  )
+}
+
+// 수집한 내용을 사람이 읽는 형태로 보여준다.
+//
+// 원래는 raw_data를 JSON 그대로 뿌렸다. 그건 화면이 아니라 로그다 — 보는 사람이
+// 중괄호를 헤치며 필요한 값을 직접 찾아야 한다. 리소스마다 볼 값은 정해져 있으므로
+// 그것만 뽑아 이름을 붙인다(lib/snapshot.js).
+//
+// 원본은 버리지 않고 접어 둔다. 수집이 잘못됐는지 따질 때 필요하고,
+// 우리가 뽑지 않은 값을 확인해야 할 때도 있다.
+function SnapshotView({ type, oldData, newData }) {
+  const [rawOpen, setRawOpen] = useState(false)
+  const { fields, rules, warn } = summarize(type, newData)
+
+  // 바뀐 값은 옆에 이전 값을 함께 적는다. 무엇이 어떻게 달라졌는지
+  // 원본 diff를 펴지 않고도 한 줄에서 읽히게 한다.
+  const before = oldData ? summarize(type, oldData) : null
+  const prevOf = (label) => {
+    if (!before) return null
+    const hit = before.fields.find(([k]) => k === label)
+    return hit ? hit[1] : null
+  }
+
+  return (
+    <div className="ac-snap-body">
+      {warn.length > 0 && (
+        <div className="ac-snap-warn">
+          {warn.map((w, i) => <span key={i}>{w}</span>)}
+        </div>
+      )}
+
+      <dl className="ac-snap-fields">
+        {fields.map(([k, v]) => {
+          const p = prevOf(k)
+          const changed = p != null && String(p) !== String(v)
+          return (
+            <div key={k} className={`ac-snap-f ${changed ? 'is-changed' : ''}`}>
+              <dt>{k}</dt>
+              <dd>
+                {v || <span className="ac-snap-none">—</span>}
+                {changed && <span className="ac-snap-was">이전 {p || '없음'}</span>}
+              </dd>
+            </div>
+          )
+        })}
+      </dl>
+
+      {rules.length > 0 && (
+        <div className="ac-snap-rules">
+          <div className="ac-snap-rules-h">규칙 {rules.length}개</div>
+          {rules.map((r, i) => (
+            <div key={i} className="ac-snap-rule">
+              <span className="d">{r.dir}</span>
+              <span className="t">{r.text}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <button className="ac-snap-raw-toggle" onClick={() => setRawOpen((v) => !v)}>
+        원본 {rawOpen ? '접기' : '보기'}
+      </button>
+      {rawOpen && <DiffView oldData={oldData} newData={newData} />}
+    </div>
   )
 }
 
@@ -214,13 +280,18 @@ export default function AwsStatus() {
             return (
               <div key={key} className={`ac-snapshot ${history.length > 0 ? 'has-changes' : ''}`}>
                 <div className="ac-snapshot-top" onClick={() => toggle(latest.id)}>
-                  <span className="ac-snapshot-name">{latest.resource_name || latest.resource_id}</span>
+                  <span className="ac-snapshot-name">
+                    {latest.resource_name || latest.resource_id}
+                    {/* 펼치지 않아도 무엇인지 알 수 있게 한 줄 요약을 붙인다.
+                        규칙이 몇 개인지, 권한이 붙었는지 같은 것들이다. */}
+                    <span className="ac-snap-brief">{briefOf(latest.resource_type, latest.raw_data)}</span>
+                  </span>
                   <span className="ac-snapshot-type">{meta.label}</span>
                   <span className="ac-snapshot-time">{new Date(latest.collected_at).toLocaleString('ko-KR')}</span>
                   <span className="ac-expand-icon">{isOpen ? '▲' : '▼'}</span>
                 </div>
                 {isOpen && (
-                  <DiffView oldData={prevOf(latest)?.raw_data} newData={latest.raw_data} />
+                  <SnapshotView type={latest.resource_type} oldData={prevOf(latest)?.raw_data} newData={latest.raw_data} />
                 )}
                 {history.length > 0 && (
                   <div className="ac-snapshot-history">
@@ -235,7 +306,7 @@ export default function AwsStatus() {
                             <span className="ac-snapshot-time">{new Date(h.collected_at).toLocaleString('ko-KR')}</span>
                             <span className="ac-expand-icon">{hOpen ? '▲' : '▼'}</span>
                           </div>
-                          {hOpen && <DiffView oldData={prevOf(h)?.raw_data} newData={h.raw_data} />}
+                          {hOpen && <SnapshotView type={h.resource_type} oldData={prevOf(h)?.raw_data} newData={h.raw_data} />}
                         </div>
                       )
                     })}

@@ -1145,8 +1145,48 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .ac-snapshot-time { color: var(--ink-3); font-size: 11px; }
 .ac-expand-icon { color: var(--ink-3); font-size: 11px; }
 /* 수집한 원본 JSON. --accent-2(짙은 보라)는 어두운 면 위에서 거의 안 읽힌다.
-   코드 블록이라 글자가 많으므로 밝은 쪽으로 올린다. */
-.ac-snapshot-json { background: var(--soft); color: #a5b4fc; font-family: var(--mono); font-size: 11px; padding: 12px; margin: 0; overflow-x: auto; max-height: 300px; }
+   코드 블록이라 글자가 많으므로 밝은 쪽으로 올린다.
+   이제 기본은 접혀 있고 '원본 보기'를 눌렀을 때만 나온다. */
+.ac-snapshot-json { background: var(--soft); color: #a5b4fc; font-family: var(--mono); font-size: 11px; padding: 12px; margin: 8px 0 0; border-radius: var(--r-sm); overflow-x: auto; max-height: 300px; }
+
+/* ── 수집 내용을 읽는 형태로 ──
+   JSON을 그대로 뿌리던 자리다. 리소스마다 볼 값만 뽑아 이름을 붙여 보여준다. */
+.ac-snap-body { padding: 0 14px 14px 17px; display: flex; flex-direction: column; gap: 12px; }
+
+/* 눈에 띄어야 할 것. 인터넷 전체 개방, 어디에도 안 붙은 정책 등 */
+.ac-snap-warn { display: flex; flex-wrap: wrap; gap: 6px; }
+.ac-snap-warn span {
+  font-size: 11.5px; font-weight: 600; color: var(--wait);
+  background: var(--wait-bg); border: 1px solid var(--wait-line);
+  border-radius: 999px; padding: 3px 10px;
+}
+
+/* 값 목록. 이름과 값을 두 칸으로 세워 눈이 세로로 흐르게 한다 */
+.ac-snap-fields { margin: 0; display: grid; gap: 1px; background: var(--line-2); border: 1px solid var(--line-2); border-radius: var(--r-sm); overflow: hidden; }
+.ac-snap-f { display: grid; grid-template-columns: 116px 1fr; gap: 12px; background: var(--panel); padding: 8px 12px; align-items: baseline; }
+.ac-snap-f dt { font-size: 11.5px; color: var(--ink-3); }
+.ac-snap-f dd { margin: 0; font-size: 13px; color: var(--ink); word-break: break-all; }
+.ac-snap-none { color: var(--ink-3); }
+/* 바뀐 값. 왼쪽에 그라디언트 선을 세우고 이전 값을 옆에 적는다 */
+.ac-snap-f.is-changed { box-shadow: inset 3px 0 0 var(--g2); }
+.ac-snap-was { display: inline-block; margin-left: 9px; font-size: 11px; color: var(--ink-3); }
+.ac-snap-was::before { content: '← '; }
+
+/* 규칙 목록(보안 그룹·NACL). 원본에서는 배열 속에 묻혀 있어 읽을 수 없던 부분이다 */
+.ac-snap-rules { border: 1px solid var(--line-2); border-radius: var(--r-sm); overflow: hidden; }
+.ac-snap-rules-h { font-size: 11.5px; font-weight: 700; color: var(--ink-2); background: var(--soft); padding: 7px 12px; }
+.ac-snap-rule { display: flex; gap: 10px; align-items: baseline; padding: 7px 12px; border-top: 1px solid var(--line-2); font-size: 12.5px; }
+.ac-snap-rule .d { font-size: 10.5px; color: var(--ink-3); width: 52px; flex: none; }
+.ac-snap-rule .t { font-family: var(--mono); color: var(--ink); }
+
+.ac-snap-raw-toggle {
+  align-self: flex-start; background: none; border: 0; padding: 0;
+  font: inherit; font-size: 11.5px; color: var(--ink-3); cursor: pointer;
+}
+.ac-snap-raw-toggle:hover { color: var(--ink-2); text-decoration: underline; }
+
+/* 목록 한 줄에 붙는 요약. 펼치지 않아도 무엇인지 알 수 있게 */
+.ac-snap-brief { margin-left: 9px; font-size: 11.5px; font-weight: 400; color: var(--ink-3); }
 .ac-diff-line { white-space: pre; }
 .ac-diff-added { color: var(--done); background: rgba(74,222,128,0.12); }
 .ac-diff-removed { color: var(--fail); background: rgba(248,113,113,0.12); }
