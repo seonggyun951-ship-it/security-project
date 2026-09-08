@@ -130,6 +130,7 @@ export default function AwsStatus() {
   const [collectResult, setCollectResult] = useState(null)
   const [snapshots, setSnapshots] = useState([])
   const [snapshotTotal, setSnapshotTotal] = useState(0)
+  const [runs, setRuns] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
   const [expanded, setExpanded] = useState(() => new Set())
@@ -159,14 +160,24 @@ export default function AwsStatus() {
     setLoading(false)
   }
 
-  useEffect(() => { fetchSnapshots() }, [])
+  // 수집을 언제 돌렸는지. 스냅샷은 값이 바뀌었을 때만 쌓이므로 이것만으로는
+  // '돌았는데 변화가 없었다'와 '아예 안 돌았다'를 구별할 수 없다.
+  const fetchRuns = async () => {
+    const { rows } = await fetchPage(
+      supabase.from('collect_runs').select('*', { count: 'exact' })
+        .order('started_at', { ascending: false }).range(0, 19),
+      '수집 실행 기록')
+    setRuns(rows)
+  }
+
+  useEffect(() => { fetchSnapshots(); fetchRuns() }, [])
 
   const runCollect = async () => {
     setCollecting(true)
     setCollectResult(null)
     const data = await callFunction('aws-collect')
     setCollectResult(data)
-    if (data.ok) await fetchSnapshots()
+    if (data.ok) { await fetchSnapshots(); await fetchRuns() }
     setCollecting(false)
   }
 
@@ -252,8 +263,31 @@ export default function AwsStatus() {
       </div>
 
       <div className="ac-card ac-card-wide">
+        {/* 언제 돌았는지 먼저 보여준다. 아래 목록은 '무엇이 바뀌었나'라서,
+            변화가 없는 날은 아무것도 안 나온다. 그때 수집이 멈춘 건지
+            바뀐 게 없는 건지 여기서 갈린다. */}
+        {runs.length > 0 && (
+          <div className="ac-runs">
+            <div className="ac-runs-h">최근 수집</div>
+            <div className="ac-runs-list">
+              {runs.slice(0, 8).map((r) => (
+                <div key={r.id} className={`ac-run ${r.error ? 'is-err' : ''}`}>
+                  <span className="t">{new Date(r.started_at).toLocaleString('ko-KR', {
+                    month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                  <span className="w">{r.trigger === 'cron' ? '자동' : '수동'}</span>
+                  <span className="r">
+                    {r.error ? '실패'
+                      : r.changed > 0 ? `${r.changed}건 변경`
+                        : r.seen != null ? '변화 없음' : '진행 중'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="ac-card-title">
-          수집 이력 {changedCount > 0 && <span className="ac-count-badge">{changedCount}</span>}
+          변경 이력 {changedCount > 0 && <span className="ac-count-badge">{changedCount}</span>}
           {/* 상한에 걸리면 알린다. 조용히 잘라내면 '변경 이력이 없다'와
               '못 가져왔다'를 구별할 수 없다. */}
           {snapshotTotal > SNAPSHOT_LIMIT && (

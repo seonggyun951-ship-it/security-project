@@ -1190,6 +1190,24 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 
 /* 상한에 걸렸을 때만 나온다 */
 .ac-snap-more { margin-left: 10px; font-size: 11.5px; font-weight: 400; color: var(--ink-3); }
+
+/* ── 수집 실행 기록 ──
+   아래 목록은 '무엇이 바뀌었나'를 담아서, 변화가 없는 날은 아무것도 안 나온다.
+   그때 수집이 멈춘 건지 바뀐 게 없는 건지 여기서 갈린다. */
+.ac-runs { margin-bottom: 16px; }
+.ac-runs-h { font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 8px; }
+.ac-runs-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.ac-run {
+  display: inline-flex; align-items: baseline; gap: 7px;
+  border: 1px solid var(--line-2); border-radius: 999px; padding: 4px 11px;
+  font-size: 11.5px; white-space: nowrap;
+}
+.ac-run .t { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.ac-run .w { color: var(--ink-3); font-size: 10.5px; }
+.ac-run .r { color: var(--ink-3); }
+/* 실패한 회차만 색이 붙는다. 나머지는 조용히 지나가야 한다 */
+.ac-run.is-err { border-color: var(--fail-line); }
+.ac-run.is-err .r { color: var(--fail); font-weight: 600; }
 .ac-diff-line { white-space: pre; }
 .ac-diff-added { color: var(--done); background: rgba(74,222,128,0.12); }
 .ac-diff-removed { color: var(--fail); background: rgba(248,113,113,0.12); }

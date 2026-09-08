@@ -11,7 +11,16 @@ const cors = {
 }
 
 // 객체 키 순서에 상관없이 비교하기 위한 정규화된 문자열화 (Postgres JSONB는 키 순서를 보존하지 않음)
+// 두 스냅샷이 같은지 비교하려고 키 순서를 고정해 문자열로 만든다.
+//
+// Date를 먼저 걸러야 한다. Date는 typeof가 'object'인데 열거할 자체 속성이 없어서
+// 아래 객체 분기로 내려가면 Object.keys가 []를 주고 결과가 '{}'가 된다.
+// DB에서 읽어온 같은 값은 문자열이므로 '"2026-08-07T…"' 이 되어 영원히 달라진다.
+//   AWS쪽 {"CreateDate":{}}  vs  DB쪽 {"CreateDate":"2026-08-07T16:38:49.000Z"}
+// 그 탓에 IAM 사용자·정책은 아무것도 안 바뀌어도 수집할 때마다 새 행이 쌓였다.
+// CreateDate·UpdateDate를 가진 IAM만 걸리고 SG·VPC·NACL은 멀쩡했던 이유다.
 function stableStringify(value) {
+  if (value instanceof Date) return JSON.stringify(value.toISOString())
   if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`
   if (value && typeof value === 'object') {
     const keys = Object.keys(value).sort()
@@ -262,6 +271,15 @@ serve(async (req) => {
 
     const supabase = createClient(Deno.env.get('SUPABASE_URL'), Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'))
 
+    // 수집을 돌렸다는 사실 자체를 남긴다.
+    //
+    // 스냅샷은 값이 바뀌었을 때만 쌓이므로, 그것만으로는 "돌았는데 변화가 없었다"와
+    // "아예 안 돌았다"를 구별할 수 없다. 둘 다 화면에서 아무것도 안 보인다.
+    // 여기 한 줄을 먼저 세워 두고 끝날 때 결과를 채운다.
+    const { data: run } = await supabase.from('collect_runs')
+      .insert({ trigger: byCron ? 'cron' : 'manual' })
+      .select('id').single()
+
     // 리소스별 마지막 스냅샷과 비교해서, 실제로 바뀐 것만 새로 기록 (변화 이력 유지, 불필요한 중복 방지)
     let changed = 0
     for (const row of rows) {
@@ -305,21 +323,38 @@ serve(async (req) => {
       .update({ last_collected_at: new Date().toISOString(), dirty: false })
       .eq('id', 1)
 
-    return new Response(JSON.stringify({
-      ok: true,
-      changed,
-      counts: {
-        security_group: sgResults.length,
-        vpc: vpcResults.length,
-        network_acl: naclResults.length,
-        iam_role: roleResults.length,
-        iam_policy: policyResults.length,
-        iam_user: userResults.length,
-        waf_web_acl: wafResults.length,
-      }
-    }), { headers: { ...cors, 'Content-Type': 'application/json' } })
+    const counts = {
+      security_group: sgResults.length,
+      vpc: vpcResults.length,
+      network_acl: naclResults.length,
+      iam_role: roleResults.length,
+      iam_policy: policyResults.length,
+      iam_user: userResults.length,
+      waf_web_acl: wafResults.length,
+    }
+
+    // 실행 기록을 마무리한다. changed가 0이어도 이 줄이 남으므로
+    // 화면은 '이 시각에 돌았고 바뀐 게 없었다'를 말할 수 있다.
+    if (run?.id) {
+      await supabase.from('collect_runs')
+        .update({ finished_at: new Date().toISOString(), seen: rows.length, changed, counts })
+        .eq('id', run.id)
+    }
+
+    return new Response(JSON.stringify({ ok: true, changed, counts }),
+      { headers: { ...cors, 'Content-Type': 'application/json' } })
   } catch (e) {
     console.error('aws-collect error:', e)
+    // 실패도 기록에 남긴다. 실패한 회차가 사라지면 화면에서는 그 시각에
+    // 아무 일도 없던 것처럼 보여, 수집이 며칠째 깨져 있어도 모른다.
+    // 여기서 또 실패하면 어쩔 수 없으므로 조용히 넘긴다 — 원래 오류를 덮으면 안 된다.
+    try {
+      const sb = createClient(Deno.env.get('SUPABASE_URL'), Deno.env.get('SUPABASE_SERVICE_ROLE_KEY'))
+      await sb.from('collect_runs').insert({
+        finished_at: new Date().toISOString(),
+        error: String(e).slice(0, 500),
+      })
+    } catch (_) { /* 기록 실패는 무시한다 */ }
     return new Response(JSON.stringify({ ok: false, error: String(e) }), { headers: { ...cors, 'Content-Type': 'application/json' }, status: 500 })
   }
 })
