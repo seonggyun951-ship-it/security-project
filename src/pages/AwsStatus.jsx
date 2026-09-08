@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { RESOURCE_META } from '../lib/aws'
-import { summarize, briefOf } from '../lib/snapshot'
+import { summarize, briefOf, flagsOf } from '../lib/snapshot'
 import { fetchPage, callFunction } from '../lib/db'
 import ErrorBanner from '../components/ErrorBanner'
 
@@ -111,6 +111,18 @@ function SnapshotView({ type, oldData, newData }) {
 // 넘으면 화면이 '더 있음'을 알리므로 조용히 잘리지는 않는다.
 const SNAPSHOT_LIMIT = 1000
 
+// 목록의 시각은 대부분 같은 값이 반복된다. 자리를 다 내주고 얻는 게 없다.
+// 짧게 줄이고 정확한 시각은 title로 넘긴다.
+function relTime(iso) {
+  const t = new Date(iso)
+  const min = Math.floor((Date.now() - t) / 60000)
+  if (min < 1) return '방금'
+  if (min < 60) return `${min}분 전`
+  if (min < 1440) return `${Math.floor(min / 60)}시간 전`
+  if (min < 43200) return `${Math.floor(min / 1440)}일 전`
+  return t.toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit' })
+}
+
 function groupSnapshotsByResource(snapshots) {
   const groups = {}
   for (const s of snapshots) {
@@ -205,6 +217,20 @@ export default function AwsStatus() {
   const resourceGroups = resourceGroupsAll
     .filter((g) => !changedOnly || g.history.length > 0)
     .filter((g) => !q || (g.latest.resource_name || '').toLowerCase().includes(q) || (g.latest.resource_id || '').toLowerCase().includes(q))
+
+  // 종류가 섞인 채 시각 순으로만 늘어서 있으면 훑을 수가 없다. IAM 사용자와
+  // 보안 그룹은 봐야 할 값이 아예 달라서 같은 줄에 놓으면 둘 다 안 읽힌다.
+  // 종류로 구획을 나눈다 — 리소스가 몇 배가 돼도 읽는 방식은 그대로다.
+  const knownTypes = Object.keys(RESOURCE_META)
+  const sections = [
+    ...knownTypes.map((k) => ({ key: k, label: RESOURCE_META[k].label })),
+    // 메타에 없는 종류가 들어와도 조용히 사라지면 안 된다.
+    ...[...new Set(resourceGroups.map((g) => g.latest.resource_type))]
+      .filter((t) => !knownTypes.includes(t))
+      .map((t) => ({ key: t, label: t })),
+  ]
+    .map((s) => ({ ...s, items: resourceGroups.filter((g) => g.latest.resource_type === s.key) }))
+    .filter((s) => s.items.length > 0)
 
   return (
     <div className="ac-page">
@@ -327,8 +353,14 @@ export default function AwsStatus() {
         )}
 
         <div className="ac-snapshot-list">
-          {resourceGroups.map(({ key, sorted, latest, history }) => {
-            const meta = RESOURCE_META[latest.resource_type] || { label: latest.resource_type }
+          {sections.map((section) => (
+          <section key={section.key} className="ac-sec">
+            <div className="ac-sec-h">
+              <span className="ac-sec-label">{section.label}</span>
+              <span className="ac-sec-count">{section.items.length}</span>
+            </div>
+          {section.items.map(({ key, sorted, latest, history }) => {
+            const flags = flagsOf(latest.resource_type, latest.raw_data)
             const isOpen = expanded.has(latest.id)
             const historyOpen = expandedHistory.has(key)
             const prevOf = (item) => {
@@ -337,15 +369,21 @@ export default function AwsStatus() {
             }
             return (
               <div key={key} className={`ac-snapshot ${history.length > 0 ? 'has-changes' : ''}`}>
+                {/* 열을 고정한다. 줄마다 길이가 달라 세로로 안 읽히던 게
+                    가독성이 떨어지는 가장 큰 이유였다. */}
                 <div className="ac-snapshot-top" onClick={() => toggle(latest.id)}>
-                  <span className="ac-snapshot-name">
-                    {latest.resource_name || latest.resource_id}
-                    {/* 펼치지 않아도 무엇인지 알 수 있게 한 줄 요약을 붙인다.
-                        규칙이 몇 개인지, 권한이 붙었는지 같은 것들이다. */}
-                    <span className="ac-snap-brief">{briefOf(latest.resource_type, latest.raw_data)}</span>
+                  <span className="ac-snapshot-name">{latest.resource_name || latest.resource_id}</span>
+                  {/* 펼치지 않아도 무엇인지 알 수 있게 한 줄 요약을 붙인다.
+                      규칙이 몇 개인지, 권한이 붙었는지 같은 것들이다. */}
+                  <span className="ac-snap-brief">{briefOf(latest.resource_type, latest.raw_data)}</span>
+                  <span className="ac-snap-flags">
+                    {flags.map((f, i) => (
+                      <span key={i} className={`ac-flag is-${f.level}`}>{f.text}</span>
+                    ))}
                   </span>
-                  <span className="ac-snapshot-type">{meta.label}</span>
-                  <span className="ac-snapshot-time">{new Date(latest.collected_at).toLocaleString('ko-KR')}</span>
+                  <span className="ac-snapshot-time" title={new Date(latest.collected_at).toLocaleString('ko-KR')}>
+                    {relTime(latest.collected_at)}
+                  </span>
                   <span className="ac-expand-icon">{isOpen ? '▲' : '▼'}</span>
                 </div>
                 {isOpen && (
@@ -361,7 +399,9 @@ export default function AwsStatus() {
                       return (
                         <div key={h.id} className="ac-snapshot-history-item">
                           <div className="ac-snapshot-history-top" onClick={() => toggle(h.id)}>
-                            <span className="ac-snapshot-time">{new Date(h.collected_at).toLocaleString('ko-KR')}</span>
+                            <span className="ac-snapshot-time" title={new Date(h.collected_at).toLocaleString('ko-KR')}>
+                              {relTime(h.collected_at)}
+                            </span>
                             <span className="ac-expand-icon">{hOpen ? '▲' : '▼'}</span>
                           </div>
                           {hOpen && <SnapshotView type={h.resource_type} oldData={prevOf(h)?.raw_data} newData={h.raw_data} />}
@@ -373,6 +413,8 @@ export default function AwsStatus() {
               </div>
             )
           })}
+          </section>
+          ))}
         </div>
       </div>
       </div>

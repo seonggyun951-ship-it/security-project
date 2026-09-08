@@ -1125,8 +1125,11 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
    회색 덩어리를 8px 간격으로 늘어놓으니 스무 개가 넘어가면 죽이 됐다.
    간격을 없애고 구분선 하나로 이어 붙여 표처럼 흐르게 한다 —
    목록은 덩어리의 나열이 아니라 훑는 것이다. */
+/* 목록 자체를 스크롤 영역으로 둔다. 리소스가 늘어도 페이지가 끝없이 길어지지 않고,
+   구획 머리글이 붙어 있을 기준면이 생긴다(sticky는 overflow:hidden 안에서 안 먹는다). */
 .ac-snapshot-list { display: flex; flex-direction: column; gap: 0;
-  border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+  border: 1px solid var(--line); border-radius: var(--r);
+  max-height: 70vh; overflow-y: auto; }
 .ac-snapshot { background: transparent; border: none; border-top: 1px solid var(--line-2);
   border-radius: 0; overflow: hidden; transition: background .12s; }
 .ac-snapshot:first-child { border-top: none; }
@@ -1138,11 +1141,44 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
   content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
   background: var(--grad);
 }
-.ac-snapshot-top { display: flex; align-items: center; gap: 9px; padding: 11px 14px; cursor: pointer; }
+/* ── 종류별 구획 ──
+   IAM 사용자와 보안 그룹은 봐야 할 값이 아예 달라서 한 통에 섞으면 둘 다 안 읽힌다.
+   머리글은 스크롤에 붙여 둔다 — 한참 내려간 뒤에도 지금 뭘 보고 있는지 알아야 한다. */
+.ac-sec + .ac-sec { border-top: 1px solid var(--line); }
+.ac-sec-h {
+  position: sticky; top: 0; z-index: 2;
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 14px; background: var(--soft);
+  border-bottom: 1px solid var(--line-2);
+}
+.ac-sec-label { font-size: 11px; font-weight: 700; letter-spacing: .1em; color: var(--ink-2); text-transform: uppercase; }
+.ac-sec-count { font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+
+/* 열을 고정한다. flex로 흘려 두면 줄마다 요약 길이가 달라 이름 뒤 위치가
+   제각각이 되고, 그러면 세로로 훑을 수가 없다. */
+.ac-snapshot-top {
+  display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) auto 62px 14px;
+  align-items: center; gap: 10px; padding: 9px 14px; cursor: pointer;
+}
 .ac-snapshot-icon { font-size: 14px; }
-.ac-snapshot-name { color: var(--ink); font-size: 13px; font-weight: 600; flex: 1; }
+.ac-snapshot-name { color: var(--ink); font-size: 13px; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ac-snapshot-type { color: var(--accent); font-size: 11px; background: var(--accent-soft); padding: 2px 8px; border-radius: var(--r-sm); }
-.ac-snapshot-time { color: var(--ink-3); font-size: 11px; }
+.ac-snapshot-time { color: var(--ink-3); font-size: 11px; text-align: right;
+  font-variant-numeric: tabular-nums; }
+
+/* 위험한 줄만 걸리게 한다. 50줄을 훑는 동안 하나씩 펼쳐 볼 수는 없다. */
+.ac-snap-flags { display: flex; gap: 5px; justify-content: flex-end; flex-wrap: nowrap; overflow: hidden; }
+.ac-flag { font-size: 10.5px; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
+.ac-flag.is-high { background: var(--fail-bg); color: var(--fail); border: 1px solid var(--fail-line); font-weight: 600; }
+.ac-flag.is-note { background: transparent; color: var(--ink-3); border: 1px solid var(--line-2); }
+
+@media (max-width: 720px) {
+  /* 좁으면 열을 유지할 수 없다. 이름과 시각만 남기고 나머지는 아래로 흘린다. */
+  .ac-snapshot-top { grid-template-columns: minmax(0, 1fr) 62px 14px; }
+  .ac-snap-brief { grid-column: 1 / -1; margin-left: 0; }
+  .ac-snap-flags { grid-column: 1 / -1; justify-content: flex-start; flex-wrap: wrap; }
+}
 .ac-expand-icon { color: var(--ink-3); font-size: 11px; }
 /* 수집한 원본 JSON. --accent-2(짙은 보라)는 어두운 면 위에서 거의 안 읽힌다.
    코드 블록이라 글자가 많으므로 밝은 쪽으로 올린다.
@@ -1186,7 +1222,8 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .ac-snap-raw-toggle:hover { color: var(--ink-2); text-decoration: underline; }
 
 /* 목록 한 줄에 붙는 요약. 펼치지 않아도 무엇인지 알 수 있게 */
-.ac-snap-brief { margin-left: 9px; font-size: 11.5px; font-weight: 400; color: var(--ink-3); }
+.ac-snap-brief { font-size: 11.5px; font-weight: 400; color: var(--ink-3);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* 상한에 걸렸을 때만 나온다 */
 .ac-snap-more { margin-left: 10px; font-size: 11.5px; font-weight: 400; color: var(--ink-3); }
