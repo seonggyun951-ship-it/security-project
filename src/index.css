@@ -13,8 +13,10 @@
   --panel:   #141417;  /* 카드 면 — 배경보다 한 단계 밝게 */
   --soft:    #1a1a1e;  /* 옅은 면 — 코드 블록, 표 머리, 보조 영역 */
   --ink:     #ffffff;  /* 본문 */
-  --ink-2:   #a1a1aa;  /* 보조 텍스트 */
-  --ink-3:   #6b7280;  /* 흐릿한 텍스트 */
+  --ink-2:   #b4b4bd;  /* 보조 텍스트 */
+  /* 흐릿한 텍스트. #6b7280으로 뒀더니 옅은 면(--soft) 위에서 대비가 3.6:1까지 떨어져
+     작은 글자가 안 읽혔다. 흐리게 보이되 읽히기는 해야 하므로 한 단계 올렸다. */
+  --ink-3:   #8a919e;
   --line:    rgba(255,255,255,.12);  /* 테두리 */
   --line-2:  rgba(255,255,255,.07);  /* 더 옅은 구분선 */
 
@@ -44,13 +46,17 @@
     color-mix(in srgb, var(--g2) var(--band-tone), var(--bg)),
     color-mix(in srgb, var(--g3) var(--band-tone), var(--bg)));
 
-  /* 조작 — 주 버튼은 그라디언트, 보조는 테두리만 */
-  --accent:   #8b5cf6;
-  --accent-2: #7c3aed;  /* hover */
-  --accent-soft: rgba(139,92,246,.14);
+  /* 조작 — 주 버튼은 그라디언트, 보조는 테두리만.
+     링크와 작은 글자로 쓰는 자리가 많아 한 단계 밝게 잡았다.
+     #8b5cf6은 카드(#141417) 위에서 4.34:1이라 작은 글자에는 모자란다. */
+  --accent:   #a78bfa;
+  --accent-2: #8b5cf6;  /* hover */
+  --accent-soft: rgba(167,139,250,.15);
 
   /* 의미색 — 어두운 바탕용으로 올렸다. bg는 색을 12% 정도만 깔아 면이 뜨지 않게 한다 */
-  --wait:  #fbbf24; --wait-bg:  rgba(251,191,36,.13); --wait-line: rgba(251,191,36,.3);
+  /* 대기·주의. 원래 앰버(#fbbf24)였는데 파랑–보라–핑크 팔레트 안에서 노랑만 혼자 떠서
+     주황 쪽으로 밀고 채도를 낮췄다. 핑크(위험)와 이어지면서도 구분은 된다. */
+  --wait:  #e8935c; --wait-bg:  rgba(232,147,92,.13); --wait-line: rgba(232,147,92,.32);
   --super: #a78bfa; --super-bg: rgba(167,139,250,.13);
   --done:  #4ade80; --done-bg:  rgba(74,222,128,.13);
   --fail:  #f87171; --fail-bg:  rgba(248,113,113,.13); --fail-line: rgba(248,113,113,.3);
@@ -315,7 +321,7 @@ body {
   margin-top: 6px;
 }
 .login-btn:hover:not(:disabled) { background: var(--accent-2); }
-.login-btn:disabled { opacity: 0.4; cursor: default; }
+.login-btn:disabled { opacity: 0.5; cursor: default; }
 
 .module-grid {
   display: grid;
@@ -449,7 +455,7 @@ body {
   margin-bottom: 20px;
 }
 .cc-btn:hover:not(:disabled) { background: var(--accent-2); }
-.cc-btn:disabled { opacity: 0.4; cursor: default; }
+.cc-btn:disabled { opacity: 0.5; cursor: default; }
 
 .cc-error {
   background: rgba(239,68,68,0.1);
@@ -543,7 +549,7 @@ body {
 .ac-card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 18px; margin-bottom: 16px; box-shadow: var(--shadow); }
 .ac-card-title { font-size: 15px; font-weight: 700; color: var(--ink); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
 /* 지금 처리할 일이 있는 카드 — 화면의 주인공 */
-.ac-card-alert { border-color: var(--wait); box-shadow: 0 0 0 1px rgba(245,158,11,0.15); }
+.ac-card-alert { border-color: var(--wait); box-shadow: 0 0 0 1px var(--wait-line); }
 .ac-card-alert .ac-card-title { font-size: 17px; }
 .ac-count-badge { background: var(--wait); color: var(--on-bright); font-size: 13px; font-weight: 800; min-width: 24px; height: 24px; padding: 0 7px; border-radius: var(--r); display: inline-flex; align-items: center; justify-content: center; }
 /* 참고용 보조 카드 — 한 단계 뒤로 */
@@ -853,7 +859,7 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .ah-dayrow b { font-size: .95rem; font-variant-numeric: tabular-nums; color: var(--ink); }
 .ah-dayrow.ah-ok b { color: var(--done); }
 .ah-dayrow.ah-bad b { color: var(--fail); }
-.ah-dayrow.is-zero { opacity: .5; }
+.ah-dayrow.is-zero { opacity: .62; }
 
 @media (max-width: 640px) {
   .ah-sum-tiles { grid-template-columns: repeat(2, 1fr); }
@@ -1062,7 +1068,7 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 /* 그라디언트는 hover에서 색을 바꿀 수 없다(배경이 이미지라 transition이 안 먹는다).
    밝기로 반응을 준다. */
 .ac-btn:hover:not(:disabled) { filter: brightness(1.12); }
-.ac-btn:disabled { opacity: 0.4; cursor: default; }
+.ac-btn:disabled { opacity: 0.5; cursor: default; }
 
 /* 화면마다 따로 만든 주 버튼들을 같은 모양으로 묶는다.
    원래는 패딩과 글자 크기까지 제각각이었다(10px 22px · 12px 28px · 8px 16px). */
@@ -1082,10 +1088,12 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .ac-result-ok { background: rgba(16,185,129,0.1); color: var(--done); border: 1px solid rgba(16,185,129,0.3); }
 .ac-result-error { background: rgba(239,68,68,0.1); color: var(--fail); border: 1px solid rgba(239,68,68,0.3); }
 .ac-filter-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
-/* 비활성 칩은 테두리를 없애 배경만 남김 — 활성 칩 하나만 눈에 들어오게 */
-.ac-filter-btn { background: rgba(148,163,184,0.07); border: 1px solid transparent; color: var(--ink-2); border-radius: var(--r); padding: 6px 12px; font-size: 12px; cursor: pointer; transition: color 0.12s, background 0.12s; }
-.ac-filter-btn:hover { color: var(--ink-2); background: rgba(148,163,184,0.13); }
-.ac-filter-btn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); font-weight: 700; }
+/* 필터 칩. 배경을 거의 안 보이는 회색으로 깔아 두었더니 어두운 바탕에서
+   버튼인지 글자인지 구분이 안 됐다. 면을 빼고 테두리로 세운다.
+   알약 모양으로 바꿔 아래 목록의 각진 줄과 역할이 갈리게 했다. */
+.ac-filter-btn { background: transparent; border: 1px solid var(--line); color: var(--ink-2); border-radius: 999px; padding: 6px 13px; font-size: 12px; cursor: pointer; transition: border-color .12s, color .12s, background .12s; }
+.ac-filter-btn:hover { color: var(--ink); border-color: var(--ink-3); background: rgba(255,255,255,.04); }
+.ac-filter-btn.active { border-color: transparent; color: var(--on-bright); background: var(--grad); font-weight: 700; }
 .ac-period-nav { display: flex; align-items: center; gap: 6px; }
 .ac-period-label { font-size: 13px; font-weight: 600; color: var(--ink); min-width: 100px; text-align: center; }
 .ac-date-picker { display: flex; align-items: center; gap: 4px; position: relative; }
@@ -1113,10 +1121,24 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .ac-cal-empty { visibility: hidden; }
 .ac-datepop-actions { display: flex; flex-direction: column; gap: 8px; }
 .ac-empty { color: var(--ink-3); font-size: 13px; padding: 20px 0; text-align: center; }
-.ac-snapshot-list { display: flex; flex-direction: column; gap: 8px; }
-.ac-snapshot { background: var(--soft); border: none; border-radius: var(--r); overflow: hidden; }
-.ac-snapshot.has-changes { border-left: 3px solid var(--wait); }
-.ac-snapshot-top { display: flex; align-items: center; gap: 8px; padding: 10px 12px; cursor: pointer; }
+/* 수집 이력.
+   회색 덩어리를 8px 간격으로 늘어놓으니 스무 개가 넘어가면 죽이 됐다.
+   간격을 없애고 구분선 하나로 이어 붙여 표처럼 흐르게 한다 —
+   목록은 덩어리의 나열이 아니라 훑는 것이다. */
+.ac-snapshot-list { display: flex; flex-direction: column; gap: 0;
+  border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.ac-snapshot { background: transparent; border: none; border-top: 1px solid var(--line-2);
+  border-radius: 0; overflow: hidden; transition: background .12s; }
+.ac-snapshot:first-child { border-top: none; }
+.ac-snapshot:hover { background: rgba(255,255,255,.035); }
+/* 바뀐 것만 왼쪽에 그라디언트 선을 세운다. 안 바뀐 줄이 대부분이라
+   여기서 색이 보이면 그 줄만 골라 볼 수 있다. */
+.ac-snapshot.has-changes { position: relative; }
+.ac-snapshot.has-changes::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: var(--grad);
+}
+.ac-snapshot-top { display: flex; align-items: center; gap: 9px; padding: 11px 14px; cursor: pointer; }
 .ac-snapshot-icon { font-size: 14px; }
 .ac-snapshot-name { color: var(--ink); font-size: 13px; font-weight: 600; flex: 1; }
 .ac-snapshot-type { color: var(--accent); font-size: 11px; background: var(--accent-soft); padding: 2px 8px; border-radius: var(--r-sm); }
@@ -1216,7 +1238,7 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
   margin-bottom: 20px;
 }
 .la-btn:hover:not(:disabled) { background: var(--accent-2); }
-.la-btn:disabled { opacity: 0.4; cursor: default; }
+.la-btn:disabled { opacity: 0.5; cursor: default; }
 
 .la-error {
   background: rgba(239,68,68,0.1);
@@ -1358,7 +1380,7 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 
 .vs-btn { background: var(--accent); color: var(--on-fill); border: none; border-radius: var(--r); padding: 12px 28px; font-size: 15px; font-weight: 700; cursor: pointer; margin-bottom: 20px; transition: background 0.15s; }
 .vs-btn:hover:not(:disabled) { background: var(--accent-2); }
-.vs-btn:disabled { opacity: 0.4; cursor: default; }
+.vs-btn:disabled { opacity: 0.5; cursor: default; }
 .vs-error { background: rgba(239,68,68,0.1); border: 1px solid var(--fail); color: var(--fail); border-radius: var(--r); padding: 12px 16px; font-size: 14px; margin-bottom: 16px; }
 
 .vs-filter-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
@@ -1732,7 +1754,7 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
   border-radius: var(--r);
 }
 .sf-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--done); }
-.sf-sep { color: var(--line); }
+.sf-sep { color: var(--ink-3); }
 .sf-up { color: var(--fail); font-weight: 600; }
 .sf-down { color: var(--done); font-weight: 600; }
 .sf-prev { color: var(--ink-3); }
@@ -1766,7 +1788,7 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
   margin-bottom: 6px;
   overflow: hidden;
 }
-.sf-row.is-muted { opacity: .6; }
+.sf-row.is-muted { opacity: .78; }
 
 .sf-rowhead {
   display: grid;
@@ -1919,7 +1941,7 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 /* 조치 신청 — 보류·예외와 달리 실제로 고치러 가는 버튼이라 눈에 띄게 둔다 */
 .sf-act-fix { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
 .sf-act-fix:hover:not(:disabled) { background: var(--panel); }
-.sf-act:disabled { opacity: .5; cursor: default; }
+.sf-act:disabled { opacity: .62; cursor: default; }
 
 .sf-holdnote {
   margin-top: 9px;
@@ -2292,7 +2314,7 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 
 /* 목록 안 버튼 묶음 */
 .sf-acts { display: flex; gap: 4px; }
-.sf-row.is-held { opacity: .68; }
+.sf-row.is-held { opacity: .82; }
 
 /* 점검 결과 — 리소스 표.
    줄을 쌓으면 "14일째 / 보류 / 예외"가 줄마다 반복돼 읽히지 않는다.
