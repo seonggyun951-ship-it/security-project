@@ -1187,6 +1187,9 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 
 /* 목록 한 줄에 붙는 요약. 펼치지 않아도 무엇인지 알 수 있게 */
 .ac-snap-brief { margin-left: 9px; font-size: 11.5px; font-weight: 400; color: var(--ink-3); }
+
+/* 상한에 걸렸을 때만 나온다 */
+.ac-snap-more { margin-left: 10px; font-size: 11.5px; font-weight: 400; color: var(--ink-3); }
 .ac-diff-line { white-space: pre; }
 .ac-diff-added { color: var(--done); background: rgba(74,222,128,0.12); }
 .ac-diff-removed { color: var(--fail); background: rgba(248,113,113,0.12); }

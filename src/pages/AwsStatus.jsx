@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { RESOURCE_META } from '../lib/aws'
 import { summarize, briefOf } from '../lib/snapshot'
-import { fetchRows, callFunction } from '../lib/db'
+import { fetchPage, callFunction } from '../lib/db'
 import ErrorBanner from '../components/ErrorBanner'
 
 // 두 줄 배열의 LCS 기반 라인 diff
@@ -107,6 +107,10 @@ function SnapshotView({ type, oldData, newData }) {
   )
 }
 
+// 한 번에 가져올 스냅샷 수. 리소스 50개에 이력이 쌓이는 속도를 감안한 값이다.
+// 넘으면 화면이 '더 있음'을 알리므로 조용히 잘리지는 않는다.
+const SNAPSHOT_LIMIT = 1000
+
 function groupSnapshotsByResource(snapshots) {
   const groups = {}
   for (const s of snapshots) {
@@ -125,6 +129,7 @@ export default function AwsStatus() {
   const [collecting, setCollecting] = useState(false)
   const [collectResult, setCollectResult] = useState(null)
   const [snapshots, setSnapshots] = useState([])
+  const [snapshotTotal, setSnapshotTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
   const [expanded, setExpanded] = useState(() => new Set())
@@ -133,13 +138,23 @@ export default function AwsStatus() {
   const [changedOnly, setChangedOnly] = useState(true)
   const [search, setSearch] = useState('')
 
+  // 최근 100건만 가져오던 것을 늘렸다.
+  //
+  // 이 표는 시각이 아니라 '리소스'가 단위인데 시각으로 잘라 오고 있었다.
+  // 리소스 50개에 이력이 300건 넘게 쌓인 상태에서 최근 100건을 가져오면
+  // 리소스 12개만 덮이고 나머지 38개는 화면에서 사라진다. 남은 12개도
+  // 앞부분이 잘려 변경 이력이 비어 보인다.
+  //
+  // 한 번에 다 가져오는 대신 상한을 크게 두고 총 건수를 함께 받는다.
+  // 조용히 잘라내지 않기 위해서다 — 넘치면 화면에 알린다.
   const fetchSnapshots = async () => {
     setLoading(true)
-    const { rows, error } = await fetchRows(
-      supabase.from('aws_resource_snapshots').select('*')
-        .order('collected_at', { ascending: false }).limit(100),
+    const { rows, total, error } = await fetchPage(
+      supabase.from('aws_resource_snapshots').select('*', { count: 'exact' })
+        .order('collected_at', { ascending: false }).range(0, SNAPSHOT_LIMIT - 1),
       '리소스 스냅샷')
     setSnapshots(rows)
+    setSnapshotTotal(total)
     setLoadError(error)
     setLoading(false)
   }
@@ -237,7 +252,16 @@ export default function AwsStatus() {
       </div>
 
       <div className="ac-card ac-card-wide">
-        <div className="ac-card-title">수집 이력 {changedCount > 0 && <span className="ac-count-badge">{changedCount}</span>}</div>
+        <div className="ac-card-title">
+          수집 이력 {changedCount > 0 && <span className="ac-count-badge">{changedCount}</span>}
+          {/* 상한에 걸리면 알린다. 조용히 잘라내면 '변경 이력이 없다'와
+              '못 가져왔다'를 구별할 수 없다. */}
+          {snapshotTotal > SNAPSHOT_LIMIT && (
+            <span className="ac-snap-more">
+              최근 {SNAPSHOT_LIMIT.toLocaleString()}건만 표시 · 전체 {snapshotTotal.toLocaleString()}건
+            </span>
+          )}
+        </div>
         <div className="ac-filter-row">
           <button className={`ac-filter-btn ${filter === 'all' ? 'active' : ''}`} onClick={() => setFilter('all')}>
             전체 {totalResources}
