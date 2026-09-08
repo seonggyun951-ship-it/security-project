@@ -74,15 +74,25 @@ export function summarize(type, raw) {
   const d = raw || {}
 
   if (type === 'iam_user') {
+    // 이름과 날짜만으로는 사용자끼리 구별이 안 된다. 실제로 궁금한 건
+    // "이 사람이 무엇을 할 수 있는가"이므로 붙은 정책과 그룹을 앞에 세운다.
+    const attached = d.AttachedPolicies || ''
+    const inline = d.InlinePolicies || ''
+    const groups = d.Groups || ''
+    const warn = []
+    // 관리자 권한은 이 계정에서 가장 위험한 상태다. 목록에서 바로 보여야 한다.
+    if (/Administrator/i.test(attached)) warn.push('관리자 권한이 직접 붙어 있습니다')
+    if (inline) warn.push(`이 사용자에게만 쓴 정책 ${inline.split(',').length}개`)
     return {
       fields: [
         ['사용자', d.UserName],
+        ['붙은 정책', attached || '없음'],
+        ['직접 쓴 정책', inline || '없음'],
+        ['소속 그룹', groups || '없음'],
         ['만든 날', day(d.CreateDate)],
-        ['환경 권한', d.EnvGroups || '없음'],
-        ['경로', d.Path],
       ],
       rules: [],
-      warn: [],
+      warn,
     }
   }
 
@@ -183,7 +193,14 @@ export function summarize(type, raw) {
 /** 목록 한 줄에 곁들일 짧은 요약. 펼치지 않아도 무엇인지 알 수 있게. */
 export function briefOf(type, raw) {
   const d = raw || {}
-  if (type === 'iam_user') return d.EnvGroups ? `환경 권한 ${d.EnvGroups}` : '환경 권한 없음'
+  if (type === 'iam_user') {
+    // 목록에서 훑을 때 가장 먼저 알아야 할 것은 권한 수준이다.
+    const a = d.AttachedPolicies || ''
+    if (/Administrator/i.test(a)) return '관리자 권한'
+    const n = [a, d.InlinePolicies || ''].filter(Boolean).join(',').split(',').filter(Boolean).length
+    if (n > 0) return `정책 ${n}개`
+    return d.EnvGroups ? `환경 권한 ${d.EnvGroups}` : '권한 없음'
+  }
   if (type === 'iam_policy') {
     const n = Number(d.AttachmentCount || 0)
     return n === 0 ? '어디에도 안 붙음' : `${n}곳에 붙음`

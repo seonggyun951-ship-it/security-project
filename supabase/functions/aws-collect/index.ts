@@ -1,7 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { EC2Client, DescribeSecurityGroupsCommand, DescribeVpcsCommand, DescribeNetworkAclsCommand } from 'npm:@aws-sdk/client-ec2@3'
-import { IAMClient, ListRolesCommand, ListPoliciesCommand, ListUsersCommand, ListGroupsForUserCommand } from 'npm:@aws-sdk/client-iam@3'
+import { IAMClient, ListRolesCommand, ListPoliciesCommand, ListUsersCommand, ListGroupsForUserCommand,
+         ListAttachedUserPoliciesCommand, ListUserPoliciesCommand } from 'npm:@aws-sdk/client-iam@3'
 import { WAFV2Client, ListWebACLsCommand, GetWebACLCommand } from 'npm:@aws-sdk/client-wafv2@3'
 
 const cors = {
@@ -108,23 +109,48 @@ async function collectIamUsers(iam) {
     (res) => res.IsTruncated ? res.Marker : undefined
   )
 
-  // 사용자마다 그룹을 한 번씩 더 조회한다. 규모가 크지 않아 이 정도면 충분하다.
+  // 사용자마다 그룹과 정책을 한 번씩 더 조회한다. 규모가 크지 않아 이 정도면 충분하다.
   // 한 명이 실패해도 나머지 목록은 살린다.
+  //
+  // 이름과 만든 날짜만으로는 사용자끼리 구별이 안 된다. 이 사람이 무엇을 할 수 있는지가
+  // 실제로 궁금한 값이라 붙은 정책까지 가져온다.
+  //   AttachedPolicies  계정에 정의된 정책을 붙인 것 (AdministratorAccess 등)
+  //   InlinePolicies    그 사용자에게만 직접 써 넣은 정책. 이름만 가져온다
+  //   Groups            소속 그룹 전체. 그룹을 통해 받은 권한도 있으므로 함께 본다
   return await Promise.all(users.map(async (u) => {
-    let envGroups = []
-    try {
-      const g = await iam.send(new ListGroupsForUserCommand({ UserName: u.UserName }))
-      envGroups = (g.Groups || []).map((x) => x.GroupName).filter((n) => n.startsWith('env-'))
-    } catch (e) {
-      console.error(`그룹 조회 실패 (${u.UserName}):`, e)
-    }
+    let groups = []
+    let attached = []
+    let inline = []
+
+    // 셋을 한꺼번에 요청한다. 사용자 수만큼 왕복이 세 배가 되지만 순차로 돌리는 것보다 빠르다.
+    const [gRes, aRes, iRes] = await Promise.allSettled([
+      iam.send(new ListGroupsForUserCommand({ UserName: u.UserName })),
+      iam.send(new ListAttachedUserPoliciesCommand({ UserName: u.UserName })),
+      iam.send(new ListUserPoliciesCommand({ UserName: u.UserName })),
+    ])
+
+    if (gRes.status === 'fulfilled') groups = (gRes.value.Groups || []).map((x) => x.GroupName)
+    else console.error(`그룹 조회 실패 (${u.UserName}):`, gRes.reason)
+
+    if (aRes.status === 'fulfilled') attached = (aRes.value.AttachedPolicies || []).map((x) => x.PolicyName)
+    else console.error(`정책 조회 실패 (${u.UserName}):`, aRes.reason)
+
+    if (iRes.status === 'fulfilled') inline = iRes.value.PolicyNames || []
+    else console.error(`인라인 정책 조회 실패 (${u.UserName}):`, iRes.reason)
+
     return {
       resource_type: 'iam_user',
       resource_id: u.UserId,
       resource_name: u.UserName,
       region: null,
-      // EnvGroups는 뷰(aws_resource_options)가 꺼내 쓴다
-      raw_data: { ...u, EnvGroups: envGroups.join(', ') },
+      // EnvGroups는 뷰(aws_resource_options)가 꺼내 쓴다. 이름을 바꾸면 안 된다.
+      raw_data: {
+        ...u,
+        EnvGroups: groups.filter((n) => n.startsWith('env-')).join(', '),
+        Groups: groups.join(', '),
+        AttachedPolicies: attached.join(', '),
+        InlinePolicies: inline.join(', '),
+      },
     }
   }))
 }
