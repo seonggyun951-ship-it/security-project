@@ -28,6 +28,8 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
   const [sgOptions, setSgOptions] = useState([])
   const [aclOptions, setAclOptions] = useState([])
   const [naclOptions, setNaclOptions] = useState([])
+  // 대상 목록에서 vpc-0d3eb… 대신 이름과 대역을 보여주기 위해 받아 둔다
+  const [vpcOptions, setVpcOptions] = useState([])
   const [userOptions, setUserOptions] = useState([]) // 환경 권한 신청의 대상 IAM 사용자
   const [myRequests, setMyRequests] = useState([])
   const [loading, setLoading] = useState(true)
@@ -71,14 +73,17 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
   const fetchOptions = async () => {
     const { rows, error } = await fetchRows(
       supabase.from('aws_resource_options')
-        // env_groups는 IAM 사용자가 이미 가진 환경 권한 — 신청 화면에서 바로 보여준다
-        .select('resource_id, resource_name, resource_type, env_groups')
-        .order('collected_at', { ascending: false }).limit(400),
+        // env_groups는 IAM 사용자가 이미 가진 환경 권한 — 신청 화면에서 바로 보여준다.
+        // rule_count·sub_count·is_admin은 '고르기 전 판단 근거'다. 뷰가 계산해서 준다 —
+        // 화면이 raw_data를 통째로 받아 세면 목록 한 번에 수백 KB가 오간다.
+        .select('resource_id, resource_name, resource_type, env_groups, vpc_id, cidr, account_id, rule_count, sub_count, is_admin')
+        .order('collected_at', { ascending: false }).limit(2000),
       '리소스 목록')
     setSgOptions(dedupeByResource(rows.filter((s) => s.resource_type === 'security_group')))
     setAclOptions(dedupeByResource(rows.filter((s) => s.resource_type === 'waf_web_acl')))
     setUserOptions(dedupeByResource(rows.filter((s) => s.resource_type === 'iam_user')))
     setNaclOptions(dedupeByResource(rows.filter((s) => s.resource_type === 'network_acl')))
+    setVpcOptions(dedupeByResource(rows.filter((s) => s.resource_type === 'vpc')))
     setOptionsError(error)
   }
 
@@ -157,6 +162,15 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
   }
 
   const meta = PAGE_META[resourceType] || PAGE_META.security_group
+
+  // 내가 최근에 신청했던 대상. 목록 맨 위로 올린다 —
+  // 같은 대상을 되풀이해 신청하는 일이 실제로 가장 많다.
+  const recentIds = [...new Set(myRequests.map((r) => r.target_id).filter(Boolean))].slice(0, 5)
+
+  // 계정 번호. 따로 수집하지 않지만 ARN 한가운데에 들어 있어 뷰가 뽑아 준다.
+  // WAF는 ARN 형식이 달라 비는데, 계정은 하나이므로 다른 리소스에서 채워진다.
+  const accountId = [...vpcOptions, ...sgOptions, ...userOptions]
+    .map((o) => o.account_id).find(Boolean) || ''
 
   const seenKey = `seen_rejected_${resourceType}`
   const getSeen = () => { try { return JSON.parse(localStorage.getItem(seenKey) || '[]') } catch { return [] } }
@@ -243,7 +257,7 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
               onSubmit={submitRequest} submitting={submitting} />
           ) : mode === 'create' ? (
             <>
-              {resourceType === 'security_group' && <SgForm sgOptions={sgOptions} onSubmit={submitRequest} submitting={submitting} />}
+              {resourceType === 'security_group' && <SgForm sgOptions={sgOptions} recentIds={recentIds} vpcOptions={vpcOptions} accountId={accountId} onSubmit={submitRequest} submitting={submitting} />}
               {resourceType === 'waf_web_acl' && <WafForm aclOptions={aclOptions} onSubmit={submitRequest} submitting={submitting} />}
               {resourceType === 'iam_user' && <IamUserForm onSubmit={submitRequest} submitting={submitting} />}
               {resourceType === 'network_acl' && <NaclForm naclOptions={naclOptions} prefill={prefill} onSubmit={submitRequest} submitting={submitting} />}

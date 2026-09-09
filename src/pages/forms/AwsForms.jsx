@@ -1,13 +1,25 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import {
   WAF_MANAGED_RULE_GROUPS, WAF_FIELDS, WAF_POSITIONS, IAM_READONLY_POLICIES,
   emptyRule, parsePortRange, normalizeCidr, emptyWafRule,
 } from '../../lib/aws'
+import ResourcePicker from '../../components/ResourcePicker'
+import { liveCheck, LiveCheck, myIp, SG_PRESETS, ruleLabel } from '../../lib/request'
 
 // 판정 상수와 규칙은 여기 두지 않는다. 규칙 엔진(lib/rules.js)이 접수 직전에
 // 검사하고 결과를 창으로 보여준다 — 폼이 같은 규칙을 한 벌 더 들고 있으면
 // 한쪽만 고쳐져 안내 문구와 실제 판정이 갈라진다.
 // (실제로 "특정 IP로 제한하세요"라는 문구가 이미 특정 IP로 제한한 신청에도 떴다)
+// 입력 중인 줄을 규칙 엔진이 받는 형태로 바꾼다.
+// CIDR이 빈 줄은 아직 적는 중이므로 넘긴다 — 적자마자 "CIDR이 없습니다"가
+// 뜨면 방해만 된다. 접수 직전 검사는 그대로 남아 있어 빈 줄을 다시 거른다.
+const toCleanRules = (rules) => rules
+  .filter((r) => r.cidr.trim())
+  .map((r) => ({
+    direction: r.direction, protocol: r.protocol,
+    ...parsePortRange(r.port), cidr: normalizeCidr(r.cidr),
+  }))
+
 const EXPIRY_OPTIONS = [
   { value: '', label: '만료 없음 (영구)' },
   { value: '1', label: '1일' },
@@ -18,14 +30,39 @@ const EXPIRY_OPTIONS = [
   { value: '90', label: '3개월' },
 ]
 
-export function SgForm({ sgOptions, onSubmit, submitting }) {
+export function SgForm({ sgOptions, recentIds = [], vpcOptions = [], accountId = '', onSubmit, submitting }) {
   const [action, setAction] = useState('add_rules')
   const [form, setForm] = useState({ sg_id: '', sg_name: '', vpc_id: '', description: '', reason: '', expires_in_days: '' })
   const [rules, setRules] = useState([emptyRule()])
+  const [ipBusy, setIpBusy] = useState(false)
 
   const updateRule = (i, patch) => setRules((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
   const addRule = () => setRules((prev) => [...prev, emptyRule()])
   const removeRule = (i) => setRules((prev) => prev.filter((_, idx) => idx !== i))
+
+  const fillMyIp = async (i) => {
+    setIpBusy(true)
+    const ip = await myIp()
+    setIpBusy(false)
+    if (!ip) return alert('내 IP를 알아내지 못했습니다. 직접 입력해주세요.')
+    updateRule(i, { cidr: `${ip}/32` })
+  }
+
+  // 적는 동안 규칙 엔진을 부른다. 판정 기준은 lib/rules.js 한 곳 그대로다.
+  const live = useMemo(
+    () => liveCheck('add_rules', { rules: toCleanRules(rules) }),
+    [rules])
+  const hardBlocked = live.some((f) => f.severity === 'high' || f.severity === 'critical')
+
+  const summary = useMemo(() => {
+    const clean = toCleanRules(rules)
+    if (action === 'create_sg' && !form.sg_name.trim()) return '새 SG 이름을 적어주세요'
+    if (action === 'add_rules' && !form.sg_id) return '대상 보안 그룹을 골라주세요'
+    if (clean.length === 0) return '규칙을 한 줄 이상 적어주세요'
+    const target = action === 'create_sg' ? form.sg_name.trim() : (sgOptions.find((o) => o.resource_id === form.sg_id)?.resource_name || form.sg_id)
+    const exp = EXPIRY_OPTIONS.find((o) => o.value === form.expires_in_days)?.label || ''
+    return `${target}에 규칙 ${clean.length}개 · ${clean.map(ruleLabel).join(', ')}${exp ? ` · ${exp}` : ''}`
+  }, [action, form, rules, sgOptions])
 
   const reset = () => {
     setForm({ sg_id: '', sg_name: '', vpc_id: '', description: '', reason: '', expires_in_days: '' })
@@ -35,9 +72,7 @@ export function SgForm({ sgOptions, onSubmit, submitting }) {
   const submit = async () => {
     if (action === 'add_rules' && !form.sg_id.trim()) return alert('SG ID는 필수입니다')
     if (action === 'create_sg' && (!form.sg_name.trim() || !form.vpc_id.trim())) return alert('SG 이름과 VPC ID는 필수입니다')
-    const cleanRules = rules.filter((r) => r.cidr.trim()).map((r) => ({
-      direction: r.direction, protocol: r.protocol, ...parsePortRange(r.port), cidr: normalizeCidr(r.cidr),
-    }))
+    const cleanRules = toCleanRules(rules)
     if (cleanRules.length === 0) return alert('규칙을 최소 1개 이상 입력해주세요 (CIDR 필수)')
 
     // 위험 판정은 여기서 하지 않는다. 접수 직전에 규칙 엔진이 검사하고
@@ -72,14 +107,11 @@ export function SgForm({ sgOptions, onSubmit, submitting }) {
       </div>
 
       {action === 'add_rules' ? (
-        <div className="ac-form-row">
-          <div className="ac-field">
-            <label className="ac-label">SG ID</label>
-            <input className="ac-input" list="sg-options" placeholder="예: sg-0123abcd" value={form.sg_id} onChange={(e) => setForm({ ...form, sg_id: e.target.value })} />
-            <datalist id="sg-options">
-              {sgOptions.map((s) => <option key={s.resource_id} value={s.resource_id}>{s.resource_name}</option>)}
-            </datalist>
-          </div>
+        <div className="ac-field">
+          <label className="ac-label">대상 Security Group</label>
+          <ResourcePicker options={sgOptions} value={form.sg_id} recentIds={recentIds}
+            vpcs={vpcOptions} accountId={accountId} label="보안 그룹"
+            onChange={(id) => setForm({ ...form, sg_id: id })} />
         </div>
       ) : (
         <>
@@ -103,9 +135,21 @@ export function SgForm({ sgOptions, onSubmit, submitting }) {
       )}
 
       <div className="ac-card-title" style={{ fontSize: 13, marginTop: 16 }}>규칙</div>
+      {/* 포트를 외우지 않아도 되게 한다. 22가 SSH인지 3389가 RDP인지는
+          알아서 알아야 할 일이 아니다. */}
+      <div className="rq-presets">
+        {SG_PRESETS.map((p) => (
+          <button key={p.label} type="button" className="rq-preset"
+            onClick={() => setRules((prev) => [...prev, { ...emptyRule(), port: p.port }])}>
+            {p.label}<span className="p">{p.port}</span>
+          </button>
+        ))}
+        <button type="button" className="rq-preset" onClick={addRule}>직접 입력</button>
+      </div>
+
       <div className="ac-rule-table">
         <div className="ac-rule-row ac-rule-head">
-          <span>방향</span><span>프로토콜</span><span>포트</span><span>CIDR</span><span></span>
+          <span>방향</span><span>프로토콜</span><span>포트</span><span>어디서</span><span></span>
         </div>
         {rules.map((r, i) => (
           <div key={i} className="ac-rule-row">
@@ -121,13 +165,22 @@ export function SgForm({ sgOptions, onSubmit, submitting }) {
             </select>
             <input className="ac-input" placeholder="22 또는 1000-2000" value={r.port} onChange={(e) => updateRule(i, { port: e.target.value })} />
             <input className="ac-input" placeholder="1.2.3.4/32" value={r.cidr} onChange={(e) => updateRule(i, { cidr: e.target.value })} />
-            {rules.length > 1
-              ? <button className="ac-btn ac-btn-secondary ac-rule-del" onClick={() => removeRule(i)}>삭제</button>
-              : <span />}
+            <span className="ac-rule-tail">
+              {/* 가장 흔한 경우인데 지금은 내 IP를 알려고 다른 사이트를 열어야 한다 */}
+              <button type="button" className="rq-myip" disabled={ipBusy}
+                onClick={() => fillMyIp(i)}>{ipBusy ? '…' : '내 IP'}</button>
+              {rules.length > 1 && (
+                <button type="button" className="rq-del" onClick={() => removeRule(i)} aria-label="줄 삭제">×</button>
+              )}
+            </span>
           </div>
         ))}
       </div>
-      <button className="ac-btn ac-btn-secondary" onClick={addRule} style={{ marginTop: 8, marginBottom: 16 }}>+ 규칙 추가</button>
+      <button className="ac-btn ac-btn-secondary" onClick={addRule} style={{ marginTop: 8 }}>+ 규칙 추가</button>
+
+      {/* 적는 동안 점검한다. 판정은 lib/rules.js 한 곳 그대로이고 부르는 시점만 앞당겼다 —
+          지금까지는 제출을 누른 뒤에야 창이 떠서, 막히면 되돌아가 고쳐야 했다. */}
+      <LiveCheck findings={live} />
 
       <div className="ac-form-row">
         <div className="ac-field">
@@ -141,7 +194,13 @@ export function SgForm({ sgOptions, onSubmit, submitting }) {
           </select>
         </div>
       </div>
-      <button className="ac-btn" onClick={submit} disabled={submitting}>{submitting ? '신청 중...' : '신청하기'}</button>
+      {/* 무엇을 신청하는지 누르기 직전에 한 줄로 확인한다 */}
+      <div className="rq-review">
+        <div className="rq-sum">{summary}</div>
+        <button className="ac-btn" onClick={submit} disabled={submitting || hardBlocked}>
+          {submitting ? '신청 중…' : '신청하기'}
+        </button>
+      </div>
     </>
   )
 }

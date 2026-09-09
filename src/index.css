@@ -762,6 +762,9 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 /* ===== 승인 화면 — 목록 | 검토 패널 2단, 화면 높이를 채운다 =====
    카드로 감싸지 않고 두 칸이 직접 면을 이룬다. shell-main의 위아래 여백(28+48)만큼 뺀다. */
 .ap-page { height: calc(100vh - 76px); min-height: 420px; }
+/* 좌측 패싯 · 표 · 우측 패널 구조를 쓰는 화면은 높이를 고정하지 않는다.
+   안에 스크롤 상자가 생겨 페이지 스크롤과 두 개가 되기 때문이다. */
+.ap-page:has(.ac-shell) { height: auto; }
 .ap { display: grid; grid-template-columns: minmax(0, 1fr) 22rem; gap: 14px; height: 100%; }
 .ap > * { min-width: 0; }
 .ap-col {
@@ -1177,6 +1180,8 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .ac-sum-act .ac-btn {
   background: var(--band-ink); color: #0c0c0c;
   padding: 8px 16px; font-size: 13.5px;
+  /* Link로 쓰는 자리가 있어 a에도 맞춘다 */
+  display: block; text-align: center; text-decoration: none;
 }
 .ac-sum-act .ac-btn:hover:not(:disabled) { filter: brightness(.92); }
 .ac-sum-msg { font-size: 12px; color: var(--band-ink); opacity: .75; }
@@ -1374,6 +1379,83 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
   width: 100%; padding: 8px; font: inherit; font-size: 13.5px; color: var(--ink-2); cursor: pointer;
 }
 .ac-side-raw:hover { border-color: var(--ink-3); color: var(--ink); }
+/* 머리에 붙는 배지 줄 (심각도 · NEW) */
+.ac-side-badges { display: flex; gap: 7px; align-items: center; flex-wrap: wrap; margin-top: 9px; }
+
+/* 툴바의 날짜 입력. 검색창과 같은 면을 쓴다 */
+.ac-tb-d {
+  background: var(--bg); border: 1px solid var(--line); border-radius: 7px;
+  padding: 9px 12px; font: inherit; font-size: 14px; color: var(--ink); flex: none;
+}
+.ac-tb-d:focus { outline: none; border-color: var(--accent); }
+
+/* ── 패널 안 대상 목록 ──
+   표로 만들면 폭 320px에 일곱 열이 들어가지 않는다. 리소스 하나를 한 덩어리로
+   쌓되, 첫 줄에 식별자와 경과만 두어 훑을 수 있게 한다. */
+.sf-allpick { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-3); margin-bottom: 10px; cursor: pointer; }
+.sf-items { display: flex; flex-direction: column; gap: 9px; }
+.sf-item { border: 1px solid var(--line-2); border-radius: var(--r-sm); padding: 10px 11px; }
+.sf-item-top { display: flex; align-items: center; gap: 8px; }
+.sf-item-id {
+  font-family: var(--mono); font-size: 13px; color: var(--ink); flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sf-item-age { font-size: 12.5px; color: var(--ink-3); flex: none; font-variant-numeric: tabular-nums; }
+.sf-item-age.old { color: var(--wait); font-weight: 600; }
+.sf-item-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 6px; font-size: 12px; color: var(--ink-3); }
+.sf-item-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+.sf-item-acts:empty { display: none; }
+
+/* ── 점검 이력 ── */
+/* 패싯 안의 앞뒤 이동(주·월). 지금 어느 구간인지 함께 적는다 */
+.ac-fnav { display: flex; align-items: center; gap: 6px; margin-top: 8px; padding: 0 6px; }
+.ac-fnav span { flex: 1; text-align: center; font-size: 12.5px; color: var(--ink-2); }
+.ac-fnav button {
+  background: none; border: 1px solid var(--line); border-radius: 6px;
+  width: 24px; height: 24px; color: var(--ink-2); font: inherit; font-size: 12px; cursor: pointer;
+}
+.ac-fnav button:hover { border-color: var(--accent); color: var(--accent); }
+
+.sh-cal { padding: 14px 16px 0; }
+.sh-tbl2 th:nth-child(1) { width: 168px; }
+.sh-tbl2 th:nth-child(2) { width: 96px; }
+.sh-tbl2 th:nth-child(3) { width: auto; }
+.sh-tbl2 th:nth-child(4),
+.sh-tbl2 th:nth-child(5) { width: 76px; }
+.sh-tbl2 th:nth-child(6) { width: 104px; }
+.sh-tbl2 th:nth-child(7) { width: 84px; }
+.sh-tbl2 .sf-up { color: var(--fail); font-weight: 700; }
+.sh-tbl2 .sf-down { color: var(--done); font-weight: 700; margin-left: 5px; }
+.sh-tbl2 .sh-same { color: var(--ink-3); font-size: 12.5px; }
+.sh-tbl2 .sh-fail { color: var(--fail); }
+
+/* 추이 막대. 이제 눌러서 그 회차를 고를 수 있으므로 버튼이다 */
+.sh-bar-wrap { background: none; border: 0; padding: 0; cursor: pointer; }
+.sh-bar-wrap.on .sh-bar { outline: 1.5px solid var(--accent); outline-offset: 1px; }
+.sh-bar-wrap.on .sh-bar-n { color: var(--accent); font-weight: 700; }
+
+/* 패널 안 심각도별 · 위반 항목 */
+.sh-sevlist { display: flex; flex-direction: column; border: 1px solid var(--line-2); border-radius: var(--r-sm); overflow: hidden; }
+.sh-sevrow, .sh-grow { display: flex; align-items: center; gap: 9px; padding: 9px 11px; border-bottom: 1px solid var(--line-2); font-size: 13.5px; }
+.sh-sevrow:last-child, .sh-grow:last-child { border-bottom: none; }
+.sh-sevrow .n, .sh-grow .n { margin-left: auto; color: var(--ink-3); font-size: 12.5px; flex: none; font-variant-numeric: tabular-nums; }
+.sh-grow .t { color: var(--ink-2); min-width: 0; }
+.sh-grow .k { display: block; font-size: 11.5px; color: var(--ink-3); margin-top: 2px; }
+
+/* 근거 (ISMS-P) */
+.sf-ref { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line-2); font-size: 13.5px; }
+.sf-ref:last-child { border-bottom: none; }
+.sf-ref .no { color: var(--accent); font-weight: 700; flex: none; }
+.sf-ref .t { color: var(--ink-2); }
+
+/* 점검 결과 표는 심각도·대상·경과 열 폭이 AWS 현황과 다르다 */
+.sf-tbl2 th:nth-child(1) { width: 104px; }
+.sf-tbl2 th:nth-child(2) { width: auto; }
+.sf-tbl2 th:nth-child(3) { width: 22%; }
+.sf-tbl2 th:nth-child(4) { width: 76px; }
+.sf-tbl2 th:nth-child(5) { width: 96px; }
+.sf-tbl2 td.num.old { color: var(--wait); font-weight: 600; }
+
 .ac-side-hist { margin-bottom: 16px; }
 .ac-side-hist-t { font-size: 13px; color: var(--ink-2); font-weight: 600; margin-bottom: 6px; font-variant-numeric: tabular-nums; }
 
@@ -1983,7 +2065,8 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
    심각도만으로는 급한 것을 가릴 수 없어 경과일을 목록에 함께 둔다.
 */
 
-.sf { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+/* height:100%를 두면 안쪽이 스크롤 상자가 된다. 페이지 스크롤 하나로 흐르게 한다. */
+.sf { display: flex; flex-direction: column; }
 
 /* 심각도 타일 */
 .sf-tiles {
@@ -2091,20 +2174,22 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .sf-rowhead:hover { background: var(--soft); }
 
 .sf-sev {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 5px;
-  font-size: .75rem;
-  font-weight: 700;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
   white-space: nowrap;
 }
-.sf-sev i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
-.sf-s-crit, .sf-s-high { color: var(--fail); }
-.sf-s-crit i, .sf-s-high i { background: var(--fail); }
-.sf-s-med { color: var(--wait); }
-.sf-s-med i { background: var(--wait); }
-.sf-s-low { color: var(--ink-3); }
-.sf-s-low i { background: var(--ink-3); }
+.sf-sev i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; flex: none; }
+/* 긴급과 높음이 같은 빨강이었다. 네 단계인데 눈에는 세 단계로 보였다.
+   AWS 현황과 같은 심각도 색(--sv-*)을 쓴다. */
+.sf-s-crit { color: var(--sv-crit); } .sf-s-crit i { background: var(--sv-crit); }
+.sf-s-high { color: var(--sv-high); } .sf-s-high i { background: var(--sv-high); }
+.sf-s-med  { color: var(--sv-med); }  .sf-s-med i  { background: var(--sv-med); }
+.sf-s-low  { color: var(--sv-low); }  .sf-s-low i  { background: var(--sv-low); }
+/* 패싯 왼쪽의 색 조각. .sf-s-* 에서 색만 받아 쓴다 */
+.ac-sw { width: 8px; height: 8px; border-radius: 2px; flex: none; background: currentColor; }
 
 .sf-name { min-width: 0; }
 .sf-name b {
@@ -2676,3 +2761,157 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .sf-selbar b { color: var(--accent); }
 .sf-selacts { margin-left: auto; display: flex; gap: 5px; }
 .sf-selacts .sf-act { background: var(--panel); }
+
+/* ══ 신청 — 대상 고르기 (ResourcePicker) ══
+   아홉 개 폼이 이 하나를 같이 쓴다. 원래는 datalist였는데 이름으로만 걸리고
+   고르기 전에 무엇을 고르는지 알 수 없어, 리소스가 수백 개가 되면 못 쓴다. */
+/* 닫힌 상태 — 신청서 안에서는 한 줄만 차지한다 */
+.rp-field { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  background: var(--soft); border: 1px solid var(--line); border-radius: var(--r);
+  padding: 11px 14px; font: inherit; color: inherit; cursor: pointer; }
+.rp-field:hover { border-color: var(--ink-3); }
+.rp-field.has { background: var(--accent-soft); border-color: var(--accent); }
+.rp-ph { flex: 1; color: var(--ink-3); font-size: 14px; }
+
+/* 목록은 창으로. 신청서 카드가 좁아 이름·ID·VPC·규칙 수를 한 줄에 넣으면
+   다 눌리고, 특히 VPC가 ID 뒤에 붙어 거의 안 읽혔다. */
+.rp-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 120;
+  display: flex; align-items: center; justify-content: center; padding: 24px; }
+.rp-modal { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r);
+  width: 100%; max-width: 760px; max-height: 82vh; display: flex; flex-direction: column;
+  overflow: hidden; box-shadow: 0 24px 64px rgba(0,0,0,.5); }
+.rp-head { display: flex; align-items: center; gap: 12px; padding: 14px 18px;
+  border-bottom: 1px solid var(--line); }
+.rp-title { font-size: 16px; font-weight: 700; color: var(--ink); }
+.rp-x { margin-left: auto; background: none; border: 0; color: var(--ink-3);
+  font-size: 22px; line-height: 1; padding: 0 4px; cursor: pointer; }
+.rp-x:hover { color: var(--ink); }
+
+.rp-search { padding: 13px 18px 0; }
+.rp-in { width: 100%; background: var(--bg); border: 1px solid var(--line);
+  border-radius: 7px; padding: 10px 13px; font: inherit; font-size: 14.5px; color: var(--ink); }
+.rp-in::placeholder { color: var(--ink-3); }
+.rp-in:focus { outline: none; border-color: var(--accent); }
+.rp-cnt { font-size: 13px; color: var(--ink-3); white-space: nowrap; }
+.rp-cnt b { color: var(--ink); }
+
+.rp-facets { display: flex; gap: 6px; padding: 12px 18px; flex-wrap: wrap;
+  border-bottom: 1px solid var(--line-2); }
+.rp-f { border: 1px solid var(--line); background: none; color: var(--ink-2);
+  border-radius: 999px; padding: 4px 11px; font: inherit; font-size: 12.5px; cursor: pointer; }
+.rp-f:hover { border-color: var(--ink-3); color: var(--ink); }
+.rp-f.on { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); font-weight: 600; }
+
+/* 묶음 안에 들어왔을 때. 어디인지 적고 나갈 길을 준다 —
+   들어간 뒤 나올 방법이 없으면 창을 닫았다 다시 열게 된다. */
+.rp-crumb { display: flex; align-items: center; gap: 11px; padding: 10px 18px;
+  border-bottom: 1px solid var(--line); background: var(--soft); }
+.rp-back { background: none; border: 1px solid var(--line); border-radius: 7px;
+  padding: 5px 11px; font: inherit; font-size: 13px; color: var(--ink-2); cursor: pointer; }
+.rp-back:hover { border-color: var(--accent); color: var(--accent); }
+.rp-crumb-t { font-size: 14.5px; font-weight: 600; color: var(--ink); }
+.rp-crumb-c { font-size: 12.5px; color: var(--ink-3); margin-left: auto; }
+
+/* 1단계 묶음 줄. 눌러서 들어간다는 게 보여야 한다. */
+.rp-bucket .rl { color: var(--ink-3); }
+.rp-arrow { color: var(--ink-3); font-size: 17px; line-height: 1; flex: none; }
+.rp-bucket:hover .rp-arrow { color: var(--accent); }
+
+.rp-list { flex: 1; overflow-y: auto; }
+/* 대문자로 바꾸지 않는다. hex ID가 섞이는 자리라
+   VPC-0D3EB0C600FF5D426 처럼 되면 읽을 수가 없다. */
+.rp-grp { position: sticky; top: 0; z-index: 1; background: var(--soft2);
+  padding: 8px 18px; font-size: 12.5px; font-weight: 700; color: var(--ink-2);
+  border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.rp-grp .c { font-weight: 400; color: var(--ink-3); margin-left: 8px; font-size: 12px; }
+
+/* 열 네 개짜리 표를 걷어냈다.
+   이름이 전부 default인 계정에서 그 표는 hex 문자열을 잘라 놓은 것에
+   지나지 않았다 — 고를 근거가 화면에 없었다.
+   위에 사람이 읽는 이름, 아래에 어디에 속한 것인지. ID는 맨 뒤에 작게. */
+.rp-row { display: flex; align-items: center; gap: 16px; width: 100%; text-align: left;
+  padding: 12px 18px; border: 0; border-bottom: 1px solid var(--line-2);
+  background: none; font: inherit; color: inherit; cursor: pointer; }
+.rp-row:hover { background: rgba(255,255,255,.05); }
+.rp-row.on { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.rp-r-main { flex: 1; min-width: 0; }
+.rp-row .nm { display: block; color: var(--ink); font-weight: 600; font-size: 15px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rp-row .nm mark { background: rgba(167,139,250,.34); color: inherit; border-radius: 2px; padding: 0 1px; }
+.rp-row .sub { display: flex; align-items: baseline; gap: 9px; margin-top: 3px;
+  font-size: 12.5px; min-width: 0; }
+.rp-row .place { color: var(--ink-2); white-space: nowrap; }
+/* ID는 고른 뒤 확인용이다. 구분에는 쓰이지 않으므로 뒤로 물린다. */
+.rp-row .id { font-family: var(--mono); font-size: 11.5px; color: var(--ink-3);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rp-row .rl { font-size: 13px; color: var(--ink-2); text-align: right;
+  white-space: nowrap; flex: none; }
+
+.rp-none { padding: 30px 18px; text-align: center; color: var(--ink-3); font-size: 14px; line-height: 1.7; }
+
+/* 쪽 넘김. AWS 현황 표 바닥과 같은 모양을 쓴다. */
+.rp-foot { display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 12px 18px; border-top: 1px solid var(--line); background: var(--soft);
+  font-size: 13.5px; color: var(--ink-3); }
+.rp-foot .pg { margin-left: auto; display: flex; align-items: center; gap: 7px; }
+.rp-foot .pgb { border: 1px solid var(--line); background: none; border-radius: 6px;
+  width: 30px; height: 30px; color: var(--ink-2); font: inherit; cursor: pointer; }
+.rp-foot .pgb:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.rp-foot .pgb:disabled { opacity: .35; cursor: default; }
+
+.rp-chosen-main { min-width: 0; flex: 1; }
+.rp-chosen-nm { display: block; font-size: 14.5px; font-weight: 600; color: var(--ink); }
+.rp-chosen-id { display: block; font-family: var(--mono); font-size: 12px; color: var(--ink-3); margin-top: 2px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rp-chosen-meta { font-size: 12.5px; color: var(--ink-3); text-align: right; white-space: nowrap; flex: none; }
+.rp-change { border: 1px solid var(--line); border-radius: 7px;
+  padding: 6px 12px; font-size: 13px; color: var(--ink-2); flex: none; }
+.rp-field:hover .rp-change { border-color: var(--ink); color: var(--ink); }
+
+@media (max-width: 560px) {
+  /* 좁으면 ID까지는 못 넣는다. 이름과 속한 곳만 남긴다. */
+  .rp-row .id { display: none; }
+}
+
+/* ── 자주 쓰는 값 ──
+   포트를 외우지 않아도 되게 한다. 눌러서 줄을 더한다. */
+.rq-presets { display: flex; flex-wrap: wrap; gap: 7px; margin: 10px 0 12px; }
+.rq-preset { display: inline-flex; align-items: center; gap: 7px;
+  border: 1px solid var(--line); background: none; color: var(--ink-2);
+  border-radius: 999px; padding: 6px 13px; font: inherit; font-size: 13.5px; cursor: pointer; }
+.rq-preset:hover { border-color: var(--accent); color: var(--ink); }
+.rq-preset .p { font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
+
+/* 규칙 줄 끝의 조작 */
+.ac-rule-tail { display: flex; align-items: center; gap: 5px; }
+.rq-myip { border: 1px solid var(--line); background: none; border-radius: 6px;
+  padding: 6px 9px; font: inherit; font-size: 12px; color: var(--accent);
+  white-space: nowrap; cursor: pointer; }
+.rq-myip:hover:not(:disabled) { border-color: var(--accent); }
+.rq-myip:disabled { opacity: .5; }
+.rq-del { border: 0; background: none; color: var(--ink-3); font-size: 17px;
+  line-height: 1; padding: 0 4px; cursor: pointer; }
+.rq-del:hover { color: var(--fail); }
+
+/* ── 적는 동안 뜨는 점검 ──
+   판정은 lib/rules.js 한 곳에서 하고, 여기서는 부르는 시점만 앞당긴다.
+   지금까지는 제출을 누른 뒤에야 창이 떠서 막히면 되돌아가 고쳐야 했다. */
+.rq-live { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.rq-lv { display: flex; gap: 10px; align-items: flex-start;
+  border-radius: var(--r); padding: 11px 14px; font-size: 13.5px; }
+.rq-lv .i { font-weight: 800; flex: none; }
+.rq-lv .tx { color: var(--ink-2); }
+.rq-lv .tx b { color: var(--ink); font-weight: 600; }
+.rq-lv .h { display: block; font-weight: 700; margin-bottom: 3px; }
+.rq-lv .why { display: block; margin-top: 4px; color: var(--ink-3); font-size: 13px; line-height: 1.6; }
+.rq-lv.is-bad { background: var(--fail-bg); border: 1px solid var(--fail-line); }
+.rq-lv.is-bad .i, .rq-lv.is-bad .h { color: var(--fail); }
+.rq-lv.is-warn { background: var(--wait-bg); border: 1px solid var(--wait-line); }
+.rq-lv.is-warn .i, .rq-lv.is-warn .h { color: var(--wait); }
+
+/* ── 제출 줄 ──
+   무엇을 신청하는지 누르기 직전에 한 줄로 확인한다. */
+.rq-review { display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.rq-sum { flex: 1; min-width: 220px; font-size: 13.5px; color: var(--ink-2); line-height: 1.7; }
+.rq-review .ac-btn { white-space: nowrap; }
