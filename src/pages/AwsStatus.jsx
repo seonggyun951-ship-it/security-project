@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useRef, Fragment } from 'react'
 import { supabase } from '../lib/supabase'
 import { RESOURCE_META } from '../lib/aws'
-import { summarize, briefOf, flagsOf } from '../lib/snapshot'
+import { summarize, briefOf } from '../lib/snapshot'
 import { fetchPage, callFunction } from '../lib/db'
 import ErrorBanner from '../components/ErrorBanner'
 
@@ -42,75 +42,6 @@ function DiffView({ oldData, newData }) {
   )
 }
 
-// 수집한 내용을 사람이 읽는 형태로 보여준다.
-//
-// 원래는 raw_data를 JSON 그대로 뿌렸다. 그건 화면이 아니라 로그다 — 보는 사람이
-// 중괄호를 헤치며 필요한 값을 직접 찾아야 한다. 리소스마다 볼 값은 정해져 있으므로
-// 그것만 뽑아 이름을 붙인다(lib/snapshot.js).
-//
-// 원본은 버리지 않고 접어 둔다. 수집이 잘못됐는지 따질 때 필요하고,
-// 우리가 뽑지 않은 값을 확인해야 할 때도 있다.
-function SnapshotView({ type, oldData, newData }) {
-  const [rawOpen, setRawOpen] = useState(false)
-  const { fields, rules, warn } = summarize(type, newData)
-
-  // 바뀐 값은 옆에 이전 값을 함께 적는다. 무엇이 어떻게 달라졌는지
-  // 원본 diff를 펴지 않고도 한 줄에서 읽히게 한다.
-  const before = oldData ? summarize(type, oldData) : null
-  const prevOf = (label) => {
-    if (!before) return null
-    const hit = before.fields.find(([k]) => k === label)
-    return hit ? hit[1] : null
-  }
-
-  return (
-    <div className="ac-snap-body">
-      {warn.length > 0 && (
-        <div className="ac-snap-warn">
-          {warn.map((w, i) => <span key={i}>{w}</span>)}
-        </div>
-      )}
-
-      <dl className="ac-snap-fields">
-        {fields.map(([k, v]) => {
-          const p = prevOf(k)
-          const changed = p != null && String(p) !== String(v)
-          return (
-            <div key={k} className={`ac-snap-f ${changed ? 'is-changed' : ''}`}>
-              <dt>{k}</dt>
-              <dd>
-                {v || <span className="ac-snap-none">—</span>}
-                {changed && <span className="ac-snap-was">이전 {p || '없음'}</span>}
-              </dd>
-            </div>
-          )
-        })}
-      </dl>
-
-      {rules.length > 0 && (
-        <div className="ac-snap-rules">
-          <div className="ac-snap-rules-h">규칙 {rules.length}개</div>
-          {rules.map((r, i) => (
-            <div key={i} className="ac-snap-rule">
-              <span className="d">{r.dir}</span>
-              <span className="t">{r.text}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <button className="ac-snap-raw-toggle" onClick={() => setRawOpen((v) => !v)}>
-        원본 {rawOpen ? '접기' : '보기'}
-      </button>
-      {rawOpen && <DiffView oldData={oldData} newData={newData} />}
-    </div>
-  )
-}
-
-// 한 번에 가져올 스냅샷 수. 리소스 50개에 이력이 쌓이는 속도를 감안한 값이다.
-// 넘으면 화면이 '더 있음'을 알리므로 조용히 잘리지는 않는다.
-const SNAPSHOT_LIMIT = 1000
-
 // 목록의 시각은 대부분 같은 값이 반복된다. 자리를 다 내주고 얻는 게 없다.
 // 짧게 줄이고 정확한 시각은 title로 넘긴다.
 function relTime(iso) {
@@ -122,6 +53,17 @@ function relTime(iso) {
   if (min < 43200) return `${Math.floor(min / 1440)}일 전`
   return t.toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit' })
 }
+
+const shortTime = (iso) => new Date(iso).toLocaleString('ko-KR', {
+  month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+})
+
+const DAY = 86400000
+
+// 한 번에 가져올 스냅샷 수. 리소스 50개에 이력이 쌓이는 속도를 감안한 값이다.
+// 넘으면 화면이 '더 있음'을 알리므로 조용히 잘리지는 않는다.
+const SNAPSHOT_LIMIT = 1000
+const PAGE_SIZE = 25
 
 function groupSnapshotsByResource(snapshots) {
   const groups = {}
@@ -136,30 +78,131 @@ function groupSnapshotsByResource(snapshots) {
   }).sort((a, b) => new Date(b.latest.collected_at) - new Date(a.latest.collected_at))
 }
 
+// 오른쪽 상세 패널.
+//
+// 원래는 줄 아래로 펼쳤다. 그러면 누를 때마다 아래 목록이 통째로 밀려서
+// 방금 보던 자리를 잃는다. 옆에 띄우면 목록이 안 움직인다.
+function DetailPanel({ group, status, onClose }) {
+  const [tab, setTab] = useState('info')
+  const [rawOpen, setRawOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    setTab('info'); setRawOpen(false)
+    // 넓은 화면에서는 패널이 sticky라 이미 보인다. 좁은 화면에서는 표 아래로
+    // 내려가므로 눌러도 아무 일이 없어 보인다. 'nearest'라서 이미 보일 때는
+    // 화면이 움직이지 않는다.
+    if (group) ref.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [group?.key])
+
+  if (!group) {
+    return (
+      <aside className="ac-side ac-side-empty">
+        <div className="ac-side-empty-t">줄을 누르면 여기에 자세한 내용이 나옵니다.</div>
+      </aside>
+    )
+  }
+
+  const { latest, sorted, history } = group
+  const meta = RESOURCE_META[latest.resource_type] || { label: latest.resource_type }
+  const { fields, rules, warn } = summarize(latest.resource_type, latest.raw_data)
+  const prevOf = (item) => {
+    const idx = sorted.findIndex((s) => s.id === item.id)
+    return idx > 0 ? sorted[idx - 1] : null
+  }
+
+  return (
+    <aside className="ac-side" ref={ref}>
+      <div className="ac-side-h">
+        <div className="ac-side-t">{latest.resource_name || latest.resource_id}</div>
+        <div className="ac-side-s">{meta.label}{latest.region ? ` · ${latest.region}` : ''}</div>
+        {status === 'deleted' && <div className="ac-state is-deleted">삭제</div>}
+        <button className="ac-side-x" onClick={onClose} aria-label="닫기">×</button>
+      </div>
+
+      <div className="ac-side-tabs">
+        <button className={`ac-side-tab ${tab === 'info' ? 'on' : ''}`} onClick={() => setTab('info')}>정보</button>
+        <button className={`ac-side-tab ${tab === 'hist' ? 'on' : ''}`} onClick={() => setTab('hist')}>
+          변경 {history.length > 0 && <span className="n">{history.length}</span>}
+        </button>
+      </div>
+
+      <div className="ac-side-b">
+        {tab === 'info' && (
+          <>
+            {warn.length > 0 && (
+              <div className="ac-side-warn">{warn.map((w, i) => <span key={i}>{w}</span>)}</div>
+            )}
+            <dl className="ac-side-fields">
+              {fields.map(([k, v]) => (
+                <div key={k} className="ac-side-f">
+                  <dt>{k}</dt>
+                  <dd>{v || <span className="ac-side-none">—</span>}</dd>
+                </div>
+              ))}
+              <div className="ac-side-f">
+                <dt>식별자</dt><dd className="mono">{latest.resource_id}</dd>
+              </div>
+              <div className="ac-side-f">
+                <dt>마지막 수집</dt><dd>{shortTime(latest.collected_at)}</dd>
+              </div>
+            </dl>
+
+            {rules.length > 0 && (
+              <>
+                <div className="ac-side-sect">규칙 {rules.length}개</div>
+                <div className="ac-side-rules">
+                  {rules.map((r, i) => (
+                    <div key={i} className="ac-side-rule">
+                      <span className="d">{r.dir}</span><span className="t">{r.text}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            <button className="ac-side-raw" onClick={() => setRawOpen((v) => !v)}>
+              원본 {rawOpen ? '접기' : '보기'}
+            </button>
+            {rawOpen && <DiffView oldData={prevOf(latest)?.raw_data} newData={latest.raw_data} />}
+          </>
+        )}
+
+        {tab === 'hist' && (
+          history.length === 0
+            ? <div className="ac-side-none-b">수집을 시작한 뒤로 바뀐 적이 없습니다.</div>
+            : history.map((h) => (
+              <div key={h.id} className="ac-side-hist">
+                <div className="ac-side-hist-t">{shortTime(h.collected_at)}</div>
+                <DiffView oldData={prevOf(h)?.raw_data} newData={h.raw_data} />
+              </div>
+            ))
+        )}
+      </div>
+    </aside>
+  )
+}
+
 export default function AwsStatus() {
-  const [cred, setCred] = useState({ accessKeyId: '', secretAccessKey: '', region: 'ap-northeast-2' })
   const [collecting, setCollecting] = useState(false)
   const [collectResult, setCollectResult] = useState(null)
   const [snapshots, setSnapshots] = useState([])
   const [snapshotTotal, setSnapshotTotal] = useState(0)
+  const [seen, setSeen] = useState([])
   const [runs, setRuns] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
-  const [expanded, setExpanded] = useState(() => new Set())
-  const [expandedHistory, setExpandedHistory] = useState(() => new Set())
-  const [filter, setFilter] = useState('all')
-  const [changedOnly, setChangedOnly] = useState(true)
-  const [search, setSearch] = useState('')
 
-  // 최근 100건만 가져오던 것을 늘렸다.
-  //
-  // 이 표는 시각이 아니라 '리소스'가 단위인데 시각으로 잘라 오고 있었다.
-  // 리소스 50개에 이력이 300건 넘게 쌓인 상태에서 최근 100건을 가져오면
-  // 리소스 12개만 덮이고 나머지 38개는 화면에서 사라진다. 남은 12개도
-  // 앞부분이 잘려 변경 이력이 비어 보인다.
-  //
-  // 한 번에 다 가져오는 대신 상한을 크게 두고 총 건수를 함께 받는다.
-  // 조용히 잘라내지 않기 위해서다 — 넘치면 화면에 알린다.
+  // 패싯은 여러 개를 동시에 고를 수 있다. 하나를 누르면 나머지가 사라지던
+  // 예전 방식은 '보안 그룹과 IAM만' 같은 흔한 요구를 아예 못 받는다.
+  const [types, setTypes] = useState([])
+  // 기본은 운영 중인 것만. 삭제된 리소스는 이력을 보려고 남겨 두는 것이지
+  // 현황의 총 건수에 섞이면 "지금 몇 개 굴리고 있나"를 알 수 없게 된다.
+  const [states, setStates] = useState(['live'])
+  const [changedIn, setChangedIn] = useState(null)
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(0)
+  const [selected, setSelected] = useState(null)
+
   const fetchSnapshots = async () => {
     setLoading(true)
     const { rows, total, error } = await fetchPage(
@@ -172,6 +215,14 @@ export default function AwsStatus() {
     setLoading(false)
   }
 
+  // 삭제 판정에 쓴다. 스냅샷은 덧붙이기만 하는 이력이라 지워진 리소스도
+  // 마지막 모습이 영원히 남는다. '이번 수집에서 실제로 보였는가'는 여기에만 있다.
+  const fetchSeen = async () => {
+    const { rows } = await fetchPage(
+      supabase.from('aws_resource_seen').select('*'), '리소스 확인 기록')
+    setSeen(rows)
+  }
+
   // 수집을 언제 돌렸는지. 스냅샷은 값이 바뀌었을 때만 쌓이므로 이것만으로는
   // '돌았는데 변화가 없었다'와 '아예 안 돌았다'를 구별할 수 없다.
   const fetchRuns = async () => {
@@ -182,55 +233,116 @@ export default function AwsStatus() {
     setRuns(rows)
   }
 
-  useEffect(() => { fetchSnapshots(); fetchRuns() }, [])
+  useEffect(() => { fetchSnapshots(); fetchSeen(); fetchRuns() }, [])
 
   const runCollect = async () => {
     setCollecting(true)
     setCollectResult(null)
     const data = await callFunction('aws-collect')
     setCollectResult(data)
-    if (data.ok) { await fetchSnapshots(); await fetchRuns() }
+    if (data.ok) { await fetchSnapshots(); await fetchSeen(); await fetchRuns() }
     setCollecting(false)
   }
 
-  const toggle = (id) => setExpanded((prev) => {
-    const next = new Set(prev)
-    next.has(id) ? next.delete(id) : next.add(id)
-    return next
-  })
+  const allGroups = useMemo(() => groupSnapshotsByResource(snapshots), [snapshots])
 
-  const toggleHistory = (key) => setExpandedHistory((prev) => {
-    const next = new Set(prev)
-    next.has(key) ? next.delete(key) : next.add(key)
-    return next
-  })
+  // 종류별 마지막 수집 시각. 수집은 종류별로 따로 돌고 하나가 실패해도
+  // 나머지는 진행하므로, 전체 최대 시각을 기준 삼으면 실패한 종류가
+  // 통째로 '삭제'로 뒤집힌다. aws_resource_options 뷰와 같은 기준을 쓴다.
+  const runAtByType = useMemo(() => {
+    const m = {}
+    for (const s of seen) {
+      const t = new Date(s.last_seen_at).getTime()
+      if (!m[s.resource_type] || t > m[s.resource_type]) m[s.resource_type] = t
+    }
+    return m
+  }, [seen])
 
-  const visible = filter === 'all' ? snapshots : snapshots.filter((s) => s.resource_type === filter)
-  const counts = Object.keys(RESOURCE_META).reduce((acc, k) => {
-    acc[k] = new Set(snapshots.filter((s) => s.resource_type === k).map((s) => s.resource_id)).size
-    return acc
-  }, {})
-  const totalResources = new Set(snapshots.map((s) => `${s.resource_type}:${s.resource_id}`)).size
-  const resourceGroupsAll = groupSnapshotsByResource(visible)
-  const changedCount = resourceGroupsAll.filter((g) => g.history.length > 0).length
+  const seenMap = useMemo(() => {
+    const m = {}
+    for (const s of seen) m[`${s.resource_type}:${s.resource_id}`] = new Date(s.last_seen_at).getTime()
+    return m
+  }, [seen])
+
+  // 리소스마다 상태·신규·변경을 한 번만 계산해 붙인다.
+  const enriched = useMemo(() => allGroups.map((g) => {
+    const t = g.latest.resource_type
+    const last = seenMap[g.key]
+    // 확인 기록이 아예 없으면 판단할 근거가 없다. 삭제로 몰지 않는다.
+    const state = last == null || !runAtByType[t] || last >= runAtByType[t] ? 'live' : 'deleted'
+    const firstAt = new Date(g.sorted[0].collected_at).getTime()
+    const lastChange = g.history.length > 0 ? new Date(g.latest.collected_at).getTime() : null
+    return {
+      ...g, state,
+      isNew: Date.now() - firstAt < 7 * DAY,
+      changedDays: lastChange == null ? null : (Date.now() - lastChange) / DAY,
+    }
+  }), [allGroups, seenMap, runAtByType])
+
+  const typeCounts = useMemo(() => {
+    const m = {}
+    for (const g of enriched) m[g.latest.resource_type] = (m[g.latest.resource_type] || 0) + 1
+    return m
+  }, [enriched])
+
+  const stateCounts = useMemo(() => ({
+    live: enriched.filter((g) => g.state === 'live').length,
+    deleted: enriched.filter((g) => g.state === 'deleted').length,
+  }), [enriched])
+
+  const changedCounts = useMemo(() => ({
+    7: enriched.filter((g) => g.changedDays != null && g.changedDays <= 7).length,
+    30: enriched.filter((g) => g.changedDays != null && g.changedDays <= 30).length,
+    none: enriched.filter((g) => g.changedDays == null).length,
+  }), [enriched])
+
+  const newCount = enriched.filter((g) => g.isNew).length
+  const lastRun = runs.find((r) => r.finished_at) || runs[0]
+
   const q = search.trim().toLowerCase()
-  const resourceGroups = resourceGroupsAll
-    .filter((g) => !changedOnly || g.history.length > 0)
-    .filter((g) => !q || (g.latest.resource_name || '').toLowerCase().includes(q) || (g.latest.resource_id || '').toLowerCase().includes(q))
+  const filtered = useMemo(() => enriched.filter((g) => {
+    if (types.length && !types.includes(g.latest.resource_type)) return false
+    if (states.length && !states.includes(g.state)) return false
+    if (changedIn === 'none' && g.changedDays != null) return false
+    if (changedIn === 7 && !(g.changedDays != null && g.changedDays <= 7)) return false
+    if (changedIn === 30 && !(g.changedDays != null && g.changedDays <= 30)) return false
+    if (q && !`${g.latest.resource_name || ''} ${g.latest.resource_id}`.toLowerCase().includes(q)) return false
+    return true
+  }), [enriched, types, states, changedIn, q])
 
-  // 종류가 섞인 채 시각 순으로만 늘어서 있으면 훑을 수가 없다. IAM 사용자와
-  // 보안 그룹은 봐야 할 값이 아예 달라서 같은 줄에 놓으면 둘 다 안 읽힌다.
-  // 종류로 구획을 나눈다 — 리소스가 몇 배가 돼도 읽는 방식은 그대로다.
-  const knownTypes = Object.keys(RESOURCE_META)
-  const sections = [
-    ...knownTypes.map((k) => ({ key: k, label: RESOURCE_META[k].label })),
-    // 메타에 없는 종류가 들어와도 조용히 사라지면 안 된다.
-    ...[...new Set(resourceGroups.map((g) => g.latest.resource_type))]
-      .filter((t) => !knownTypes.includes(t))
-      .map((t) => ({ key: t, label: t })),
+  // 필터가 바뀌면 첫 쪽으로. 3쪽을 보다가 결과가 5건으로 줄면 빈 화면이 남는다.
+  useEffect(() => { setPage(0) }, [types, states, changedIn, q])
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const pageRows = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+
+  // 이 쪽에 실린 것만 종류별로 묶는다. 표 안에서 종류가 바뀌는 지점이 보이면
+  // 지금 무엇을 보고 있는지 스크롤 중에도 알 수 있다.
+  const sections = useMemo(() => {
+    const out = []
+    for (const g of pageRows) {
+      const t = g.latest.resource_type
+      const last = out[out.length - 1]
+      if (!last || last.type !== t) out.push({ type: t, label: (RESOURCE_META[t] || {}).label || t, items: [g] })
+      else last.items.push(g)
+    }
+    return out
+  }, [pageRows])
+
+  const toggleIn = (list, setList, v) =>
+    setList(list.includes(v) ? list.filter((x) => x !== v) : [...list, v])
+
+  const chips = [
+    ...types.map((t) => ({ k: `t:${t}`, label: `종류 : ${(RESOURCE_META[t] || {}).label || t}`, off: () => toggleIn(types, setTypes, t) })),
+    ...states.map((s) => ({ k: `s:${s}`, label: `상태 : ${s === 'live' ? '활성' : '삭제'}`, off: () => toggleIn(states, setStates, s) })),
+    ...(changedIn ? [{ k: 'c', label: `변경 : ${changedIn === 'none' ? '없음' : `최근 ${changedIn}일`}`, off: () => setChangedIn(null) }] : []),
   ]
-    .map((s) => ({ ...s, items: resourceGroups.filter((g) => g.latest.resource_type === s.key) }))
-    .filter((s) => s.items.length > 0)
+  // '모두 해제'도 활성만 보는 상태로 돌아간다. 아무것도 안 걸린 목록에
+  // 삭제된 리소스가 섞여 나오면 그게 기본값처럼 보인다.
+  const clearAll = () => { setTypes([]); setStates(['live']); setChangedIn(null); setSearch('') }
+
+  const onlyLive = states.length === 1 && states[0] === 'live'
+  const selectedGroup = enriched.find((g) => g.key === selected) || null
 
   return (
     <div className="ac-page">
@@ -239,184 +351,182 @@ export default function AwsStatus() {
 
       <ErrorBanner message={loadError} onRetry={fetchSnapshots} />
 
-      <div className="ac-grid">
-      <details className="ac-card ac-card-muted">
-        <summary className="ac-card-summary">AWS 자격증명 <span className="ac-tag">준비 중</span></summary>
-        <p className="ac-cred-note">실제 운영 키는 여기 저장되지 않습니다. Supabase Edge Function 시크릿으로 별도 설정합니다. 이 폼은 아직 스켈레톤 단계입니다.</p>
-        <div className="ac-form-row">
-          <input
-            className="ac-input"
-            type="password"
-            placeholder="Access Key ID"
-            value={cred.accessKeyId}
-            onChange={(e) => setCred({ ...cred, accessKeyId: e.target.value })}
-            autoComplete="off"
-          />
-          <input
-            className="ac-input"
-            type="password"
-            placeholder="Secret Access Key"
-            value={cred.secretAccessKey}
-            onChange={(e) => setCred({ ...cred, secretAccessKey: e.target.value })}
-            autoComplete="off"
-          />
-          <input
-            className="ac-input"
-            placeholder="Region"
-            value={cred.region}
-            onChange={(e) => setCred({ ...cred, region: e.target.value })}
-          />
+      {/* 열자마자 읽혀야 하는 것만. 위험 판정은 여기서 하지 않는다 —
+          그건 보안 점검이 답할 일이고, 두 군데서 따로 판정하면 어긋난다. */}
+      <div className="ac-sum">
+        <div className="ac-sum-c">
+          <div className="k">신규</div>
+          <div className="v">{newCount}</div>
+          <div className="sub">최근 7일 내 처음 잡힘</div>
         </div>
-        <button className="ac-btn ac-btn-secondary" disabled>저장 (준비 중)</button>
-      </details>
-
-      <div className="ac-card">
-        <div className="ac-card-title">수동 수집</div>
-        <p className="ac-cred-note">자격증명이 설정되면 여기서 바로 수집을 실행할 수 있습니다.</p>
-        <button className="ac-btn" onClick={runCollect} disabled={collecting}>
-          {collecting ? '수집 중...' : '지금 수집하기'}
-        </button>
-        {collectResult && (
-          collectResult.ok ? (
-            <div className="ac-result ac-result-ok">
-              수집 완료 — 조회 SG {collectResult.counts.security_group}/IAM Role {collectResult.counts.iam_role}/
-              IAM Policy {collectResult.counts.iam_policy}/WAF {collectResult.counts.waf_web_acl}개, 그중 변경 {collectResult.changed}건 기록됨
-            </div>
-          ) : (
-            <div className="ac-result ac-result-error">{collectResult.error}</div>
-          )
-        )}
-      </div>
-
-      <div className="ac-card ac-card-wide">
-        {/* 언제 돌았는지 먼저 보여준다. 아래 목록은 '무엇이 바뀌었나'라서,
-            변화가 없는 날은 아무것도 안 나온다. 그때 수집이 멈춘 건지
-            바뀐 게 없는 건지 여기서 갈린다. */}
-        {runs.length > 0 && (
-          <div className="ac-runs">
-            <div className="ac-runs-h">최근 수집</div>
-            <div className="ac-runs-list">
-              {runs.slice(0, 8).map((r) => (
-                <div key={r.id} className={`ac-run ${r.error ? 'is-err' : ''}`}>
-                  <span className="t">{new Date(r.started_at).toLocaleString('ko-KR', {
-                    month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
-                  <span className="w">{r.trigger === 'cron' ? '자동' : '수동'}</span>
-                  <span className="r">
-                    {r.error ? '실패'
-                      : r.changed > 0 ? `${r.changed}건 변경`
-                        : r.seen != null ? '변화 없음' : '진행 중'}
-                  </span>
-                </div>
-              ))}
-            </div>
+        <div className="ac-sum-c">
+          <div className="k">삭제</div>
+          <div className={`v ${stateCounts.deleted > 0 ? 'is-gone' : ''}`}>{stateCounts.deleted}</div>
+          <div className="sub">마지막 수집에 없음</div>
+        </div>
+        <div className="ac-sum-c">
+          <div className="k">7일 내 변경</div>
+          <div className="v">{changedCounts[7]}</div>
+          <div className="sub">30일 {changedCounts[30]}건</div>
+        </div>
+        <div className="ac-sum-c">
+          <div className="k">마지막 수집</div>
+          <div className="v sm">{lastRun ? relTime(lastRun.started_at) : '기록 없음'}</div>
+          <div className="sub">
+            {lastRun
+              ? `${shortTime(lastRun.started_at)} ${lastRun.trigger === 'cron' ? '자동' : '수동'}${lastRun.error ? ' · 실패' : ''}`
+              : '아직 수집한 적이 없습니다'}
           </div>
-        )}
-
-        <div className="ac-card-title">
-          변경 이력 {changedCount > 0 && <span className="ac-count-badge">{changedCount}</span>}
-          {/* 상한에 걸리면 알린다. 조용히 잘라내면 '변경 이력이 없다'와
-              '못 가져왔다'를 구별할 수 없다. */}
-          {snapshotTotal > SNAPSHOT_LIMIT && (
-            <span className="ac-snap-more">
-              최근 {SNAPSHOT_LIMIT.toLocaleString()}건만 표시 · 전체 {snapshotTotal.toLocaleString()}건
-            </span>
+        </div>
+        <div className="ac-sum-c ac-sum-act">
+          <button className="ac-btn" onClick={runCollect} disabled={collecting}>
+            {collecting ? '수집 중…' : '지금 수집'}
+          </button>
+          {collectResult && (
+            <div className={`ac-sum-msg ${collectResult.ok ? '' : 'is-err'}`}>
+              {collectResult.ok ? `조회 ${collectResult.seen ?? '-'} · 변경 ${collectResult.changed}` : collectResult.error}
+            </div>
           )}
         </div>
-        <div className="ac-filter-row">
-          <button className={`ac-filter-btn ${filter === 'all' ? 'active' : ''}`} onClick={() => setFilter('all')}>
-            전체 {totalResources}
-          </button>
-          {Object.entries(RESOURCE_META).map(([key, meta]) => counts[key] > 0 && (
-            <button key={key} className={`ac-filter-btn ${filter === key ? 'active' : ''}`} onClick={() => setFilter(filter === key ? 'all' : key)}>
-              {meta.label} {counts[key]}
-            </button>
-          ))}
-        </div>
-        <div className="ac-filter-row">
-          <button className={`ac-filter-btn ${changedOnly ? 'active' : ''}`} onClick={() => setChangedOnly((v) => !v)}>
-            변경된 것만 {changedCount}
-          </button>
-          <input
-            className="ac-input ac-search-input"
-            placeholder=" 이름 또는 ID로 검색"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-
-        {loading && <div className="ac-empty">불러오는 중...</div>}
-        {!loading && resourceGroups.length === 0 && resourceGroupsAll.length === 0 && (
-          <div className="ac-empty">아직 수집된 데이터가 없습니다. 자격증명 설정 후 "지금 수집하기"를 눌러보세요.</div>
-        )}
-        {!loading && resourceGroups.length === 0 && resourceGroupsAll.length > 0 && (
-          <div className="ac-empty">조건에 맞는 리소스가 없습니다. {changedOnly && '(변경된 것만 보기 켜짐)'}</div>
-        )}
-
-        <div className="ac-snapshot-list">
-          {sections.map((section) => (
-          <section key={section.key} className="ac-sec">
-            <div className="ac-sec-h">
-              <span className="ac-sec-label">{section.label}</span>
-              <span className="ac-sec-count">{section.items.length}</span>
-            </div>
-          {section.items.map(({ key, sorted, latest, history }) => {
-            const flags = flagsOf(latest.resource_type, latest.raw_data)
-            const isOpen = expanded.has(latest.id)
-            const historyOpen = expandedHistory.has(key)
-            const prevOf = (item) => {
-              const idx = sorted.findIndex((s) => s.id === item.id)
-              return idx > 0 ? sorted[idx - 1] : null
-            }
-            return (
-              <div key={key} className={`ac-snapshot ${history.length > 0 ? 'has-changes' : ''}`}>
-                {/* 열을 고정한다. 줄마다 길이가 달라 세로로 안 읽히던 게
-                    가독성이 떨어지는 가장 큰 이유였다. */}
-                <div className="ac-snapshot-top" onClick={() => toggle(latest.id)}>
-                  <span className="ac-snapshot-name">{latest.resource_name || latest.resource_id}</span>
-                  {/* 펼치지 않아도 무엇인지 알 수 있게 한 줄 요약을 붙인다.
-                      규칙이 몇 개인지, 권한이 붙었는지 같은 것들이다. */}
-                  <span className="ac-snap-brief">{briefOf(latest.resource_type, latest.raw_data)}</span>
-                  <span className="ac-snap-flags">
-                    {flags.map((f, i) => (
-                      <span key={i} className={`ac-flag is-${f.level}`}>{f.text}</span>
-                    ))}
-                  </span>
-                  <span className="ac-snapshot-time" title={new Date(latest.collected_at).toLocaleString('ko-KR')}>
-                    {relTime(latest.collected_at)}
-                  </span>
-                  <span className="ac-expand-icon">{isOpen ? '▲' : '▼'}</span>
-                </div>
-                {isOpen && (
-                  <SnapshotView type={latest.resource_type} oldData={prevOf(latest)?.raw_data} newData={latest.raw_data} />
-                )}
-                {history.length > 0 && (
-                  <div className="ac-snapshot-history">
-                    <div className="ac-snapshot-history-toggle" onClick={() => toggleHistory(key)}>
-                      변경 이력 {history.length}건 {historyOpen ? '▲' : '▼'}
-                    </div>
-                    {historyOpen && history.map((h) => {
-                      const hOpen = expanded.has(h.id)
-                      return (
-                        <div key={h.id} className="ac-snapshot-history-item">
-                          <div className="ac-snapshot-history-top" onClick={() => toggle(h.id)}>
-                            <span className="ac-snapshot-time" title={new Date(h.collected_at).toLocaleString('ko-KR')}>
-                              {relTime(h.collected_at)}
-                            </span>
-                            <span className="ac-expand-icon">{hOpen ? '▲' : '▼'}</span>
-                          </div>
-                          {hOpen && <SnapshotView type={h.resource_type} oldData={prevOf(h)?.raw_data} newData={h.raw_data} />}
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-          </section>
-          ))}
-        </div>
       </div>
+
+      {/* 아무것도 안 골랐으면 오른쪽 칸을 아예 없앤다. 빈 패널이 320px을
+          붙들고 있으면 정작 봐야 할 표가 눌린다. */}
+      <div className={`ac-shell ${selectedGroup ? 'has-side' : ''}`}>
+        {/* 왼쪽 패싯. 눌러도 나머지 종류가 사라지지 않고 개수가 그대로 보인다. */}
+        <aside className="ac-facets">
+          <div className="ac-fg">
+            <div className="ac-fg-t">종류</div>
+            {Object.entries(typeCounts)
+              .sort((a, b) => b[1] - a[1])
+              .map(([t, n]) => (
+                <button key={t} className={`ac-fi ${types.includes(t) ? 'on' : ''}`}
+                  onClick={() => toggleIn(types, setTypes, t)}>
+                  <span className="box">{types.includes(t) ? '✓' : ''}</span>
+                  <span className="l">{(RESOURCE_META[t] || {}).label || t}</span>
+                  <span className="c">{n}</span>
+                </button>
+              ))}
+          </div>
+
+          <div className="ac-fg">
+            <div className="ac-fg-t">상태</div>
+            {[['live', '활성'], ['deleted', '삭제']].map(([k, label]) => (
+              <button key={k} className={`ac-fi ${states.includes(k) ? 'on' : ''}`}
+                onClick={() => toggleIn(states, setStates, k)}>
+                <span className="box">{states.includes(k) ? '✓' : ''}</span>
+                <span className="l">{label}</span>
+                <span className="c">{stateCounts[k]}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="ac-fg">
+            <div className="ac-fg-t">변경</div>
+            {[[7, '최근 7일'], [30, '최근 30일'], ['none', '변경 없음']].map(([k, label]) => (
+              <button key={k} className={`ac-fi ${changedIn === k ? 'on' : ''}`}
+                onClick={() => setChangedIn(changedIn === k ? null : k)}>
+                <span className="box">{changedIn === k ? '✓' : ''}</span>
+                <span className="l">{label}</span>
+                <span className="c">{changedCounts[k]}</span>
+              </button>
+            ))}
+          </div>
+        </aside>
+
+        <div className="ac-main">
+          <div className="ac-tb">
+            <input className="ac-tb-s" placeholder="이름 또는 ID로 검색"
+              value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+
+          {/* 지금 뭐가 걸려 있는지 항상 보여야 한다. 거른 표와 안 거른 표가
+              똑같이 생기면 사람이 잘못 읽는다. */}
+          <div className="ac-chips">
+            {/* 총 건수는 지금 굴리고 있는 것이 기준이다. 삭제된 리소스를 섞어 세면
+                "우리가 몇 개를 운영 중인가"라는 물음에 답할 수 없다. */}
+            <span className="lead">
+              {onlyLive
+                ? (filtered.length === stateCounts.live
+                  ? <>운영 중 <b>{stateCounts.live}건</b></>
+                  : <>운영 중 {stateCounts.live}건 중 <b>{filtered.length}건</b></>)
+                : <>전체 {enriched.length}건 중 <b>{filtered.length}건</b></>}
+              {snapshotTotal > SNAPSHOT_LIMIT && (
+                <span className="ac-snap-more">
+                  · 이력 최근 {SNAPSHOT_LIMIT.toLocaleString()}건만 반영 (전체 {snapshotTotal.toLocaleString()}건)
+                </span>
+              )}
+            </span>
+            {chips.map((c) => (
+              <button key={c.k} className="ac-chip" onClick={c.off}>{c.label}<span className="x">×</span></button>
+            ))}
+            {chips.length > 0 && <button className="ac-clr" onClick={clearAll}>모두 해제</button>}
+          </div>
+
+          <div className="ac-tw">
+            {loading && <div className="ac-empty">불러오는 중…</div>}
+            {!loading && enriched.length === 0 && (
+              <div className="ac-empty">아직 수집된 데이터가 없습니다. "지금 수집"을 눌러보세요.</div>
+            )}
+            {!loading && enriched.length > 0 && filtered.length === 0 && (
+              <div className="ac-empty">조건에 맞는 리소스가 없습니다. <button className="ac-clr" onClick={clearAll}>모두 해제</button></div>
+            )}
+
+            {filtered.length > 0 && (
+              <table className="ac-tbl">
+                <thead>
+                  <tr>
+                    <th>이름</th><th>식별자</th><th>구성</th>
+                    <th className="num">변경</th><th className="num">수집</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sections.map((sec) => (
+                    <Fragment key={sec.type}>
+                      <tr className="ac-grp">
+                        <td colSpan={5}>
+                          {sec.label}<span className="cnt">{typeCounts[sec.type]}개</span>
+                        </td>
+                      </tr>
+                      {sec.items.map((g) => (
+                        <tr key={g.key}
+                          className={`${selected === g.key ? 'sel' : ''} ${g.state === 'deleted' ? 'gone' : ''}`}
+                          onClick={() => setSelected(selected === g.key ? null : g.key)}>
+                          <td className="name">
+                            {g.latest.resource_name || g.latest.resource_id}
+                            {g.state === 'deleted' && <span className="ac-state is-deleted">삭제</span>}
+                            {g.isNew && g.state !== 'deleted' && <span className="ac-state is-new">신규</span>}
+                          </td>
+                          <td className="mono">{g.latest.resource_id}</td>
+                          <td>{briefOf(g.latest.resource_type, g.latest.raw_data)}</td>
+                          <td className="num">{g.history.length || '—'}</td>
+                          <td className="num" title={new Date(g.latest.collected_at).toLocaleString('ko-KR')}>
+                            {relTime(g.latest.collected_at)}
+                          </td>
+                        </tr>
+                      ))}
+                    </Fragment>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {filtered.length > 0 && (
+            <div className="ac-foot">
+              <span>{filtered.length}건 중 {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)}건</span>
+              <span className="pg">
+                <span>{page + 1} / {pageCount}</span>
+                <button className="pgb" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>‹</button>
+                <button className="pgb" disabled={page + 1 >= pageCount} onClick={() => setPage((p) => p + 1)}>›</button>
+              </span>
+            </div>
+          )}
+        </div>
+
+        {selectedGroup && (
+          <DetailPanel group={selectedGroup} status={selectedGroup.state} onClose={() => setSelected(null)} />
+        )}
       </div>
     </div>
   )

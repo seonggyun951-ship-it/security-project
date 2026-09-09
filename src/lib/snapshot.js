@@ -218,35 +218,10 @@ export function briefOf(type, raw) {
   return ''
 }
 
-/**
- * 목록에서 바로 눈에 띄어야 할 것. summarize().warn과 뿌리는 같지만
- * 이쪽은 짧고 등급이 붙는다 — 문장은 펼친 뒤에 읽는 것이고,
- * 목록에서는 50줄을 훑는 동안 위험한 줄만 걸려야 한다.
- *
- * level: high(당장 볼 것) | note(알아는 둘 것)
- */
-export function flagsOf(type, raw) {
-  const d = raw || {}
-  const out = []
-  if (type === 'iam_user') {
-    if (/Administrator/i.test(d.AttachedPolicies || '')) out.push({ level: 'high', text: '관리자' })
-    if (d.InlinePolicies) out.push({ level: 'note', text: '인라인 정책' })
-    if (!d.AttachedPolicies && !d.InlinePolicies && !d.Groups) out.push({ level: 'note', text: '권한 없음' })
-  }
-  if (type === 'iam_policy' && Number(d.AttachmentCount || 0) === 0) {
-    out.push({ level: 'note', text: '미사용' })
-  }
-  if (type === 'security_group') {
-    const open = (d.IpPermissions || []).filter((r) =>
-      (r.IpRanges || []).some((x) => x.CidrIp === '0.0.0.0/0'))
-    if (open.length) out.push({ level: 'high', text: `전체 개방 ${open.length}` })
-  }
-  if (type === 'network_acl' && (d.Associations || []).length === 0) {
-    // 어떤 서브넷에도 안 붙은 NACL은 규칙을 아무리 써도 효력이 없다.
-    out.push({ level: 'note', text: '미적용' })
-  }
-  if (type === 'vpc' && d.IsDefault) out.push({ level: 'note', text: '기본 VPC' })
-  return out
-}
+// 위험/주의 판정(flagsOf)은 뺐다.
+//
+// 현황은 '무엇이 있고 무엇이 바뀌었나'를 보는 곳이고, 위험 판정은 보안 점검이 한다.
+// 여기서 손으로 쓴 규칙 몇 줄로 따로 판정하면 판정이 두 군데가 되고,
+// Prowler 결과와 어긋났을 때 어느 쪽을 믿어야 할지 알 수 없게 된다.
 
 export { tailOf }

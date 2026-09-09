@@ -12,6 +12,8 @@
   --bg:      #0c0c0c;  /* 페이지 바탕 */
   --panel:   #141417;  /* 카드 면 — 배경보다 한 단계 밝게 */
   --soft:    #1a1a1e;  /* 옅은 면 — 코드 블록, 표 머리, 보조 영역 */
+  /* 표 머리(--soft) 위에 또 한 겹 올려야 하는 자리. 표 안의 종류 구분줄이 여기 해당한다 */
+  --soft2:   #202026;
   --ink:     #ffffff;  /* 본문 */
   --ink-2:   #b4b4bd;  /* 보조 텍스트 */
   /* 흐릿한 텍스트. #6b7280으로 뒀더니 옅은 면(--soft) 위에서 대비가 3.6:1까지 떨어져
@@ -1035,6 +1037,9 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 @media (min-width: 1500px) {
   .ac-page { max-width: 1320px; }
 }
+/* AWS 현황은 표라서 글줄 길이 제한이 걸리는 화면이 아니다. 폭 제한을 풀어
+   화면을 다 쓰게 한다. 리소스가 늘수록 열에 줄 자리가 필요하다. */
+.ac-page:has(.ac-shell) { max-width: none; }
 
 @media (min-width: 900px) {
   .ac-grid { grid-template-columns: 1fr 1fr; }
@@ -1121,65 +1126,264 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .ac-cal-empty { visibility: hidden; }
 .ac-datepop-actions { display: flex; flex-direction: column; gap: 8px; }
 .ac-empty { color: var(--ink-3); font-size: 13px; padding: 20px 0; text-align: center; }
-/* 수집 이력.
-   회색 덩어리를 8px 간격으로 늘어놓으니 스무 개가 넘어가면 죽이 됐다.
-   간격을 없애고 구분선 하나로 이어 붙여 표처럼 흐르게 한다 —
-   목록은 덩어리의 나열이 아니라 훑는 것이다. */
-/* 목록 자체를 스크롤 영역으로 둔다. 리소스가 늘어도 페이지가 끝없이 길어지지 않고,
-   구획 머리글이 붙어 있을 기준면이 생긴다(sticky는 overflow:hidden 안에서 안 먹는다). */
-.ac-snapshot-list { display: flex; flex-direction: column; gap: 0;
+/* 목록 틀. AWS 현황은 표로 갈아탔지만 GCP 승인·신청과 홈이 아직 쓴다.
+   덩어리를 간격 두고 늘어놓는 대신 구분선 하나로 이어 붙여 표처럼 흐르게 한다. */
+.ac-snapshot-list {
+  display: flex; flex-direction: column; gap: 0;
   border: 1px solid var(--line); border-radius: var(--r);
-  max-height: 70vh; overflow-y: auto; }
-.ac-snapshot { background: transparent; border: none; border-top: 1px solid var(--line-2);
-  border-radius: 0; overflow: hidden; transition: background .12s; }
+  max-height: 70vh; overflow-y: auto;
+}
+.ac-snapshot { background: transparent; border: none; border-top: 1px solid var(--line-2); border-radius: 0; transition: background .12s; }
 .ac-snapshot:first-child { border-top: none; }
 .ac-snapshot:hover { background: rgba(255,255,255,.035); }
-/* 바뀐 것만 왼쪽에 그라디언트 선을 세운다. 안 바뀐 줄이 대부분이라
-   여기서 색이 보이면 그 줄만 골라 볼 수 있다. */
 .ac-snapshot.has-changes { position: relative; }
 .ac-snapshot.has-changes::before {
-  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
-  background: var(--grad);
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--grad);
 }
-/* ── 종류별 구획 ──
-   IAM 사용자와 보안 그룹은 봐야 할 값이 아예 달라서 한 통에 섞으면 둘 다 안 읽힌다.
-   머리글은 스크롤에 붙여 둔다 — 한참 내려간 뒤에도 지금 뭘 보고 있는지 알아야 한다. */
-.ac-sec + .ac-sec { border-top: 1px solid var(--line); }
-.ac-sec-h {
-  position: sticky; top: 0; z-index: 2;
-  display: flex; align-items: center; gap: 8px;
-  padding: 7px 14px; background: var(--soft);
+.ac-snapshot-top { display: flex; align-items: center; gap: 9px; padding: 11px 14px; cursor: pointer; }
+.ac-snapshot-name { color: var(--ink); font-size: 13px; font-weight: 600; flex: 1; }
+.ac-snapshot-type { color: var(--accent); font-size: 11px; background: var(--accent-soft); padding: 2px 8px; border-radius: var(--r-sm); }
+.ac-snapshot-time { color: var(--ink-3); font-size: 11px; }
+.ac-expand-icon { color: var(--ink-3); font-size: 11px; }
+
+/* ══ AWS 현황 ══
+   좌측 패싯 · 표 · 우측 상세 패널.
+   예전에는 줄 아래로 펼쳤는데, 누를 때마다 아래 목록이 통째로 밀려
+   방금 보던 자리를 잃었다. 옆에 띄우면 목록이 안 움직인다. */
+
+/* ── 상단 집계 ──
+   위험/주의는 여기 넣지 않는다. 그건 보안 점검이 답할 일이고,
+   두 군데서 따로 판정하면 어긋났을 때 어느 쪽을 믿을지 알 수 없다.
+   여기에는 현황만이 답할 수 있는 사실을 둔다 — 신규·삭제·변경·수집. */
+/* 다른 화면의 요약 띠(.dash-stats)와 같은 틀을 쓴다. 여기만 검은 카드로 두면
+   같은 앱 안에서 요약이 화면마다 다르게 생긴다. */
+.ac-sum {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(158px, 1fr));
+  gap: 0; background: var(--band);
+  border-radius: var(--r); overflow: hidden; margin-bottom: 18px;
+}
+/* 높이만 낮춘다. 가로는 아래 표와 같은 폭을 그대로 쓴다. */
+.ac-sum-c { padding: 11px 20px; border-left: 1px solid rgba(255,255,255,.16); }
+.ac-sum-c:first-child { border-left: 0; }
+.ac-sum-c .k { font-size: 11px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--band-ink); opacity: .72; }
+.ac-sum-c .v { font-size: 24px; font-weight: 800; letter-spacing: -.03em; line-height: 1; margin-top: 5px; color: var(--band-ink); font-variant-numeric: tabular-nums; }
+.ac-sum-c .v.sm { font-size: 17px; padding-top: 5px; }
+/* 띠 위에서는 빨강을 얹어도 안 읽힌다. 색 대신 굵기와 밑줄로 세운다 —
+   0이면 아무 표시도 안 붙어 조용히 지나간다. */
+.ac-sum-c .v.is-gone { text-decoration: underline; text-decoration-thickness: 3px; text-underline-offset: 5px; }
+.ac-sum-c .sub { font-size: 12px; color: var(--band-ink); opacity: .62; margin-top: 4px; }
+.ac-sum-act { display: flex; flex-direction: column; justify-content: center; gap: 8px; }
+/* 그라디언트 띠 위에 그라디언트 버튼을 얹으면 버튼이 안 보인다. 흰 면으로 뒤집는다. */
+.ac-sum-act .ac-btn {
+  background: var(--band-ink); color: #0c0c0c;
+  padding: 8px 16px; font-size: 13.5px;
+}
+.ac-sum-act .ac-btn:hover:not(:disabled) { filter: brightness(.92); }
+.ac-sum-msg { font-size: 12px; color: var(--band-ink); opacity: .75; }
+.ac-sum-msg.is-err { opacity: 1; font-weight: 700; }
+
+/* ── 본체 ── */
+/* 기본은 두 칸. 줄을 골랐을 때만 오른쪽 칸이 생긴다 —
+   빈 패널이 320px을 붙들고 있으면 정작 봐야 할 표가 눌린다. */
+.ac-shell {
+  display: grid; grid-template-columns: 208px minmax(0, 1fr);
+  border: 1px solid var(--line); border-radius: var(--r);
+  background: var(--panel);
+  /* overflow를 감추면 안 된다. 안쪽에 스크롤 상자가 생겨 페이지 스크롤과
+     두 개가 되고, 표 머리글의 sticky도 여기서 막힌다. */
+}
+.ac-shell.has-side { grid-template-columns: 208px minmax(0, 1fr) 340px; }
+
+/* ── 좌측 패싯 ──
+   여러 개를 동시에 고를 수 있다. 하나를 누르면 나머지가 사라지던 예전 방식은
+   '보안 그룹과 IAM만' 같은 흔한 요구를 아예 못 받는다. */
+/* 모서리는 각 칸이 직접 깎는다. 바깥에서 overflow로 자르면
+   안쪽에 스크롤 상자가 생겨 페이지 스크롤과 두 개가 된다. */
+.ac-facets {
+  border-right: 1px solid var(--line); background: var(--soft); padding: 16px 12px;
+  border-radius: var(--r) 0 0 var(--r);
+}
+.ac-fg { margin-bottom: 22px; }
+.ac-fg:last-child { margin-bottom: 0; }
+.ac-fg-t { font-size: 11.5px; font-weight: 700; letter-spacing: .11em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 8px; padding: 0 2px; }
+.ac-fi {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  background: none; border: 0; border-radius: var(--r-sm);
+  padding: 6px 6px; font: inherit; font-size: 14px; color: var(--ink-2);
+  cursor: pointer; text-align: left;
+}
+.ac-fi:hover { background: rgba(255,255,255,.05); color: var(--ink); }
+.ac-fi .box {
+  width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid var(--line);
+  flex: none; display: grid; place-items: center; font-size: 10px; line-height: 1;
+}
+.ac-fi.on { color: var(--ink); }
+.ac-fi.on .box { background: var(--accent); border-color: var(--accent); color: #0c0c0c; font-weight: 900; }
+.ac-fi .l { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ac-fi .c { margin-left: auto; font-size: 12.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+
+.ac-main { min-width: 0; display: flex; flex-direction: column; }
+
+/* ── 툴바 ── */
+.ac-tb { display: flex; align-items: center; gap: 8px; padding: 14px 16px; }
+.ac-tb-s {
+  flex: 1; min-width: 0; background: var(--bg); border: 1px solid var(--line);
+  border-radius: 7px; padding: 9px 13px; font: inherit; font-size: 14px; color: var(--ink);
+}
+.ac-tb-s::placeholder { color: var(--ink-3); }
+.ac-tb-s:focus { outline: none; border-color: var(--accent); }
+
+/* ── 활성 필터 칩 ──
+   지금 뭐가 걸려 있는지 항상 보여야 한다. 거른 표와 안 거른 표가
+   똑같이 생기면 사람이 잘못 읽는다. */
+.ac-chips { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 0 16px 13px; font-size: 13.5px; }
+.ac-chips .lead { color: var(--ink-3); }
+.ac-chips .lead b { color: var(--ink); }
+.ac-chip {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: var(--soft); border: 1px solid var(--line-2); border-radius: 999px;
+  padding: 4px 8px 4px 12px; font: inherit; font-size: 13px; color: var(--ink-2); cursor: pointer;
+}
+.ac-chip:hover { border-color: var(--ink-3); color: var(--ink); }
+.ac-chip .x { color: var(--ink-3); font-size: 15px; line-height: 1; }
+.ac-clr { background: none; border: 0; padding: 0; font: inherit; font-size: 13px; color: var(--accent); cursor: pointer; }
+.ac-clr:hover { text-decoration: underline; }
+
+/* ── 표 ── */
+/* 표에 따로 높이를 주지 않는다. 안쪽 스크롤을 만들면 페이지 스크롤과 두 개가 되고,
+   손가락/휠이 어디에 걸리느냐에 따라 다르게 움직여 읽기 나빠진다. */
+.ac-tw { flex: 1; border-top: 1px solid var(--line); }
+.ac-tbl { border-collapse: collapse; width: 100%; }
+.ac-tbl thead th {
+  position: sticky; top: 0; z-index: 3; background: var(--soft); text-align: left;
+  font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--ink-3); padding: 11px 16px; white-space: nowrap;
+  border-bottom: 1px solid var(--line);
+}
+.ac-tbl thead th.num { text-align: right; }
+/* 열 폭을 잡아 준다. 안 잡으면 이름이 긴 리소스 하나 때문에 표 전체가
+   그쪽으로 쏠리고, 짧은 열은 '2시간 전'이 두 줄로 깨진다. */
+.ac-tbl { table-layout: fixed; }
+.ac-tbl th:nth-child(1) { width: auto; }
+.ac-tbl th:nth-child(2) { width: 24%; }
+.ac-tbl th:nth-child(3) { width: 22%; }
+.ac-tbl th:nth-child(4) { width: 72px; }
+.ac-tbl th:nth-child(5) { width: 96px; }
+.ac-tbl tbody td.num,
+.ac-tbl tbody td.mono { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ac-tbl tbody td {
+  padding: 0 16px; height: 46px; font-size: 14.5px; color: var(--ink-2);
   border-bottom: 1px solid var(--line-2);
 }
-.ac-sec-label { font-size: 11px; font-weight: 700; letter-spacing: .1em; color: var(--ink-2); text-transform: uppercase; }
-.ac-sec-count { font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.ac-tbl tbody tr { cursor: pointer; }
+.ac-tbl tbody tr:hover td { background: rgba(255,255,255,.04); }
+.ac-tbl tbody tr.sel td { background: rgba(167,139,250,.09); }
+.ac-tbl tbody tr.sel td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+/* 삭제된 리소스는 이력을 보려고 남겨 두는 것이라 한 단계 물린다 */
+.ac-tbl tbody tr.gone td { color: var(--ink-3); }
+.ac-tbl td.name { color: var(--ink); font-weight: 600; }
+.ac-tbl tr.gone td.name { color: var(--ink-3); text-decoration: line-through; }
+.ac-tbl td.mono { font-family: var(--mono); font-size: 13px; color: var(--ink-3); }
+.ac-tbl td.num { text-align: right; font-variant-numeric: tabular-nums; font-size: 13.5px; color: var(--ink-3); }
 
-/* 열을 고정한다. flex로 흘려 두면 줄마다 요약 길이가 달라 이름 뒤 위치가
-   제각각이 되고, 그러면 세로로 훑을 수가 없다. */
-.ac-snapshot-top {
-  display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) auto 62px 14px;
-  align-items: center; gap: 10px; padding: 9px 14px; cursor: pointer;
+/* 표 안에서 종류가 바뀌는 지점. 스크롤 중에도 지금 뭘 보는지 알 수 있다. */
+.ac-tbl tr.ac-grp td {
+  position: sticky; top: 41px; z-index: 2; background: var(--soft2, #202026);
+  height: 34px; font-size: 12px; font-weight: 700; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--ink-3);
+  border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
 }
-.ac-snapshot-icon { font-size: 14px; }
-.ac-snapshot-name { color: var(--ink); font-size: 13px; font-weight: 600;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ac-snapshot-type { color: var(--accent); font-size: 11px; background: var(--accent-soft); padding: 2px 8px; border-radius: var(--r-sm); }
-.ac-snapshot-time { color: var(--ink-3); font-size: 11px; text-align: right;
-  font-variant-numeric: tabular-nums; }
+.ac-tbl tr.ac-grp .cnt { font-weight: 400; letter-spacing: 0; text-transform: none; margin-left: 9px; }
 
-/* 위험한 줄만 걸리게 한다. 50줄을 훑는 동안 하나씩 펼쳐 볼 수는 없다. */
-.ac-snap-flags { display: flex; gap: 5px; justify-content: flex-end; flex-wrap: nowrap; overflow: hidden; }
-.ac-flag { font-size: 10.5px; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
-.ac-flag.is-high { background: var(--fail-bg); color: var(--fail); border: 1px solid var(--fail-line); font-weight: 600; }
-.ac-flag.is-note { background: transparent; color: var(--ink-3); border: 1px solid var(--line-2); }
-
-@media (max-width: 720px) {
-  /* 좁으면 열을 유지할 수 없다. 이름과 시각만 남기고 나머지는 아래로 흘린다. */
-  .ac-snapshot-top { grid-template-columns: minmax(0, 1fr) 62px 14px; }
-  .ac-snap-brief { grid-column: 1 / -1; margin-left: 0; }
-  .ac-snap-flags { grid-column: 1 / -1; justify-content: flex-start; flex-wrap: wrap; }
+/* 상태 표시. 위험 판정이 아니라 사실이다 — 있었는데 없어졌거나, 새로 생겼거나. */
+.ac-state {
+  display: inline-block; margin-left: 8px; font-size: 12px; font-weight: 600;
+  padding: 2px 8px; border-radius: var(--r-sm); vertical-align: middle;
 }
-.ac-expand-icon { color: var(--ink-3); font-size: 11px; }
+.ac-state.is-deleted { background: var(--fail-bg); color: var(--fail); border: 1px solid var(--fail-line); }
+.ac-state.is-new { background: var(--accent-soft); color: var(--accent); border: 1px solid rgba(167,139,250,.3); }
+
+/* ── 바닥 ── */
+.ac-foot {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  padding: 12px 16px; border-top: 1px solid var(--line);
+  font-size: 13.5px; color: var(--ink-3);
+}
+.ac-foot .pg { margin-left: auto; display: flex; align-items: center; gap: 7px; }
+.ac-foot .pgb {
+  border: 1px solid var(--line); background: none; border-radius: 6px;
+  width: 30px; height: 30px; color: var(--ink-2); font: inherit; cursor: pointer;
+}
+.ac-foot .pgb:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.ac-foot .pgb:disabled { opacity: .35; cursor: default; }
+
+/* ── 우측 상세 패널 ── */
+/* 페이지 스크롤 하나로 합치면서 생긴 문제: 표를 한참 내려가 줄을 누르면
+   패널은 셸 맨 위에 있어 화면 밖이다. 화면에 붙여 따라오게 한다.
+   내용이 화면보다 길 때만 패널 안에서 스크롤이 생긴다. */
+.ac-side {
+  border-left: 1px solid var(--line); background: var(--soft);
+  display: flex; flex-direction: column; min-width: 0;
+  border-radius: 0 var(--r) var(--r) 0;
+  position: sticky; top: 0; align-self: start;
+  max-height: 100vh; overflow-y: auto;
+}
+.ac-side-empty { align-items: center; justify-content: center; padding: 30px 22px; }
+.ac-side-empty-t { color: var(--ink-3); font-size: 13.5px; text-align: center; line-height: 1.7; }
+/* 패널 안에서 스크롤이 생겨도 무엇을 보고 있는지는 남아야 한다 */
+.ac-side-h { padding: 15px 17px; border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 2; background: var(--soft); }
+.ac-side-t { font-size: 16px; font-weight: 700; color: var(--ink); padding-right: 24px; word-break: break-all; }
+.ac-side-s { font-size: 13px; color: var(--ink-3); margin-top: 3px; }
+.ac-side-x {
+  position: absolute; top: 12px; right: 12px; background: none; border: 0;
+  color: var(--ink-3); font-size: 20px; line-height: 1; cursor: pointer; padding: 2px 6px;
+}
+.ac-side-x:hover { color: var(--ink); }
+.ac-side-tabs { display: flex; gap: 2px; padding: 0 11px; border-bottom: 1px solid var(--line); }
+.ac-side-tab {
+  background: none; border: 0; font: inherit; font-size: 13.5px; padding: 10px 11px;
+  color: var(--ink-3); border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer;
+}
+.ac-side-tab.on { color: var(--ink); font-weight: 700; border-bottom-color: var(--accent); }
+.ac-side-tab .n { color: var(--ink-3); font-weight: 400; margin-left: 4px; }
+/* 여기도 안쪽 스크롤을 두지 않는다. 패널은 페이지와 같이 흐른다. */
+.ac-side-b { padding: 15px 17px; }
+
+.ac-side-warn { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 13px; }
+.ac-side-warn span {
+  font-size: 12.5px; font-weight: 600; color: var(--wait);
+  background: var(--wait-bg); border: 1px solid var(--wait-line);
+  border-radius: 999px; padding: 3px 10px;
+}
+.ac-side-fields { margin: 0; }
+.ac-side-f { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line-2); font-size: 13.5px; }
+.ac-side-f:last-child { border-bottom: none; }
+.ac-side-f dt { color: var(--ink-3); flex: none; }
+.ac-side-f dd { margin: 0; text-align: right; color: var(--ink-2); word-break: break-all; }
+.ac-side-f dd.mono { font-family: var(--mono); font-size: 12.5px; }
+.ac-side-none { color: var(--ink-3); }
+.ac-side-none-b { color: var(--ink-3); font-size: 13.5px; padding: 8px 0; line-height: 1.7; }
+.ac-side-sect { font-size: 11.5px; font-weight: 700; letter-spacing: .11em; text-transform: uppercase; color: var(--ink-3); margin: 18px 0 8px; }
+.ac-side-rules { border: 1px solid var(--line-2); border-radius: var(--r-sm); overflow: hidden; }
+.ac-side-rule { display: flex; gap: 9px; align-items: baseline; padding: 7px 11px; border-bottom: 1px solid var(--line-2); font-size: 12.5px; }
+.ac-side-rule:last-child { border-bottom: none; }
+.ac-side-rule .d { font-size: 11px; color: var(--ink-3); width: 52px; flex: none; }
+.ac-side-rule .t { font-family: var(--mono); color: var(--ink-2); word-break: break-all; }
+.ac-side-raw {
+  margin-top: 14px; background: none; border: 1px solid var(--line); border-radius: 7px;
+  width: 100%; padding: 8px; font: inherit; font-size: 13.5px; color: var(--ink-2); cursor: pointer;
+}
+.ac-side-raw:hover { border-color: var(--ink-3); color: var(--ink); }
+.ac-side-hist { margin-bottom: 16px; }
+.ac-side-hist-t { font-size: 13px; color: var(--ink-2); font-weight: 600; margin-bottom: 6px; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 1080px) {
+  /* 세 칸을 유지할 수 없다. 패싯과 패널을 표 아래로 흘린다. */
+  .ac-shell { grid-template-columns: 1fr; }
+  .ac-facets { border-right: none; border-bottom: 1px solid var(--line); }
+  .ac-side { border-left: none; border-top: 1px solid var(--line); }
+  .ac-tbl tr.ac-grp td { top: 0; }
+}
 /* 수집한 원본 JSON. --accent-2(짙은 보라)는 어두운 면 위에서 거의 안 읽힌다.
    코드 블록이라 글자가 많으므로 밝은 쪽으로 올린다.
    이제 기본은 접혀 있고 '원본 보기'를 눌렀을 때만 나온다. */
@@ -1228,23 +1432,6 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 /* 상한에 걸렸을 때만 나온다 */
 .ac-snap-more { margin-left: 10px; font-size: 11.5px; font-weight: 400; color: var(--ink-3); }
 
-/* ── 수집 실행 기록 ──
-   아래 목록은 '무엇이 바뀌었나'를 담아서, 변화가 없는 날은 아무것도 안 나온다.
-   그때 수집이 멈춘 건지 바뀐 게 없는 건지 여기서 갈린다. */
-.ac-runs { margin-bottom: 16px; }
-.ac-runs-h { font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 8px; }
-.ac-runs-list { display: flex; flex-wrap: wrap; gap: 6px; }
-.ac-run {
-  display: inline-flex; align-items: baseline; gap: 7px;
-  border: 1px solid var(--line-2); border-radius: 999px; padding: 4px 11px;
-  font-size: 11.5px; white-space: nowrap;
-}
-.ac-run .t { color: var(--ink-2); font-variant-numeric: tabular-nums; }
-.ac-run .w { color: var(--ink-3); font-size: 10.5px; }
-.ac-run .r { color: var(--ink-3); }
-/* 실패한 회차만 색이 붙는다. 나머지는 조용히 지나가야 한다 */
-.ac-run.is-err { border-color: var(--fail-line); }
-.ac-run.is-err .r { color: var(--fail); font-weight: 600; }
 .ac-diff-line { white-space: pre; }
 .ac-diff-added { color: var(--done); background: rgba(74,222,128,0.12); }
 .ac-diff-removed { color: var(--fail); background: rgba(248,113,113,0.12); }
