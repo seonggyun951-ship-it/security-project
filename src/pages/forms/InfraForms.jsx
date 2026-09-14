@@ -1,4 +1,30 @@
 import { useState } from 'react'
+import ResourcePicker from '../../components/ResourcePicker'
+
+// 인프라 신청의 대상 고르기.
+//
+// 다른 화면과 달리 여기는 수집해 둔 목록이 아니라 aws-list-vpcs로 AWS에서 바로
+// 읽어온다 — 방금 만든 VPC에 곧바로 서브넷을 붙이는 일이 흔해서, 수집을 기다리게
+// 하면 쓸 수가 없다. 그래서 담긴 값의 이름이 다르고, 여기서 맞춰 끼운다.
+//
+// 목록을 못 받았을 때는 직접 입력할 수 있어야 한다. AWS 조회가 막혀도
+// 신청 자체는 낼 수 있어야 하기 때문이다.
+function InfraPicker({ label, items, idKey, value, onChange, placeholder, accountId }) {
+  if (items.length === 0) {
+    return <input className="ac-input" placeholder={placeholder}
+      value={value} onChange={(e) => onChange(e.target.value)} />
+  }
+  return (
+    <ResourcePicker label={label} accountId={accountId}
+      options={items.map((x) => ({
+        resource_id: x[idKey],
+        resource_name: x.name || x[idKey],
+        cidr: x.cidr_block || x.cidr,
+        meta: x.cidr_block || x.cidr || '',
+      }))}
+      value={value} onChange={onChange} />
+  )
+}
 
 const AZ_OPTIONS = [
   { value: 'ap-northeast-2a', label: '2a' },
@@ -86,7 +112,7 @@ export function VpcForm({ onSubmit, submitting }) {
   )
 }
 
-export function SubnetForm({ onSubmit, submitting, vpcOptions }) {
+export function SubnetForm({ onSubmit, submitting, vpcOptions, accountId = '' }) {
   const [form, setForm] = useState({ name: '', vpc_id: '', cidr_block: '', availability_zone: 'ap-northeast-2a', public_ip: true, reason: '' })
   const reset = () => setForm({ name: '', vpc_id: '', cidr_block: '', availability_zone: 'ap-northeast-2a', public_ip: true, reason: '' })
 
@@ -111,14 +137,9 @@ export function SubnetForm({ onSubmit, submitting, vpcOptions }) {
         </div>
         <div className="ac-field">
           <label className="ac-label">VPC</label>
-          {vpcOptions.length > 0 ? (
-            <select className="ac-input" value={form.vpc_id} onChange={(e) => setForm({ ...form, vpc_id: e.target.value })}>
-              <option value="">VPC 선택...</option>
-              {vpcOptions.map((v) => <option key={v.vpc_id} value={v.vpc_id}>{v.name} ({v.vpc_id})</option>)}
-            </select>
-          ) : (
-            <input className="ac-input" placeholder="vpc-0123abcd" value={form.vpc_id} onChange={(e) => setForm({ ...form, vpc_id: e.target.value })} />
-          )}
+          <InfraPicker label="VPC" items={vpcOptions} idKey="vpc_id"
+            accountId={accountId} placeholder="vpc-0123abcd"
+            value={form.vpc_id} onChange={(id) => setForm({ ...form, vpc_id: id })} />
         </div>
       </div>
       <div className="ac-form-row">
@@ -203,7 +224,7 @@ export function Ec2Form({ onSubmit, submitting }) {
   )
 }
 
-export function IgwForm({ onSubmit, submitting, vpcOptions }) {
+export function IgwForm({ onSubmit, submitting, vpcOptions, accountId = '' }) {
   const [form, setForm] = useState({ name: '', vpc_id: '', reason: '' })
   const reset = () => setForm({ name: '', vpc_id: '', reason: '' })
 
@@ -247,7 +268,7 @@ export function IgwForm({ onSubmit, submitting, vpcOptions }) {
   )
 }
 
-export function RouteTableForm({ onSubmit, submitting, vpcOptions, igwOptions, subnetOptions }) {
+export function RouteTableForm({ onSubmit, submitting, vpcOptions, igwOptions, subnetOptions, accountId = '' }) {
   const [form, setForm] = useState({ name: '', vpc_id: '', gateway_id: '', subnet_ids: [], reason: '' })
   const reset = () => setForm({ name: '', vpc_id: '', gateway_id: '', subnet_ids: [], reason: '' })
 
@@ -277,30 +298,20 @@ export function RouteTableForm({ onSubmit, submitting, vpcOptions, igwOptions, s
         </div>
         <div className="ac-field">
           <label className="ac-label">VPC</label>
-          {vpcOptions.length > 0 ? (
-            <select className="ac-input" value={form.vpc_id} onChange={(e) => setForm({ ...form, vpc_id: e.target.value })}>
-              <option value="">VPC 선택...</option>
-              {vpcOptions.map((v) => <option key={v.vpc_id} value={v.vpc_id}>{v.name} ({v.vpc_id})</option>)}
-            </select>
-          ) : (
-            <input className="ac-input" placeholder="vpc-0123abcd" value={form.vpc_id} onChange={(e) => setForm({ ...form, vpc_id: e.target.value })} />
-          )}
+          <InfraPicker label="VPC" items={vpcOptions} idKey="vpc_id"
+            accountId={accountId} placeholder="vpc-0123abcd"
+            value={form.vpc_id} onChange={(id) => setForm({ ...form, vpc_id: id })} />
         </div>
       </div>
       <div className="ac-form-row">
         <div className="ac-field">
           <label className="ac-label">IGW (0.0.0.0/0 → IGW 라우트 추가)</label>
-          {(() => {
-            const filtered = igwOptions.filter((g) => !form.vpc_id || g.vpc_id === form.vpc_id)
-            return filtered.length > 0 ? (
-              <select className="ac-input" value={form.gateway_id} onChange={(e) => setForm({ ...form, gateway_id: e.target.value })}>
-                <option value="">선택 안함</option>
-                {filtered.map((g) => <option key={g.igw_id} value={g.igw_id}>{g.name} ({g.igw_id})</option>)}
-              </select>
-            ) : (
-              <input className="ac-input" placeholder="igw-0123abcd (선택)" value={form.gateway_id} onChange={(e) => setForm({ ...form, gateway_id: e.target.value })} />
-            )
-          })()}
+          {/* 위에서 고른 VPC에 붙은 것만 보여준다. 다른 VPC의 IGW를 고르면
+              적용 단계에서 실패하는데, 그때는 이미 승인까지 끝난 뒤다. */}
+          <InfraPicker label="IGW" idKey="igw_id"
+            items={igwOptions.filter((g) => !form.vpc_id || g.vpc_id === form.vpc_id)}
+            accountId={accountId} placeholder="igw-0123abcd (선택)"
+            value={form.gateway_id} onChange={(id) => setForm({ ...form, gateway_id: id })} />
         </div>
         <div className="ac-field">
           <label className="ac-label">연결할 서브넷</label>

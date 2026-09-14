@@ -2873,6 +2873,10 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
   .rp-row .id { display: none; }
 }
 
+/* 규칙 하나가 어느 신청에서 왔는지. 여러 신청의 규칙이 한 자리에 모이므로
+   언제 넣은 것인지가 지울지 말지를 정하는 근거가 된다. */
+.ac-check-from { display: block; margin-top: 3px; font-size: 11.5px; color: var(--ink-3); font-weight: 400; }
+
 /* ── 자주 쓰는 값 ──
    포트를 외우지 않아도 되게 한다. 눌러서 줄을 더한다. */
 .rq-presets { display: flex; flex-wrap: wrap; gap: 7px; margin: 10px 0 12px; }

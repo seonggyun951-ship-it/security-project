@@ -254,19 +254,19 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
 
           {mode === 'env' ? (
             <EnvAccessForm userOptions={userOptions} optionsError={optionsError}
-              onSubmit={submitRequest} submitting={submitting} />
+              accountId={accountId} onSubmit={submitRequest} submitting={submitting} />
           ) : mode === 'create' ? (
             <>
               {resourceType === 'security_group' && <SgForm sgOptions={sgOptions} recentIds={recentIds} vpcOptions={vpcOptions} accountId={accountId} onSubmit={submitRequest} submitting={submitting} />}
-              {resourceType === 'waf_web_acl' && <WafForm aclOptions={aclOptions} onSubmit={submitRequest} submitting={submitting} />}
+              {resourceType === 'waf_web_acl' && <WafForm aclOptions={aclOptions} recentIds={recentIds} accountId={accountId} onSubmit={submitRequest} submitting={submitting} />}
               {resourceType === 'iam_user' && <IamUserForm onSubmit={submitRequest} submitting={submitting} />}
               {resourceType === 'network_acl' && <NaclForm naclOptions={naclOptions} prefill={prefill} onSubmit={submitRequest} submitting={submitting} />}
             </>
           ) : (
             <>
-              {resourceType === 'security_group' && <SgDeleteForm prefill={prefill} onSubmit={submitRequest} submitting={submitting} />}
-              {resourceType === 'waf_web_acl' && <WafDeleteForm onSubmit={submitRequest} submitting={submitting} />}
-              {resourceType === 'iam_user' && <IamDeleteForm onSubmit={submitRequest} submitting={submitting} />}
+              {resourceType === 'security_group' && <SgDeleteForm prefill={prefill} accountId={accountId} onSubmit={submitRequest} submitting={submitting} />}
+              {resourceType === 'waf_web_acl' && <WafDeleteForm accountId={accountId} onSubmit={submitRequest} submitting={submitting} />}
+              {resourceType === 'iam_user' && <IamDeleteForm accountId={accountId} onSubmit={submitRequest} submitting={submitting} />}
               {resourceType === 'network_acl' && <NaclDeleteForm naclOptions={naclOptions} onSubmit={submitRequest} submitting={submitting} />}
             </>
           )}

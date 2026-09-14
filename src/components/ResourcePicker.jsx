@@ -41,6 +41,8 @@ function Hit({ text, q }) {
  * 통째로 받아 세면 목록 한 번에 수백 KB가 오간다.
  */
 function metaOf(o) {
+  // 부르는 쪽이 직접 정해 준 경우. 삭제 신청처럼 AWS 리소스가 아닌 목록에 쓴다.
+  if (o.meta) return o.meta
   const t = o.resource_type
   if (t === 'security_group') {
     return `인바운드 ${o.rule_count ?? 0}${o.sub_count != null ? ` · 아웃바운드 ${o.sub_count}` : ''}`

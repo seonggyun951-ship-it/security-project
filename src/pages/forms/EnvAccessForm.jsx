@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { ENVIRONMENTS, envMeta } from '../../lib/aws'
+import ResourcePicker from '../../components/ResourcePicker'
 
 // 만료를 두면 배치(expire-access)가 하루 한 번 돌면서 그룹에서 빼준다.
 // 쓰고 나서 회수 신청을 잊어버리는 일이 잦아, 기본값을 '1주'로 둔다.
@@ -20,7 +21,7 @@ const EXPIRY_OPTIONS = [
 //
 // 대상은 수집해 둔 IAM 사용자 목록에서 고른다. 손으로 적으면 오타가 나도
 // 승인이 끝난 뒤 적용 단계에서야 실패한다.
-export function EnvAccessForm({ userOptions = [], optionsError, onSubmit, submitting }) {
+export function EnvAccessForm({ userOptions = [], optionsError, accountId = '', onSubmit, submitting }) {
   const [form, setForm] = useState({
     mode: 'grant',
     user_name: '',
@@ -81,20 +82,13 @@ export function EnvAccessForm({ userOptions = [], optionsError, onSubmit, submit
         </div>
         <div className="ac-field">
           <label className="ac-label">대상 IAM 사용자</label>
-          <select className="ac-input" value={form.user_name}
-            onChange={(e) => setForm({ ...form, user_name: e.target.value })}>
-            <option value="">선택하세요</option>
-            {userOptions.map((u) => (
-              <option key={u.resource_id} value={u.resource_name}>
-                {u.resource_name}{u.env_groups ? ` — ${u.env_groups}` : ''}
-              </option>
-            ))}
-          </select>
-          {userOptions.length === 0 && (
-            <p className="ac-sub" style={{ marginTop: 6, marginBottom: 0 }}>
-              목록이 비어 있습니다. 관리자가 'AWS 현황'에서 리소스를 한 번 수집하면 채워집니다.
-            </p>
-          )}
+          {/* 이 폼은 사용자 '이름'을 payload에 싣는다(권한 그룹이 이름으로 붙는다).
+              고르기는 ID로 하되 담아 두는 값은 이름이라 두 번째 인자를 쓴다. */}
+          <ResourcePicker options={userOptions}
+            value={userOptions.find((u) => u.resource_name === form.user_name)?.resource_id || ''}
+            accountId={accountId} label="IAM 사용자"
+            emptyHint="목록이 비어 있습니다. 관리자가 'AWS 현황'에서 리소스를 한 번 수집하면 채워집니다."
+            onChange={(_id, u) => setForm({ ...form, user_name: u?.resource_name || '' })} />
         </div>
       </div>
 

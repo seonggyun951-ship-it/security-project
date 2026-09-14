@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { fetchRows } from '../../lib/db'
 import { sgRuleLabel, wafRuleLabel } from '../../lib/aws'
+import ResourcePicker from '../../components/ResourcePicker'
 
 // 삭제 신청 폼.
 //
@@ -43,9 +44,14 @@ function useDeletableRequests(resourceType, createActions, deleteAction) {
         '삭제 신청 목록'),
     ])
 
-    // 이미 삭제 신청이 걸린 원본은 후보에서 뺀다 (중복 신청 방지)
+    // 이미 삭제 신청이 걸린 원본은 후보에서 뺀다 (중복 신청 방지).
+    // 대상으로 묶어 고르게 되면서 삭제 신청 하나가 원본 여러 건을 가리킬 수 있다.
+    // 예전 형식(단수)도 함께 본다 — 그때 만들어진 행이 남아 있다.
     const taken = new Set(
-      deletes.rows.map((d) => d.payload?.source_request_id).filter(Boolean)
+      deletes.rows.flatMap((d) => [
+        ...(d.payload?.source_request_ids || []),
+        d.payload?.source_request_id,
+      ]).filter(Boolean)
     )
     setRows(applied.rows.filter((r) => !taken.has(r.id)))
     setError(applied.error || deletes.error)
@@ -64,8 +70,42 @@ function useDeletableRequests(resourceType, createActions, deleteAction) {
 const whenLabel = (r) =>
   `${new Date(r.requested_at).toLocaleDateString('ko-KR')}${r.requester_email ? ` · ${r.requester_email}` : ''}`
 
+/**
+ * 신청들을 '대상 리소스' 기준으로 묶는다.
+ *
+ * 원래는 신청 하나가 곧 한 줄이었다. 같은 SG에 세 번 신청했으면 세 줄이 뜨고,
+ * 신청자는 어느 줄에 무슨 규칙이 들었는지 기억해야 골랐다.
+ * 실제로 고르고 싶은 것은 "이 SG의 이 규칙"이지 "몇 월 며칠 신청"이 아니다.
+ *
+ * 그래서 대상으로 묶고, 그 안에 여러 신청의 규칙을 모두 늘어놓는다.
+ * 규칙마다 어느 신청에서 왔는지는 들고 다닌다 — 지울 때 원본을 되짚어야 한다.
+ */
+function groupByTarget(rows, { idOf, nameOf, rulesOf }) {
+  const map = new Map()
+  for (const r of rows) {
+    const id = idOf(r)
+    if (!id) continue
+    if (!map.has(id)) map.set(id, { id, name: nameOf(r) || id, items: [] })
+    const g = map.get(id)
+    if (!g.name || g.name === id) g.name = nameOf(r) || g.name
+    for (const rule of rulesOf(r)) {
+      g.items.push({ rule, from: r })
+    }
+  }
+  return [...map.values()].filter((g) => g.items.length > 0)
+}
+
+/** 묶음을 ResourcePicker가 받는 모양으로 */
+const toPickerRows = (groups, unit) => groups.map((g) => ({
+  resource_id: g.id,
+  resource_name: g.name,
+  // 대상 식별자를 아래 줄에 보여준다. 이름이 겹칠 때 이걸로 가른다.
+  env_groups: g.id !== g.name ? g.id : '',
+  meta: `${unit} ${g.items.length}개`,
+}))
+
 // ---- IAM 계정 삭제 ----
-export function IamDeleteForm({ onSubmit, submitting }) {
+export function IamDeleteForm({ accountId = '', onSubmit, submitting }) {
   const { rows, loading, error, reload } = useDeletableRequests('iam_user', ['create_readonly_user'], 'delete_iam_user')
   const [targetId, setTargetId] = useState('')
   const [reason, setReason] = useState('')
@@ -102,14 +142,15 @@ export function IamDeleteForm({ onSubmit, submitting }) {
           <div className="ac-form-row">
             <div className="ac-field">
               <label className="ac-label">삭제할 계정</label>
-              <select className="ac-input" value={targetId} onChange={(e) => setTargetId(e.target.value)}>
-                <option value="">선택...</option>
-                {rows.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.payload?.user_name} — {whenLabel(r)}
-                  </option>
-                ))}
-              </select>
+              {/* IAM 계정은 하나가 곧 하나라 묶을 게 없다. 신청 그대로 목록에 낸다. */}
+              <ResourcePicker label="계정" accountId={accountId}
+                options={rows.map((r) => ({
+                  resource_id: r.id,
+                  resource_name: r.payload?.user_name || r.title,
+                  env_groups: whenLabel(r),
+                }))}
+                value={targetId} onChange={(id) => setTargetId(id)}
+                emptyHint="삭제할 수 있는 계정이 없습니다." />
             </div>
           </div>
           <div className="ac-form-row">
@@ -128,7 +169,7 @@ export function IamDeleteForm({ onSubmit, submitting }) {
 }
 
 // ---- SG 규칙 삭제 ----
-export function SgDeleteForm({ prefill, onSubmit, submitting }) {
+export function SgDeleteForm({ prefill, accountId = '', onSubmit, submitting }) {
   const { rows, loading, error, reload } = useDeletableRequests('security_group', ['create_sg', 'add_rules'], 'delete_sg_rules')
   const [targetId, setTargetId] = useState('')
   const [picked, setPicked] = useState([]) // 선택된 규칙 index
@@ -160,43 +201,43 @@ export function SgDeleteForm({ prefill, onSubmit, submitting }) {
     if (ok) setReason('')
   }
 
-  const target = rows.find((r) => r.id === targetId)
-  const rules = target?.payload?.rules || []
+  // 신청 단위가 아니라 SG 단위로 묶는다. 같은 SG에 세 번 신청했으면
+  // 세 줄이 아니라 한 줄이고, 그 안에 규칙이 다 모여 있다.
+  //
+  // SG를 어디서 읽는지는 신청 종류마다 다르다.
+  //   add_rules  → target_id (기존 SG를 고른 것)
+  //   create_sg  → result.created_id (새로 만들어진 SG)
+  // payload.sg_id는 예전 형식이라 마지막에 본다.
+  const groups = groupByTarget(rows, {
+    idOf: (r) => r.target_id || r.result?.created_id || r.payload?.sg_id,
+    nameOf: (r) => r.payload?.sg_name,
+    rulesOf: (r) => r.payload?.rules || [],
+  })
+  const target = groups.find((g) => g.id === targetId)
+  const rules = target?.items || []
 
   const toggle = (i) => setPicked((prev) => prev.includes(i) ? prev.filter((x) => x !== i) : [...prev, i])
   const chooseTarget = (id) => { setTargetId(id); setPicked([]) }
 
   const submit = async () => {
-    if (!target) return alert('대상 신청을 선택해주세요')
+    if (!target) return alert('대상 Security Group을 선택해주세요')
     if (picked.length === 0) return alert('삭제할 규칙을 최소 1개 선택해주세요')
     if (!reason.trim()) return alert('삭제 사유는 필수입니다')
 
-    // 원본 신청에 기록된 SG를 그대로 쓴다. 신청 종류마다 저장 위치가 다르다.
-    //   add_rules  → target_id (기존 SG를 고른 것)
-    //   create_sg  → result.created_id (새로 만들어진 SG)
-    // payload.sg_id는 예전 형식이라 마지막에 본다.
-    const sgId = target.target_id || target.result?.created_id || target.payload?.sg_id
-    if (!sgId) {
-      // 어디를 봤는데 없었는지 남긴다. 원인 없이 "못 찾음"만 뜨면 확인할 방법이 없다.
-      console.error('SG 대상 확인 실패', {
-        id: target.id, action: target.action,
-        target_id: target.target_id, result: target.result, payload_sg_id: target.payload?.sg_id,
-      })
-      return alert(
-        '원본 신청에서 대상 SG를 찾을 수 없습니다.\n' +
-        `(신청 ${target.action} / target_id: ${target.target_id ?? '없음'})\n\n` +
-        'F12 콘솔에 상세가 남습니다.'
-      )
-    }
-
     const chosen = picked.map((i) => rules[i]).filter(Boolean)
+    // 고른 규칙이 여러 신청에 걸쳐 있을 수 있다. 원본을 모두 남긴다 —
+    // 중복 신청을 막는 데 쓰이고, 나중에 감사할 때 근거가 된다.
+    const sources = [...new Set(chosen.map((c) => c.from.id))]
     const ok = await onSubmit({
       resource_type: 'security_group', action: 'delete_sg_rules',
-      title: target.payload?.sg_name || sgId,
-      target_id: sgId,
+      title: target.name,
+      target_id: target.id,
       payload: {
-        sg_id: sgId, sg_name: target.payload?.sg_name || null,
-        rules: chosen, source_request_id: target.id,
+        sg_id: target.id, sg_name: target.name,
+        rules: chosen.map((c) => c.rule),
+        source_request_ids: sources,
+        // 예전 형식도 함께 남긴다. 이 값만 보는 코드가 아직 있다.
+        source_request_id: sources[0],
       },
       reason: reason.trim(),
     })
@@ -257,27 +298,31 @@ export function SgDeleteForm({ prefill, onSubmit, submitting }) {
         <>
           <div className="ac-form-row">
             <div className="ac-field">
-              <label className="ac-label">대상 신청</label>
-              <select className="ac-input" value={targetId} onChange={(e) => chooseTarget(e.target.value)}>
-                <option value="">선택...</option>
-                {rows.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.title || r.payload?.sg_name || r.payload?.sg_id} — {whenLabel(r)}
-                  </option>
-                ))}
-              </select>
+              <label className="ac-label">대상 Security Group</label>
+              <ResourcePicker label="Security Group" accountId={accountId}
+                options={toPickerRows(groups, '규칙')}
+                value={targetId} onChange={(id) => chooseTarget(id)}
+                emptyHint="제거할 수 있는 규칙이 없습니다." />
             </div>
           </div>
 
           {target && (
             <>
-              <div className="ac-card-title" style={{ fontSize: 13, marginTop: 16 }}>제거할 규칙 선택</div>
-              {rules.length === 0 && <div className="ac-empty">이 신청에는 규칙이 없습니다.</div>}
+              <div className="ac-card-title" style={{ fontSize: 13, marginTop: 16 }}>
+                제거할 규칙 선택
+                <span className="ac-tag">{rules.length}개</span>
+              </div>
+              {rules.length === 0 && <div className="ac-empty">이 SG에 제거할 규칙이 없습니다.</div>}
+              {/* 규칙마다 어느 신청에서 온 것인지 적는다. 여러 신청의 규칙이
+                  한 자리에 모이므로, 언제 넣은 것인지가 판단 근거가 된다. */}
               <div className="ac-check-list">
-                {rules.map((rule, i) => (
+                {rules.map((it, i) => (
                   <label key={i} className={`ac-check ${picked.includes(i) ? 'active' : ''}`}>
                     <input type="checkbox" checked={picked.includes(i)} onChange={() => toggle(i)} />
-                    <span>{sgRuleLabel(rule)}</span>
+                    <span>
+                      {sgRuleLabel(it.rule)}
+                      <span className="ac-check-from">{whenLabel(it.from)}</span>
+                    </span>
                   </label>
                 ))}
               </div>
@@ -300,37 +345,48 @@ export function SgDeleteForm({ prefill, onSubmit, submitting }) {
 }
 
 // ---- WAF 규칙 삭제 ----
-export function WafDeleteForm({ onSubmit, submitting }) {
+export function WafDeleteForm({ accountId = '', onSubmit, submitting }) {
   const { rows, loading, error, reload } = useDeletableRequests('waf_web_acl', ['add_waf_rules'], 'delete_waf_rules')
   const [targetId, setTargetId] = useState('')
   const [picked, setPicked] = useState([]) // 선택된 규칙 이름
   const [reason, setReason] = useState('')
 
-  const target = rows.find((r) => r.id === targetId)
-  const rules = target?.payload?.rules || []
+  // 신청 단위가 아니라 Web ACL 단위로 묶는다. 같은 ACL에 여러 번 규칙을
+  // 넣었으면 그 규칙들이 한 자리에 모여야 무엇을 뺄지 고를 수 있다.
+  const groups = groupByTarget(rows, {
+    idOf: (r) => r.result?.web_acl_id || r.target_id,
+    nameOf: (r) => r.payload?.web_acl_name || r.title,
+    rulesOf: (r) => r.payload?.rules || [],
+  })
+  const target = groups.find((g) => g.id === targetId)
+  const rules = target?.items || []
 
   const toggle = (name) => setPicked((prev) => prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name])
   const chooseTarget = (id) => { setTargetId(id); setPicked([]) }
 
   const submit = async () => {
-    if (!target) return alert('대상 신청을 선택해주세요')
+    if (!target) return alert('대상 Web ACL을 선택해주세요')
     if (picked.length === 0) return alert('삭제할 규칙을 최소 1개 선택해주세요')
     if (!reason.trim()) return alert('삭제 사유는 필수입니다')
 
-    const aclId = target.result?.web_acl_id || target.target_id
-    const aclName = target.payload?.web_acl_name || target.title
-    if (!aclId || !aclName) return alert('원본 신청에서 대상 Web ACL을 찾을 수 없습니다')
-
     if (!confirm(`차단 규칙 ${picked.length}개를 제거합니다.\n해당 요청이 더 이상 차단되지 않습니다.\n\n계속할까요?`)) return
+
+    // 고른 규칙이 여러 신청에 걸쳐 있을 수 있다. 원본을 모두 남긴다.
+    const chosen = rules.filter((it) => picked.includes(it.rule.name))
+    const sources = [...new Set(chosen.map((c) => c.from.id))]
+    // scope는 신청마다 같아야 정상이지만, 첫 것을 기준으로 삼는다.
+    const scope = chosen[0]?.from?.payload?.scope || 'REGIONAL'
 
     const ok = await onSubmit({
       resource_type: 'waf_web_acl', action: 'delete_waf_rules',
-      title: aclName,
-      target_id: aclId,
+      title: target.name,
+      target_id: target.id,
       payload: {
-        web_acl_id: aclId, web_acl_name: aclName,
-        scope: target.payload?.scope || 'REGIONAL',
-        rule_names: picked, source_request_id: target.id,
+        web_acl_id: target.id, web_acl_name: target.name,
+        scope,
+        rule_names: picked,
+        source_request_ids: sources,
+        source_request_id: sources[0],
       },
       reason: reason.trim(),
     })
@@ -350,27 +406,29 @@ export function WafDeleteForm({ onSubmit, submitting }) {
         <>
           <div className="ac-form-row">
             <div className="ac-field">
-              <label className="ac-label">대상 신청</label>
-              <select className="ac-input" value={targetId} onChange={(e) => chooseTarget(e.target.value)}>
-                <option value="">선택...</option>
-                {rows.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.payload?.web_acl_name || r.title} — {whenLabel(r)}
-                  </option>
-                ))}
-              </select>
+              <label className="ac-label">대상 Web ACL</label>
+              <ResourcePicker label="Web ACL" accountId={accountId}
+                options={toPickerRows(groups, '규칙')}
+                value={targetId} onChange={(id) => chooseTarget(id)}
+                emptyHint="제거할 수 있는 규칙이 없습니다." />
             </div>
           </div>
 
           {target && (
             <>
-              <div className="ac-card-title" style={{ fontSize: 13, marginTop: 16 }}>제거할 규칙 선택</div>
-              {rules.length === 0 && <div className="ac-empty">이 신청에는 규칙이 없습니다.</div>}
+              <div className="ac-card-title" style={{ fontSize: 13, marginTop: 16 }}>
+                제거할 규칙 선택
+                <span className="ac-tag">{rules.length}개</span>
+              </div>
+              {rules.length === 0 && <div className="ac-empty">이 Web ACL에 제거할 규칙이 없습니다.</div>}
               <div className="ac-check-list">
-                {rules.map((rule) => (
-                  <label key={rule.name} className={`ac-check ${picked.includes(rule.name) ? 'active' : ''}`}>
-                    <input type="checkbox" checked={picked.includes(rule.name)} onChange={() => toggle(rule.name)} />
-                    <span>{wafRuleLabel(rule)}</span>
+                {rules.map((it, i) => (
+                  <label key={`${it.rule.name}-${i}`} className={`ac-check ${picked.includes(it.rule.name) ? 'active' : ''}`}>
+                    <input type="checkbox" checked={picked.includes(it.rule.name)} onChange={() => toggle(it.rule.name)} />
+                    <span>
+                      {wafRuleLabel(it.rule)}
+                      <span className="ac-check-from">{whenLabel(it.from)}</span>
+                    </span>
                   </label>
                 ))}
               </div>

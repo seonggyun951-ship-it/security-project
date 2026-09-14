@@ -205,7 +205,7 @@ export function SgForm({ sgOptions, recentIds = [], vpcOptions = [], accountId =
   )
 }
 
-export function WafForm({ aclOptions, onSubmit, submitting }) {
+export function WafForm({ aclOptions, recentIds = [], accountId = '', onSubmit, submitting }) {
   const [action, setAction] = useState('create_acl') // 'create_acl' | 'add_waf_rules'
   const [form, setForm] = useState({ acl_name: '', default_action: 'allow', target_id: '', reason: '' })
   const [groups, setGroups] = useState([]) // 선택된 관리형 규칙 그룹 name[]
@@ -337,14 +337,11 @@ export function WafForm({ aclOptions, onSubmit, submitting }) {
           <div className="ac-form-row">
             <div className="ac-field">
               <label className="ac-label">대상 Web ACL</label>
-              <select className="ac-input" value={form.target_id} onChange={(e) => setForm({ ...form, target_id: e.target.value })}>
-                <option value="">선택...</option>
-                {aclOptions.map((a) => (
-                  <option key={a.resource_id} value={a.resource_id}>
-                    {a.resource_name} {a.region === 'CLOUDFRONT' ? '(글로벌)' : '(리전)'}
-                  </option>
-                ))}
-              </select>
+              {/* WAF는 VPC에 속하지 않으므로 계정 → Web ACL 두 단계로 끝난다.
+                  ResourcePicker가 vpc_id 없는 종류를 알아서 그렇게 다룬다. */}
+              <ResourcePicker options={aclOptions} value={form.target_id} recentIds={recentIds}
+                accountId={accountId} label="Web ACL"
+                onChange={(id) => setForm({ ...form, target_id: id })} />
             </div>
           </div>
           <div className="ac-card-title" style={{ fontSize: 13, marginTop: 16 }}>추가할 규칙</div>

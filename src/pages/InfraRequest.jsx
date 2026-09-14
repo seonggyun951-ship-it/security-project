@@ -20,6 +20,8 @@ export default function InfraRequest({ mode = 'network' }) {
   const [vpcOptions, setVpcOptions] = useState([])
   const [igwOptions, setIgwOptions] = useState([])
   const [subnetOptions, setSubnetOptions] = useState([])
+  // 대상 고르기 창의 첫 단계에 쓴다. 지금 계정은 하나뿐이다.
+  const [accountId, setAccountId] = useState('')
   const [dateFilter, setDateFilter] = useState('')
   const [calOpen, setCalOpen] = useState(false)
   const [detailReq, setDetailReq] = useState(null)
@@ -64,7 +66,9 @@ export default function InfraRequest({ mode = 'network' }) {
     //    일반 사용자는 필요한 컬럼만 뽑아둔 aws_resource_options 뷰를 통해 읽는다.
     const sg = await fetchRows(
       supabase.from('aws_resource_options')
-        .select('vpc_id').eq('resource_type', 'security_group')
+        // account_id는 대상 고르기 창의 첫 단계에 쓴다. 따로 수집하지 않지만
+        // ARN 한가운데에 들어 있어 뷰가 뽑아 준다.
+        .select('vpc_id, account_id').eq('resource_type', 'security_group')
         .order('collected_at', { ascending: false }).limit(200),
       'VPC 목록(스냅샷)')
     if (sg.error) errors.push(sg.error)
@@ -72,6 +76,7 @@ export default function InfraRequest({ mode = 'network' }) {
       const id = row.vpc_id
       if (id && id.startsWith('vpc-') && !vpcMap.has(id)) vpcMap.set(id, { vpc_id: id, name: id })
     }
+    setAccountId(sg.rows.map((r) => r.account_id).find(Boolean) || '')
 
     // 2) DB: 적용된 VPC 신청에서 이름 보강
     const vpcReqs = await fetchRows(
@@ -207,7 +212,7 @@ export default function InfraRequest({ mode = 'network' }) {
               ))}
             </div>
           )}
-          {FormComponent && <FormComponent onSubmit={submitRequest} submitting={submitting} vpcOptions={vpcOptions} igwOptions={igwOptions} subnetOptions={subnetOptions} />}
+          {FormComponent && <FormComponent onSubmit={submitRequest} submitting={submitting} vpcOptions={vpcOptions} igwOptions={igwOptions} subnetOptions={subnetOptions} accountId={accountId} />}
         </div>
 
         <div className="ac-card ac-card-wide ac-card-muted">
