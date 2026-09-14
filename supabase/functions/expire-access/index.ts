@@ -39,8 +39,26 @@ async function notifyDiscord(content) {
 //   NoSuchEntity              IAM 사용자·그룹이 없음
 //   InvalidPermission.NotFound 그 규칙이 이미 없음
 //   InvalidGroup.NotFound      SG 자체가 삭제됨 (그 안의 규칙도 함께 사라진 것)
+// 오류를 사람이 읽는 문자열로.
+//
+// String(e)는 Error에는 통하지만, Supabase 조회 오류처럼 평범한 객체를 던지면
+// '[object Object]'가 된다 — 실제로 만료 배치 실패 알림이 그렇게 떴다.
+// message를 먼저 보고, 없으면 통째로 JSON으로 편다.
+const errText = (e) => {
+  if (e instanceof Error) return e.message
+  if (e && typeof e === 'object') {
+    if (typeof e.message === 'string') {
+      // Supabase 오류는 code·details·hint에 실마리가 더 있다.
+      const extra = [e.code, e.details, e.hint].filter(Boolean).join(' · ')
+      return extra ? `${e.message} (${extra})` : e.message
+    }
+    try { return JSON.stringify(e) } catch { return String(e) }
+  }
+  return String(e)
+}
+
 const alreadyGone = (e) => {
-  const s = String(e)
+  const s = errText(e)
   return s.includes('NoSuchEntity')
     || s.includes('InvalidPermission.NotFound')
     || s.includes('InvalidGroup.NotFound')
@@ -150,7 +168,7 @@ serve(async (req) => {
         done.push({ id: r.id, action: r.action, summary })
       } catch (e) {
         console.error(`만료 회수 실패 (${r.id}):`, e)
-        failed.push({ id: r.id, action: r.action, error: String(e).slice(0, 200) })
+        failed.push({ id: r.id, action: r.action, error: errText(e).slice(0, 200) })
       }
     }
 
@@ -166,7 +184,7 @@ serve(async (req) => {
     return json({ ok: true, expired: done.length, failed: failed.length, done, failed })
   } catch (e) {
     console.error('expire-access error:', e)
-    await notifyDiscord(`❌ **만료 회수 배치 실패**\n${String(e).slice(0, 300)}`)
-    return json({ ok: false, error: String(e) }, 500)
+    await notifyDiscord(`❌ **만료 회수 배치 실패**\n${errText(e).slice(0, 300)}`)
+    return json({ ok: false, error: errText(e) }, 500)
   }
 })
