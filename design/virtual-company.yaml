@@ -1,0 +1,278 @@
+# ─────────────────────────────────────────────────────────────
+# 가상 회사 — 클라우드 네트워크 설계 원본
+#
+# 이 파일 하나가 설계의 유일한 출처. 여기서 RAG 지식과 화면 데이터를 함께 뽑는다.
+# 실제 클라우드에는 아무것도 올리지 않는다. NAT·ALB·VPN·PrivateLink·PSC는
+# 켜두기만 해도 과금이라, 평소엔 이 문서로만 존재한다.
+#   (프리티어 마지막 달에 한 번 몰아 올려 데모를 뽑는 것은 별개.)
+#
+# 값을 고칠 때는 이 파일만 고친다. RAG·화면은 여기서 다시 생성한다.
+# ─────────────────────────────────────────────────────────────
+
+company:
+  name: 가상 회사
+  note: >
+    클라우드 계정/프로젝트 단위로 통제 경계를 나눈다. 개인정보 취급 시스템은
+    별도 경계로 완전히 격리한다 (ISMS-P 개인정보처리시스템 접근통제·망분리).
+
+# 공통 통제 원칙. 모든 경계가 따른다.
+principles:
+  - id: default-deny-inbound
+    text: 인터넷 유입 기본 차단. 외부 유입은 오직 외부 로드밸런서를 통해서만.
+  - id: explicit-egress
+    text: 밖으로 나가는 것은 NAT 고정 IP로만. 상대가 화이트리스트할 IP가 정해져 있다.
+  - id: data-isolation
+    text: 데이터 계층은 인터넷과 격리. 개인정보 DB는 별도 경계 + 엔드포인트로만 노출.
+
+boundaries:
+
+  # ═══════════════════════════════════════════════════════════
+  # AWS — 계정 하나. 개인정보는 계정을 못 나누므로 VPC로 격리한다.
+  # ═══════════════════════════════════════════════════════════
+  aws:
+    kind: account
+    id: "170420138507"
+    region: ap-northeast-2
+    azs: [ap-northeast-2a, ap-northeast-2c]
+
+    nat_egress_ips:
+      dev:  43.201.10.21
+      qa:   43.201.10.22
+      prod: 43.201.10.23
+      # db · pii 는 egress 없음 (격리)
+
+    vpcs:
+      - name: vpc-prod
+        env: prod
+        cidr: 172.16.0.0/16
+        internet_facing: true
+        subnets:
+          - { name: prod-public-a,  tier: public,  az: ap-northeast-2a, cidr: 172.16.1.0/24 }
+          - { name: prod-public-c,  tier: public,  az: ap-northeast-2c, cidr: 172.16.2.0/24 }
+          - { name: prod-private-a, tier: private, az: ap-northeast-2a, cidr: 172.16.11.0/24 }
+          - { name: prod-private-c, tier: private, az: ap-northeast-2c, cidr: 172.16.12.0/24 }
+        components:
+          - { type: igw, name: prod-igw }
+          - { type: nat, name: prod-nat, eip: 43.201.10.23 }
+          - { type: alb, name: prod-alb, scheme: internet-facing, listeners: "443,80→443" }
+          # 개인정보 DB를 소비하는 쪽. PrivateLink 인터페이스 엔드포인트를 여기 둔다.
+          - { type: vpc_endpoint, name: prod-to-pii-endpoint, service: pii-db-privatelink }
+
+      - name: vpc-dev
+        env: dev
+        cidr: 10.10.0.0/16
+        internet_facing: false
+        subnets:
+          - { name: dev-public-a,  tier: public,  az: ap-northeast-2a, cidr: 10.10.1.0/24 }
+          - { name: dev-public-c,  tier: public,  az: ap-northeast-2c, cidr: 10.10.2.0/24 }
+          - { name: dev-private-a, tier: private, az: ap-northeast-2a, cidr: 10.10.11.0/24 }
+          - { name: dev-private-c, tier: private, az: ap-northeast-2c, cidr: 10.10.12.0/24 }
+        components:
+          - { type: igw, name: dev-igw }
+          - { type: nat, name: dev-nat, eip: 43.201.10.21 }
+
+      - name: vpc-qa
+        env: qa
+        cidr: 10.20.0.0/16
+        internet_facing: false
+        subnets:
+          - { name: qa-public-a,  tier: public,  az: ap-northeast-2a, cidr: 10.20.1.0/24 }
+          - { name: qa-public-c,  tier: public,  az: ap-northeast-2c, cidr: 10.20.2.0/24 }
+          - { name: qa-private-a, tier: private, az: ap-northeast-2a, cidr: 10.20.11.0/24 }
+          - { name: qa-private-c, tier: private, az: ap-northeast-2c, cidr: 10.20.12.0/24 }
+        components:
+          - { type: igw, name: qa-igw }
+          - { type: nat, name: qa-nat, eip: 43.201.10.22 }
+
+      # 일반 DB — 인터넷 격리. prod 에서 VPC 피어링으로 접근.
+      - name: vpc-db
+        env: db
+        cidr: 192.168.0.0/16
+        internet_facing: false
+        classification: general
+        subnets:
+          - { name: db-data-a, tier: data, az: ap-northeast-2a, cidr: 192.168.1.0/24 }
+          - { name: db-data-c, tier: data, az: ap-northeast-2c, cidr: 192.168.2.0/24 }
+        components:
+          - { type: flow_logs, name: db-flow-logs }
+
+      # 개인정보 DB — 완전 격리 + PrivateLink 로만 노출.
+      # 네트워크를 통째로 여는 피어링이 아니라, 이 DB 서비스 하나만 엔드포인트로 내보낸다.
+      # 별도 SG/NACL, 별도 감사. ISMS-P 개인정보처리시스템 접근통제 요건에 대응.
+      - name: vpc-pii
+        env: pii
+        cidr: 10.99.0.0/16
+        internet_facing: false
+        classification: pii
+        subnets:
+          - { name: pii-data-a, tier: data, az: ap-northeast-2a, cidr: 10.99.1.0/24 }
+          - { name: pii-data-c, tier: data, az: ap-northeast-2c, cidr: 10.99.2.0/24 }
+        components:
+          - { type: flow_logs, name: pii-flow-logs }
+          # DB 접근제어 게이트웨이. 앱은 DB에 직접 못 붙고 반드시 이 프록시를 거친다.
+          # 모든 접속·쿼리를 기록하고 정책 통제·마스킹을 한다.
+          # 개인정보보호법(안전성 확보조치): 접속기록 2년 보관(고유식별·민감정보 또는 5만명 이상).
+          # 예시 제품: DB SAFER (카테고리: DB 접근제어)
+          - { type: db_access_control, name: pii-dbac, product_example: "DB SAFER",
+              log_retention: "2년", enforces: [접속기록, 정책통제, 마스킹],
+              # 접근제어 GW가 죽으면 DB에 아무도 못 붙는 단일 장애점이 된다.
+              # 그때만 콘솔로 직접 붙되, 그 접속은 CloudTrail/Audit Logs에 남아 사후 감사 대상.
+              emergency_access: "GW 장애 시 클라우드 콘솔 직접 접속 · CloudTrail/Audit Logs 별도 기록 · 사후 감사" }
+          # PrivateLink 제공자. 엔드포인트는 DB가 아니라 접근제어 GW로 붙는다.
+          - { type: endpoint_service, name: pii-db-privatelink, backed_by: nlb,
+              fronts: pii-dbac, consumers: [vpc-prod] }
+
+    connections:
+      - { type: vpc_peering,  name: prod-to-db,  from: vpc-prod, to: vpc-db,
+          allow: "172.16.11·12/24 → 192.168.0.0/16 (5432/3306)", note: 일반 DB }
+      - { type: privatelink,  name: prod-to-pii, from: vpc-prod, to: vpc-pii,
+          allow: "엔드포인트 하나만 · DB 포트만", note: 개인정보 DB — 네트워크 전체 노출 없음 }
+
+    nacl_policy:
+      public:
+        - { no: 90,  action: deny,  proto: tcp, ports: "22,3389", src: 0.0.0.0/0 }
+        - { no: 100, action: allow, proto: tcp, ports: "443",     src: 0.0.0.0/0 }
+        - { no: 110, action: allow, proto: tcp, ports: "80",      src: 0.0.0.0/0 }
+      private:
+        - { no: 100, action: allow, proto: all, ports: all, src: vpc_cidr }
+        - { no: 200, action: deny,  proto: all, ports: all, src: 0.0.0.0/0 }
+      data:
+        - { no: 100, action: allow, proto: tcp, ports: "5432,3306", src: "172.16.11·12/24" }
+        - { no: 200, action: deny,  proto: all, ports: all, src: 0.0.0.0/0 }
+
+  # ═══════════════════════════════════════════════════════════
+  # GCP — 프로젝트로 경계를 나눈다. 실무 관행대로 dev/prod 분리,
+  #        개인정보는 별도 프로젝트로 격리.
+  #   비운영(dev·qa·sandbox)  →  virtual-corp-dev
+  #   운영 + 일반 DB          →  virtual-corp-prod
+  #   개인정보 DB (PSC)       →  virtual-corp-pii
+  # ═══════════════════════════════════════════════════════════
+  gcp:
+    kind: org
+    region: asia-northeast3
+    status: planned
+
+    projects:
+      - id: virtual-corp-dev
+        purpose: 비운영 (dev·qa·sandbox)
+        network:
+          name: vpc-nonprod
+          cidr: 10.100.0.0/16
+          subnetworks:
+            - { name: dev,     tier: app, cidr: 10.100.0.0/20 }
+            - { name: qa,      tier: app, cidr: 10.100.16.0/20 }
+            - { name: sandbox, tier: app, cidr: 10.100.32.0/20 }
+          components:
+            - { type: cloud_nat, name: nonprod-nat, eip: 34.64.10.21 }
+        firewall:
+          - { name: deny-ssh-rdp, action: deny,  proto: tcp, ports: "22,3389", src: 0.0.0.0/0, priority: 900 }
+
+      - id: virtual-corp-prod
+        purpose: 운영 + 일반 DB
+        network:
+          name: vpc-prod
+          cidr: 10.101.0.0/16
+          subnetworks:
+            - { name: prod-web,    tier: web,  cidr: 10.101.0.0/20 }
+            - { name: prod-app,    tier: app,  cidr: 10.101.16.0/20 }
+            - { name: general-db,  tier: data, cidr: 10.101.32.0/20, private_google_access: true }
+          components:
+            - { type: cloud_nat, name: prod-nat, eip: 34.64.10.23 }
+            - { type: http_lb,   name: prod-xlb, scheme: external, backend_tag: web }
+            # 개인정보 DB를 소비하는 PSC 엔드포인트.
+            - { type: psc_endpoint, name: prod-to-pii-psc, target: pii-db-service }
+        firewall:
+          - { name: allow-https,  action: allow, proto: tcp, ports: "443",  src: 0.0.0.0/0, target_tag: web }
+          - { name: deny-ssh-rdp, action: deny,  proto: tcp, ports: "22,3389", src: 0.0.0.0/0, priority: 900 }
+          - { name: allow-gen-db, action: allow, proto: tcp, ports: "5432,3306", src: 10.101.16.0/20, target_tag: data }
+
+      # 개인정보 DB — 독립 프로젝트. PSC 로만 노출.
+      # 네트워크 연결 없이 서비스 엔드포인트 하나만 prod 에 내준다.
+      # 별도 IAM·별도 감사 로그 → 개인정보처리시스템 논리적 분리.
+      - id: virtual-corp-pii
+        purpose: 개인정보 DB (격리)
+        network:
+          name: vpc-pii
+          cidr: 10.102.0.0/16
+          subnetworks:
+            - { name: pii-db, tier: data, cidr: 10.102.0.0/20, private_google_access: true, external_ip: false }
+          components:
+            # AWS와 같은 원칙. PSC 엔드포인트는 DB가 아니라 접근제어 GW로 붙는다.
+            - { type: db_access_control, name: pii-dbac, product_example: "DB SAFER",
+                log_retention: "2년", enforces: [접속기록, 정책통제, 마스킹] }
+            - { type: psc_service, name: pii-db-service, fronts: pii-dbac, published_to: [virtual-corp-prod] }
+        firewall:
+          - { name: allow-pii-dbac, action: allow, proto: tcp, ports: "5432", src: psc-endpoint, note: PSC 엔드포인트 → 접근제어 GW }
+          - { name: deny-all,       action: deny,  proto: all, ports: all, src: 0.0.0.0/0, priority: 1000 }
+
+    connections:
+      - { type: psc, name: prod-to-pii, from: virtual-corp-prod, to: virtual-corp-pii,
+          allow: "엔드포인트 하나 · 5432 만", note: 개인정보 DB — 네트워크 연결 없음 }
+
+# ─────────────────────────────────────────────────────────────
+# 두 클라우드 연결 — Site-to-Site VPN (IPsec, HA 터널 2개)
+# 잇는 대역만 라우팅. CIDR 이 겹치면 라우팅 불가라 처음부터 분리 설계.
+# ─────────────────────────────────────────────────────────────
+interconnect:
+  type: site-to-site-vpn
+  tunnels: 2
+  routed: "AWS 172.16.11·12/24  ↔  GCP 10.101.16.0/20 (prod ↔ prod)"
+  cidr_plan:
+    aws: [10.10.0.0/16, 10.20.0.0/16, 172.16.0.0/16, 192.168.0.0/16, 10.99.0.0/16]
+    gcp: [10.100.0.0/16, 10.101.0.0/16, 10.102.0.0/16]
+    note: 전 대역 상호 비중복 — VPN 라우팅의 전제
+  # 개인정보 DB 보안 채널. 두 클라우드의 DB 접근제어 GW를 연동해 접속기록을
+  # 한곳에서 관리하고, 양쪽 개인정보 DB를 암호화 채널로 잇는다(복제·DR).
+  # 이 트래픽도 위 VPN을 타므로 인터넷에 노출되지 않는다.
+  pii_secure_channel:
+    over: site-to-site-vpn
+    links:
+      - { type: dbac_federation, from: aws/pii-dbac, to: gcp/pii-dbac, purpose: 접속기록 통합 관리 }
+      - { type: pii_db_replication, from: aws/vpc-pii, to: gcp/virtual-corp-pii, encrypted: true }
+
+# ─────────────────────────────────────────────────────────────
+# 네트워크 위에 얹히는 공통 보안 계층.
+# 네트워크가 "어디로 통신하나"라면, 이 계층은 "누가·무엇으로·어떻게 기록되나"다.
+# ISMS-P 접근통제·암호화·접근기록 요건과 바로 이어진다.
+# ─────────────────────────────────────────────────────────────
+security_layers:
+
+  # 누가 접근하나. 네트워크 격리와 짝을 이루는 신원 경계.
+  identity:
+    aws:
+      idp: AWS IAM Identity Center (SSO)
+      model: 역할 기반(least privilege) · MFA 필수
+      pii_access: 개인정보 DB 접근 역할 분리 · 승인 기반 임시 권한 · 접근 시 기록
+    gcp:
+      idp: Google Cloud IAM
+      model: 역할 기반 · MFA 필수
+    federation:
+      # 클라우드 간 신원 연동. 키를 심지 않고 단기 토큰으로 서로 접근한다.
+      type: AWS IAM ↔ GCP Workload Identity Federation
+      note: 장기 키 없이 OIDC 단기 토큰 교환
+
+  # 무엇이든 기록은 한곳에 모은다. PII 접속기록만이 아니라 전체 관제.
+  logging:
+    aws_sources:  [CloudTrail, VPC Flow Logs, ALB access logs, DB SAFER 접속기록]
+    gcp_sources:  [Cloud Audit Logs, VPC Flow Logs, LB logs, DB SAFER 접속기록]
+    central:
+      sink: 중앙 로그 저장소 (불변 · 암호화)
+      siem: SIEM 관제 · 이상행위 탐지 · 알림
+      retention: { pii: "2년", general: "1년" }
+
+  # 저장·전송·키. 개인정보는 필수.
+  encryption:
+    at_rest:   { aws: "KMS (DB·볼륨·버킷)", gcp: "Cloud KMS" }
+    in_transit: TLS 1.2+ 전 구간 · VPN IPsec
+    key_mgmt:  { rotation: 자동, pii_keys: 개인정보용 키 분리 }
+
+  # 애플리케이션 계층 방어. 외부 로드밸런서 앞단.
+  waf:
+    aws: { on: ALB, rules: [관리형 규칙셋, IP 차단, 요청 수 제한] }
+    gcp: { on: External HTTP LB, product: Cloud Armor }
+
+  # 사용자가 로드밸런서에 닿는 경로. 이름 → LB.
+  dns:
+    aws: { service: Route 53, records: "corp.example.com → prod-alb" }
+    gcp: { service: Cloud DNS, records: "gcp.example.com → prod-xlb" }
+    note: 공개 대상은 prod 뿐 · dev·qa·pii 는 DNS 미노출
