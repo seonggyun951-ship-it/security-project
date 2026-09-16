@@ -309,11 +309,38 @@ export function reqWarnings(r) {
 
   // 신청 접수 때 규칙 엔진이 남긴 것.
   // 위험한 신청은 애초에 접수되지 않으므로 여기 오는 건 '주의'뿐이다.
+  // 개인정보·데이터(kind) 판정은 줄글에 섞지 않는다 — 상단 배너(reqZoneAlerts)로 따로 뺀다.
   for (const c of (p.check || [])) {
+    if (c.kind === 'pii' || c.kind === 'data') continue
     out.push(`${c.title}${c.why ? ` — ${c.why}` : ''}`)
   }
 
   return out
+}
+
+// 개인정보·데이터 계층 판정만 뽑는다. 승인 화면이 접지 않고 맨 위에 눈에 띄게 그린다 —
+// 사유만 보고 무심코 승인하는 걸 막기 위해서다.
+export function reqZoneAlerts(r) {
+  return (r.payload?.check || []).filter((c) => c.kind === 'pii' || c.kind === 'data')
+}
+
+// 개인정보·데이터 계층 신청 배너. 신청 카드·승인 패널 양쪽이 같은 모양으로 쓴다.
+export function ZoneAlerts({ alerts = [] }) {
+  if (!alerts.length) return null
+  return (
+    <div className="rd-zones">
+      {alerts.map((c, i) => (
+        <div key={i} className={`rd-zone ${c.kind === 'pii' ? 'is-pii' : 'is-data'}`}>
+          <span className="ic">{c.kind === 'pii' ? '🔒' : '🛡️'}</span>
+          <span className="tx">
+            <b>{c.kind === 'pii' ? '개인정보 DB 관련 신청' : '데이터 계층(DB) 관련 신청'}</b>
+            <span className="ttl">{c.title}</span>
+            {c.why && <span className="why">{c.why}</span>}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 // 승인 대기 목록 — 카드가 아니라 표로 보여준다.
@@ -403,6 +430,8 @@ export function ReqDrawer({ r, busyId, onApprove, onReject, onClose, isSuper = f
 
         {/* 줄글로 나열하지 않고 항목별 서식으로 묶는다 — 편지 본문이 아니라 결재 양식으로 읽히게 */}
         <div className="rd-body">
+          {/* 개인정보·데이터 계층 신청이면 맨 위에 안 접히고 뜬다. 승인 전 반드시 보게 */}
+          <ZoneAlerts alerts={reqZoneAlerts(r)} />
           {warnings.map((w, i) => <div key={i} className="ac-req-warn">⚠️ {w}</div>)}
 
           {detail.length > 0 && (
@@ -502,6 +531,7 @@ export function ReqCard({ r, busyId, onApprove, onReject, isSuper = false }) {
   const meta = REQ_STATUS_META[r.status] || { label: r.status, color: 'var(--ink-3)' }
   const detail = reqDetailLines(r)
   const warnings = reqWarnings(r)
+  const zoneAlerts = reqZoneAlerts(r)
   const busy = busyId === r.id
   const isDelete = isDeleteAction(r.action)
   // 삭제는 pending(신청 직후)과 awaiting_super(1차 승인됨) 두 상태에서 처리 대상이다.
@@ -512,6 +542,7 @@ export function ReqCard({ r, busyId, onApprove, onReject, isSuper = false }) {
         <span className="ac-req-status" style={{ background: meta.color }}>{meta.label}</span>
         <span className="ac-req-title">{reqTitle(r)}</span>
       </div>
+      <ZoneAlerts alerts={zoneAlerts} />
       {detail.map((line, i) => <div key={i} className="ac-req-reason">{line}</div>)}
       {warnings.map((w, i) => <div key={i} className="ac-req-warn">⚠️ {w}</div>)}
       {r.reason && <div className="ac-req-reason">사유: {r.reason}</div>}

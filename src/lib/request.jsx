@@ -76,11 +76,18 @@ export function LiveCheck({ findings }) {
     <div className="rq-live">
       {sorted.map((f, i) => {
         const hard = f.severity === 'high' || f.severity === 'critical'
+        // 개인정보(pii)·데이터(data) 대역 신청은 위험도와 별개로 눈에 띄게 한다.
+        // 위험해서가 아니라 '설계상 이 경로가 맞는지' 관리자가 반드시 봐야 하는 것이다.
+        const zone = f.kind === 'pii' || f.kind === 'data'
+        const cls = f.kind === 'pii' ? 'is-pii' : f.kind === 'data' ? 'is-data' : hard ? 'is-bad' : 'is-warn'
+        const head = f.kind === 'pii' ? '개인정보 DB 관련 신청입니다'
+          : f.kind === 'data' ? '데이터 계층(DB) 관련 신청입니다'
+            : hard ? '이대로는 접수되지 않습니다' : '사유를 받고 넘어갑니다'
         return (
-          <div key={i} className={`rq-lv ${hard ? 'is-bad' : 'is-warn'}`}>
-            <span className="i">{hard ? '✕' : '!'}</span>
+          <div key={i} className={`rq-lv ${cls}`}>
+            <span className="i">{f.kind === 'pii' ? '🔒' : zone ? '🛡️' : hard ? '✕' : '!'}</span>
             <span className="tx">
-              <span className="h">{hard ? '이대로는 접수되지 않습니다' : '사유를 받고 넘어갑니다'}</span>
+              <span className="h">{head}</span>
               <b>{f.title}</b>
               {f.why && <span className="why">{f.why}</span>}
             </span>

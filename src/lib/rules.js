@@ -7,6 +7,11 @@
 //      화면이 보여주는 판정과 학습된 판정이 갈라진다.
 //
 // 순수 함수만 둔다 — React, DOM, 네트워크 호출 금지.
+//
+// 대역·분류 같은 '설계 사실'은 여기 박지 않는다. design/virtual-company.yaml에서
+// 뽑아 둔 design-facts.json을 읽는다(build-design-facts.mjs). 설계를 바꾸면
+// 판정이 따라오게 하기 위해서다 — 박아두면 설계는 바뀌고 판정만 옛날 값으로 남는다.
+import DESIGN from './design-facts.js'
 
 export const DANGEROUS_PORTS = {
   22:    { name: 'SSH',             why: 'SSH 포트 전체 오픈은 무차별 대입(brute force) 공격의 주요 타깃입니다. 특정 IP로 제한하거나 VPN을 사용하세요.' },
@@ -318,12 +323,29 @@ export function analyzeConfig(data) {
 // 문서만 옛날 값으로 남는다.
 //
 // cidr은 terraform/envs/{env}/main.tf의 값과 같아야 한다. 거기서 바꾸면 여기도 바꾼다.
-export const ENVIRONMENTS = [
-  { key: 'dev',  label: '개발 (vpc-dev)',   cidr: '10.10.0.0/16',   can: '생성·수정·삭제', needsSuper: false },
-  { key: 'qa',   label: 'QA (vpc-qa)',      cidr: '10.20.0.0/16',   can: '생성·수정 (삭제 불가)', needsSuper: false },
-  { key: 'prod', label: '운영 (vpc-prod)',  cidr: '172.16.0.0/16',  can: '조회만', needsSuper: true },
-  { key: 'db',   label: '개인정보 (vpc-db)', cidr: '192.168.0.0/16', can: '조회만', needsSuper: true },
-]
+// 환경 접근 권한 정책. cidr은 설계(design-facts)에서 받고,
+// can·needsSuper는 앱의 접근 정책이라 여기서 정한다.
+// db는 '일반 DB'로 바로잡는다 — 개인정보는 별도 vpc-pii로 분리됐다.
+const ENV_ACCESS_POLICY = {
+  dev:  { label: '개발 (vpc-dev)',     can: '생성·수정·삭제',       needsSuper: false },
+  qa:   { label: 'QA (vpc-qa)',        can: '생성·수정 (삭제 불가)', needsSuper: false },
+  prod: { label: '운영 (vpc-prod)',    can: '조회만',               needsSuper: true },
+  db:   { label: '일반 DB (vpc-db)',   can: '조회만',               needsSuper: true },
+  pii:  { label: '개인정보 (vpc-pii)', can: '조회만',               needsSuper: true },
+}
+
+// 환경 접근 권한 신청에 쓰는 목록. 대역은 설계에서, 정책은 위에서.
+// 데이터 계층(일반DB·개인정보)은 환경 권한 부여 대상이 아니므로 뺀다 —
+// 접근은 엔드포인트/피어링으로만이지 사람이 IAM 그룹으로 붙는 곳이 아니다.
+export const ENVIRONMENTS = DESIGN.cidrs
+  .filter((c) => c.class === 'env' || c.class === 'app')
+  .map((c) => ({
+    key: c.env,
+    label: ENV_ACCESS_POLICY[c.env]?.label || c.vpc,
+    cidr: c.cidr,
+    can: ENV_ACCESS_POLICY[c.env]?.can || '조회만',
+    needsSuper: ENV_ACCESS_POLICY[c.env]?.needsSuper ?? true,
+  }))
 
 export const REQUEST_POLICY = {
   MIN_CIDR_PREFIX: 24,   // /24 이상만 허용 (/0~/23은 너무 넓다)
@@ -346,7 +368,16 @@ export const REQUEST_POLICY = {
   // 여기는 "이 대역에서 들어오는 트래픽이 사내인가"만 본다.
   //
   // 사무실 고정 공인 IP처럼 사설 대역이 아닌데 신뢰하는 주소가 생기면 여기 덧붙인다.
-  INTERNAL_CIDRS: ENVIRONMENTS.map((e) => e.cidr),
+  //
+  // 우리가 만든 VPC 대역 전체를 설계에서 받는다. env 목록이 아니라 design 전체라,
+  // 데이터 계층(일반DB·개인정보)까지 '사내'로 친다. 개인정보 vpc-pii(10.99)도 포함된다.
+  INTERNAL_CIDRS: DESIGN.internal_cidrs,
+}
+
+// 어떤 CIDR이 어느 설계 대역에 속하는가. 데이터 계층 판정의 근거다.
+// 대상 대역(신청이 겨냥한 곳)이 inner를 포함하는 것을 찾는다.
+export function designZoneOf(cidr) {
+  return DESIGN.cidrs.find((z) => cidrContains(z.cidr, cidr)) || null
 }
 
 // IPv4 CIDR 포함 관계. inner가 outer 안에 완전히 들어가면 true.
@@ -371,6 +402,47 @@ export function cidrContains(outer, inner) {
 
 export const isInternalCidr = (cidr) =>
   REQUEST_POLICY.INTERNAL_CIDRS.some((net) => cidrContains(net, cidr))
+
+// 설계 대조 — 신청 규칙이 데이터 계층 대역(일반DB·개인정보)을 건드리는지.
+//
+// 규칙 엔진의 다른 판정이 "위험한가"를 본다면, 이건 "설계에 맞는가"를 본다.
+// 개인정보·일반 DB는 대역으로 직접 붙는 곳이 아니다 — 엔드포인트/피어링을 거쳐야 한다.
+// 그걸 대역으로 직접 여는 신청이면 설계 위반이므로 관리자가 반드시 보게 남긴다.
+//
+// finding에 kind를 붙인다. 화면이 개인정보('pii')는 더 눈에 띄게 그린다.
+export function checkDesignZones(rules = []) {
+  const findings = []
+  const seen = new Set()   // 같은 대역을 여러 규칙이 쓰면 한 번만
+  for (const r of rules) {
+    if (r.action === 'deny') continue   // 막는 규칙은 대상이 아니다
+    const cidr = String(r.cidr || '').trim()
+    if (!cidr || cidr === '0.0.0.0/0' || cidr === '::/0') continue
+
+    const zone = designZoneOf(cidr)
+    if (!zone || !zone.direct_access_forbidden) continue
+    if (seen.has(zone.cidr)) continue
+    seen.add(zone.cidr)
+
+    if (zone.pii) {
+      findings.push({
+        severity: 'medium',
+        kind: 'pii',
+        title: `개인정보 DB 대역입니다 (${zone.vpc} ${zone.cidr})`,
+        detail: `${cidr}는 개인정보 DB(${zone.vpc})에 속합니다.`,
+        why: '개인정보 DB는 대역으로 직접 접근하지 않습니다. PrivateLink + DB 접근제어(DB SAFER)를 거쳐야 하며, 모든 접속은 기록되어 2년 보관됩니다(개인정보보호법). 승인 전 이 접근이 정말 필요한지 확인하세요.',
+      })
+    } else {
+      findings.push({
+        severity: 'medium',
+        kind: 'data',
+        title: `일반 DB 대역입니다 (${zone.vpc} ${zone.cidr})`,
+        detail: `${cidr}는 일반 DB(${zone.vpc})에 속합니다.`,
+        why: 'DB 계층은 인터넷과 격리되며 앱에서는 VPC 피어링으로만 접근하는 것이 설계입니다. 대역을 직접 여는 것이 맞는지 확인하세요.',
+      })
+    }
+  }
+  return findings
+}
 
 export const envMeta = (key) => ENVIRONMENTS.find((e) => e.key === key)
 
@@ -451,6 +523,9 @@ export function checkSgRules(rules = []) {
       why: '규칙이 많으면 검토가 어렵고 실수가 섞이기 쉽습니다. 나눠서 신청하세요.',
     })
   }
+
+  // 설계 대조 — 데이터 계층(일반DB·개인정보) 대역을 직접 여는지
+  findings.push(...checkDesignZones(rules))
 
   return findings
 }
@@ -565,6 +640,9 @@ export function checkNaclRules(rules = []) {
       why: '규칙이 많으면 검토가 어렵고 실수가 섞이기 쉽습니다. 나눠서 신청하세요.',
     })
   }
+
+  // 설계 대조 — 데이터 계층(일반DB·개인정보) 대역을 직접 여는지
+  findings.push(...checkDesignZones(rules))
 
   return findings
 }

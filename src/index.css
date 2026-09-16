@@ -2912,6 +2912,24 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
 .rq-lv.is-bad .i, .rq-lv.is-bad .h { color: var(--fail); }
 .rq-lv.is-warn { background: var(--wait-bg); border: 1px solid var(--wait-line); }
 .rq-lv.is-warn .i, .rq-lv.is-warn .h { color: var(--wait); }
+/* 개인정보 대역 신청 — 위험도와 별개로 반드시 눈에 걸려야 한다 */
+.rq-lv.is-pii { background: rgba(244,63,94,.1); border: 1px solid rgba(244,63,94,.45); }
+.rq-lv.is-pii .i, .rq-lv.is-pii .h { color: #f43f5e; }
+.rq-lv.is-data { background: rgba(236,72,153,.08); border: 1px solid rgba(236,72,153,.35); }
+.rq-lv.is-data .i, .rq-lv.is-data .h { color: var(--data); }
+
+/* 승인 화면·신청 카드의 개인정보/데이터 배너. 접히지 않고 맨 위에 뜬다. */
+.rd-zones { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.rd-zone { display: flex; gap: 10px; align-items: flex-start; padding: 11px 13px; border-radius: 8px; }
+.rd-zone .ic { font-size: 16px; flex: none; }
+.rd-zone .tx { display: flex; flex-direction: column; gap: 2px; }
+.rd-zone .tx b { font-size: 13.5px; }
+.rd-zone .ttl { font-size: 13px; color: var(--ink); font-weight: 600; }
+.rd-zone .why { font-size: 12.5px; color: var(--ink-2); line-height: 1.55; margin-top: 2px; }
+.rd-zone.is-pii { background: rgba(244,63,94,.1); border: 1px solid rgba(244,63,94,.5); }
+.rd-zone.is-pii .tx > b { color: #f43f5e; }
+.rd-zone.is-data { background: rgba(236,72,153,.08); border: 1px solid rgba(236,72,153,.38); }
+.rd-zone.is-data .tx > b { color: var(--data); }
 
 /* ── 제출 줄 ──
    무엇을 신청하는지 누르기 직전에 한 줄로 확인한다. */

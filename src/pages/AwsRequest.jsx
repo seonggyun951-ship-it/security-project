@@ -137,8 +137,10 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
       setSubmitting(false); alert(e.message); return false
     }
     // 점검 결과를 payload에 실어 보낸다. 관리자 검토 화면이 이걸 그대로 보여준다.
+    // kind도 함께 싣는다. 관리자 검토 화면이 개인정보(pii)·데이터(data) 신청을
+    // 구별해 눈에 띄게 그리려면 이 값이 있어야 한다.
     const payload = warnings.length > 0
-      ? { ...req.payload, check: warnings.map((f) => ({ severity: f.severity, title: f.title, why: f.why })) }
+      ? { ...req.payload, check: warnings.map((f) => ({ severity: f.severity, kind: f.kind || null, title: f.title, why: f.why })) }
       : req.payload
     const { error } = await supabase.from('aws_requests').insert({
       ...req,
