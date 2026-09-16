@@ -12,6 +12,7 @@ import CloudCheck from './pages/CloudCheck'
 import CloudAutomation from './pages/CloudAutomation'
 import ApprovalHistory from './pages/ApprovalHistory'
 import ScanFindings from './pages/ScanFindings'
+import SecurityAsk from './pages/SecurityAsk'
 import ScanHistory from './pages/ScanHistory'
 import SecurityOverview from './pages/SecurityOverview'
 import AwsRequest from './pages/AwsRequest'
@@ -118,6 +119,7 @@ export default function App() {
             <Route path="/aws-status" element={<AdminRoute><AwsStatus /></AdminRoute>} />
             <Route path="/security" element={<AdminRoute><SecurityOverview /></AdminRoute>} />
             <Route path="/scan" element={<ScanFindings />} />
+            <Route path="/ask" element={<SecurityAsk />} />
             {/* scan_runs는 RLS가 관리자만 읽게 한다 — 화면도 같이 막는다 */}
             <Route path="/scan-history" element={<AdminRoute><ScanHistory /></AdminRoute>} />
             <Route path="/admin/users" element={<SuperAdminRoute><AdminUsers /></SuperAdminRoute>} />

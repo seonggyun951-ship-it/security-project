@@ -12,6 +12,8 @@ export const NAV_GROUPS = [
       // 관리자는 전체 현황 대시보드, 신청자는 신청 종류 선택 화면.
       { title: '대시보드', path: '/', adminOnly: true, icon: '▤' },
       { title: '홈', path: '/', requesterOnly: true, icon: '▤' },
+      // 관리자는 대시보드 바로 밑. 신청자에겐 GCP 신청 아래에 따로 둔다(아래 그룹).
+      { title: '보안 질의', path: '/ask', adminOnly: true, icon: '⌕' },
     ],
   },
   {
@@ -49,6 +51,14 @@ export const NAV_GROUPS = [
     label: 'GCP 관리',
     items: [
       { title: '관리자 승인', path: '/gcp/approval', adminOnly: true, badge: 'gcp', icon: '◈' },
+    ],
+  },
+  {
+    // 신청자용 위치. 관리자에겐 이 그룹이 비어(아래 항목이 requesterOnly) 안 보이고,
+    // 관리자는 위 '개요'의 항목으로 본다.
+    label: 'AI 질의',
+    items: [
+      { title: '보안 질의', path: '/ask', requesterOnly: true, icon: '⌕' },
     ],
   },
   {

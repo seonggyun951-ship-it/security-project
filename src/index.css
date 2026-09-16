@@ -2937,3 +2937,44 @@ details[open] > .ac-card-summary::before { transform: rotate(90deg); }
   margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
 .rq-sum { flex: 1; min-width: 220px; font-size: 13.5px; color: var(--ink-2); line-height: 1.7; }
 .rq-review .ac-btn { white-space: nowrap; }
+
+/* ══ 보안 질의 (RAG 챗) ══ */
+.ask-page { display: flex; flex-direction: column; height: calc(100vh - 76px); min-height: 480px; }
+.ask-head { flex: none; }
+.ask-thread { flex: 1; overflow-y: auto; padding: 8px 2px 16px; display: flex; flex-direction: column; gap: 20px; }
+
+.ask-empty { margin-top: 24px; }
+.ask-empty-t { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 12px; }
+.ask-samples { display: flex; flex-wrap: wrap; gap: 8px; }
+.ask-sample { text-align: left; border: 1px solid var(--line); background: var(--soft); color: var(--ink-2);
+  border-radius: 999px; padding: 9px 15px; font: inherit; font-size: 13.5px; cursor: pointer; }
+.ask-sample:hover { border-color: var(--accent); color: var(--ink); }
+
+.ask-turn { display: flex; flex-direction: column; gap: 10px; }
+.ask-q { display: flex; align-items: flex-start; gap: 10px; align-self: flex-end; max-width: 80%;
+  background: var(--accent-soft); border: 1px solid rgba(167,139,250,.3); border-radius: 12px 12px 4px 12px;
+  padding: 10px 14px; font-size: 14.5px; color: var(--ink); }
+.ask-q-ic { flex: none; font-size: 11px; font-weight: 700; color: var(--accent); }
+
+.ask-a { align-self: flex-start; max-width: 88%; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 12px 12px 12px 4px; padding: 14px 16px; }
+.ask-a-body { font-size: 14.5px; line-height: 1.75; color: var(--ink); white-space: pre-wrap; }
+.ask-loading { color: var(--ink-3); font-size: 14px; }
+.ask-err { color: var(--fail); font-size: 14px; }
+
+.ask-sources { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 12px;
+  padding-top: 12px; border-top: 1px solid var(--line-2); }
+.ask-sources-h { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); margin-right: 4px; }
+.ask-src { font-size: 11.5px; padding: 3px 9px; border-radius: 6px; border: 1px solid var(--line-2); color: var(--ink-3); }
+.ask-src b { font-weight: 700; }
+/* 우리 것(설계·정책)은 눈에 띄게, 참고 기준은 차분하게 */
+.ask-src.ours { border-color: rgba(167,139,250,.4); background: var(--accent-soft); color: var(--ink-2); }
+.ask-src.ours b { color: var(--accent); }
+.ask-src.ref b { color: var(--ink-2); }
+
+.ask-bar { flex: none; display: flex; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line); }
+.ask-input { flex: 1; background: var(--bg); border: 1px solid var(--line); border-radius: var(--r);
+  padding: 11px 14px; font: inherit; font-size: 14.5px; color: var(--ink); }
+.ask-input:focus { outline: none; border-color: var(--accent); }
+.ask-input::placeholder { color: var(--ink-3); }
+.ask-bar .ac-btn { white-space: nowrap; padding: 11px 22px; }
