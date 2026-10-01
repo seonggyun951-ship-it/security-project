@@ -15,6 +15,19 @@
 # 주의: subnet_ids를 비워 두면 Terraform이 기본 NACL에서 서브넷을 떼어내려 하는데
 # AWS는 그걸 허용하지 않는다(어느 NACL에도 안 붙은 서브넷은 존재할 수 없다).
 # 이 VPC의 서브넷을 전부 명시한다.
+#
+# ── 규칙의 주인은 앱이다 (2026-10-01 결정) ──────────────────────
+# 아래 규칙은 VPC를 처음 만들 때 한 번 까는 '초기값'이다. 그 뒤의 추가·삭제는
+# 앱의 NACL 신청(aws-request-apply가 AWS에 바로 적용)이 맡는다.
+#
+# 그래서 맨 아래 lifecycle에서 ingress·egress 변경을 무시한다. 이게 없으면
+# aws_default_network_acl은 코드에 없는 규칙을 전부 지우므로, apply할 때마다
+# 승인까지 받아 넣은 앱 규칙이 조용히 사라진다(실제로 prod #22가 이렇게 지워졌다).
+#
+# 반대로 말하면 **여기 규칙을 고쳐도 이미 있는 VPC에는 적용되지 않는다.**
+# 기존 VPC에 반영하려면 그 env에서만 lifecycle을 잠깐 빼고 apply하되,
+# 그 apply는 앱으로 넣은 규칙까지 지운다는 걸 알고 해야 한다.
+# 먼저 앱 규칙을 확인하고(AWS 현황 → NACL), 필요한 건 코드로 옮긴 뒤 진행한다.
 
 locals {
   # 퍼블릭 서브넷이 없는 VPC(vpc-db)는 인터넷과 주고받을 일이 없다.
@@ -121,4 +134,10 @@ resource "aws_default_network_acl" "this" {
   }
 
   tags = merge(local.tags, { Name = "${var.name}-default-nacl" })
+
+  # 규칙은 처음 만들 때만 깐다. 그 뒤로는 앱 신청이 주인이다 — 이유는 파일 맨 위 주석.
+  # 지우면 다음 apply에서 앱으로 넣은 규칙이 전부 사라진다.
+  lifecycle {
+    ignore_changes = [ingress, egress]
+  }
 }
