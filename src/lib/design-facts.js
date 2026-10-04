@@ -12,7 +12,25 @@ export default {
       "class": "app",
       "internet_facing": true,
       "direct_access_forbidden": false,
-      "pii": false
+      "pii": false,
+      "subnets": [
+        {
+          "cidr": "172.16.1.0/24",
+          "tier": "public"
+        },
+        {
+          "cidr": "172.16.2.0/24",
+          "tier": "public"
+        },
+        {
+          "cidr": "172.16.11.0/24",
+          "tier": "private"
+        },
+        {
+          "cidr": "172.16.12.0/24",
+          "tier": "private"
+        }
+      ]
     },
     {
       "cidr": "10.10.0.0/16",
@@ -21,7 +39,25 @@ export default {
       "class": "env",
       "internet_facing": false,
       "direct_access_forbidden": false,
-      "pii": false
+      "pii": false,
+      "subnets": [
+        {
+          "cidr": "10.10.1.0/24",
+          "tier": "public"
+        },
+        {
+          "cidr": "10.10.2.0/24",
+          "tier": "public"
+        },
+        {
+          "cidr": "10.10.11.0/24",
+          "tier": "private"
+        },
+        {
+          "cidr": "10.10.12.0/24",
+          "tier": "private"
+        }
+      ]
     },
     {
       "cidr": "10.20.0.0/16",
@@ -30,7 +66,25 @@ export default {
       "class": "env",
       "internet_facing": false,
       "direct_access_forbidden": false,
-      "pii": false
+      "pii": false,
+      "subnets": [
+        {
+          "cidr": "10.20.1.0/24",
+          "tier": "public"
+        },
+        {
+          "cidr": "10.20.2.0/24",
+          "tier": "public"
+        },
+        {
+          "cidr": "10.20.11.0/24",
+          "tier": "private"
+        },
+        {
+          "cidr": "10.20.12.0/24",
+          "tier": "private"
+        }
+      ]
     },
     {
       "cidr": "192.168.0.0/16",
@@ -39,7 +93,17 @@ export default {
       "class": "general_db",
       "internet_facing": false,
       "direct_access_forbidden": true,
-      "pii": false
+      "pii": false,
+      "subnets": [
+        {
+          "cidr": "192.168.1.0/24",
+          "tier": "data"
+        },
+        {
+          "cidr": "192.168.2.0/24",
+          "tier": "data"
+        }
+      ]
     },
     {
       "cidr": "10.99.0.0/16",
@@ -48,7 +112,17 @@ export default {
       "class": "pii_db",
       "internet_facing": false,
       "direct_access_forbidden": true,
-      "pii": true
+      "pii": true,
+      "subnets": [
+        {
+          "cidr": "10.99.1.0/24",
+          "tier": "data"
+        },
+        {
+          "cidr": "10.99.2.0/24",
+          "tier": "data"
+        }
+      ]
     }
   ],
   "internal_cidrs": [
@@ -57,6 +131,10 @@ export default {
     "10.20.0.0/16",
     "192.168.0.0/16",
     "10.99.0.0/16"
+  ],
+  "general_db_allowed_sources": [
+    "172.16.11.0/24",
+    "172.16.12.0/24"
   ],
   "nat_egress_ips": {
     "dev": "43.201.10.21",

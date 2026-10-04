@@ -52,7 +52,13 @@ const DIMENSIONS = 2048
 // 임계값을 올리면 맞는 것까지 잘리므로 낮게 두고 다른 방법을 찾아야 한다.
 //
 // 모델을 바꾸면 점수 분포가 통째로 달라지므로 이 값들을 다시 재야 한다.
+//
+// virtual_infra(우리 설계)는 2026-10-04에 추가·측정 (질의 6개, 출처 안 상위 4건):
+//   관련(대상 VPC를 적은 SG 신청) 1위 0.499~0.589 · 무관(WAF·IAM·SSH 일반) 1위 0.205~0.248
+// 관련 질의는 문장에 VPC 이름이 들어 있을 때 그 VPC 문서가 1위로 잡혔다 — 그래서 화면이
+// context로 대상 VPC를 넘기고, 아래에서 검색어에 붙인다.
 const RETRIEVE = [
+  { source: 'virtual_infra', count: 2, min: 0.35, label: '우리 회사 네트워크 설계' },
   { source: 'rule_engine',  count: 2, min: 0.35, label: '비슷한 신청의 판정 사례' },
   { source: 'policy',       count: 2, min: 0.25, label: '우리 시스템의 정책' },
   { source: 'concept',      count: 2, min: 0.25, label: '관련 개념 (AWS 공식 문서)' },
@@ -107,14 +113,45 @@ serve(async (req) => {
       // 기록용. 무엇에 대한 설명인지 화면이 알려 준다 —
       // summary 문구를 뜯어 짐작하면 문구를 바꿀 때마다 분류가 어긋난다.
       kind = null, subject_id = null,
+      // 신청의 맥락. { vpc_id, target_id, description, reason }
+      // summary는 '규칙 2개'처럼 무엇을 여는지만 담아, 이 SG가 어느 VPC의 무엇을 위한 것인지
+      // 몰랐다 — 개인정보 VPC 안의 DB 접근제어용 SG를 '외부에서 DB 대역을 연다'로 설명했다.
+      // (아래에 검색 결과를 담는 context가 따로 있어 이름을 바꿔 받는다)
+      context: reqContext = null,
     } = await req.json()
     if (!summary && !question) {
       return json({ ok: false, error: 'summary 또는 question이 필요합니다' }, 400)
     }
 
+    // 대상 VPC를 이름·대역으로 바꾼다. 화면에는 VPC ID만 있어 사람도 LLM도 어디인지 모른다.
+    // 새 SG는 payload.vpc_id, 기존 SG·NACL은 수집 목록에서 그 리소스의 VPC를 찾는다.
+    const contextLines: string[] = []
+    let targetVpc: { name: string; cidr: string } | null = null
+    if (reqContext && typeof reqContext === 'object') {
+      let vpcId = typeof reqContext.vpc_id === 'string' ? reqContext.vpc_id : null
+      // 같은 리소스가 수집 시점별로 여러 줄일 수 있다(화면도 dedupe한다). 한 줄만 기대하면
+      // 중복이 생기는 순간 조용히 빈 값이 되므로, 가장 최근 것 하나를 고른다.
+      const latest = (q) => q.order('collected_at', { ascending: false }).limit(1)
+      if (!vpcId && typeof reqContext.target_id === 'string') {
+        const { data } = await latest(client.from('aws_resource_options')
+          .select('vpc_id').eq('resource_id', reqContext.target_id))
+        vpcId = data?.[0]?.vpc_id ?? null
+      }
+      if (vpcId) {
+        const { data } = await latest(client.from('aws_resource_options')
+          .select('resource_name, cidr').eq('resource_id', vpcId))
+        if (data?.[0]) targetVpc = { name: data[0].resource_name || vpcId, cidr: data[0].cidr || '' }
+      }
+      if (targetVpc) contextLines.push(`대상 VPC: ${targetVpc.name}${targetVpc.cidr ? ` (${targetVpc.cidr})` : ''}`)
+      if (reqContext.description) contextLines.push(`리소스 설명: ${String(reqContext.description).slice(0, 200)}`)
+      if (reqContext.reason) contextLines.push(`신청 사유: ${String(reqContext.reason).slice(0, 300)}`)
+    }
+
     // 검색어는 신청 내용과 판정 사유를 합쳐 만든다.
     // 판정 사유에 '위험 포트 22(SSH)' 같은 핵심어가 들어 있어 검색이 잘 걸린다.
+    // 대상 VPC 이름을 앞에 붙인다 — 이게 있어야 우리 설계의 그 VPC 문서가 걸린다(위 측정).
     const queryText = [
+      targetVpc ? `대상 VPC ${targetVpc.name} (${targetVpc.cidr})` : null,
       question || summary,
       ...findings.slice(0, 4).map((f) => f.title),
     ].filter(Boolean).join(' ')
@@ -215,12 +252,21 @@ serve(async (req) => {
       '5. 왜 그런 판정이 나왔는지와, 무엇을 고치면 되는지를 담으세요.',
       '6. 읽는 사람이 신청자일 수도 관리자일 수도 있습니다. 용어를 늘어놓지 말고,',
       '   무엇이 어떤 상태이고 어떻게 하면 되는지를 담백하게 설명하세요.',
-      '7. 참고한 자료가 있으면 문장 끝에 [T1021.004] 같은 식별자를 붙이세요.',
+      '7. 본문에 [T1021.004]·[policy-data-zones] 같은 대괄호 인용을 붙이지 마세요.',
+      '   근거 목록은 화면이 설명 아래에 따로 보여줍니다. 본문은 인용 없이 문장만 씁니다.',
+      '   자료 식별자(policy-data-zones, vinfra-aws-vpc-pii 등)를 본문에 쓰거나 풀어 쓰지 마세요.',
+      '   필요하면 "데이터 계층 정책", "우리 네트워크 설계"처럼 무슨 자료인지로 부르세요.',
+      '8. "신청 맥락"에 대상 VPC가 있고 참고 자료에 우리 회사 네트워크 설계가 있으면,',
+      '   이 리소스가 설계상 어느 구간의 무엇을 위한 것인지(예: 개인정보 VPC 안의 DB 접근제어',
+      '   게이트웨이용)를 먼저 한 문장으로 짚고, 그 경로가 설계와 맞는지를 설명하세요.',
+      '   출발지와 대상이 같은 VPC 안이면 바깥에서 그 대역으로 들어오는 것과 구분해서 쓰세요.',
+      '9. 사내망 여부는 "우리 시스템의 정책" 자료의 사내망 목록을 따릅니다. 추측하지 마세요.',
     ].join('\n')
 
     const userPrompt = [
       `신청 내용: ${summary || question}`,
       verdictKo ? `처리 결과: ${verdictKo}` : null,
+      contextLines.length ? `\n신청 맥락:\n${contextLines.join('\n')}` : null,
       '',
       '규칙 엔진 판정:',
       findingText,
@@ -250,7 +296,14 @@ serve(async (req) => {
       throw new Error(`설명 생성 실패 (${chatRes.status}): ${d.slice(0, 200)}`)
     }
     const chat = await chatRes.json()
-    const explanation = chat.choices?.[0]?.message?.content?.trim() || ''
+    // 프롬프트로 막았지만 모델이 습관처럼 붙이는 대괄호 인용을 한 번 더 걷어낸다.
+    // 근거는 화면의 '근거 N건 보기'가 맡는다. 설명 본문에는 대괄호를 쓸 일이 없어
+    // ([T1021.004], [policy-data-zones], [ismsp · 2.6.4 …]) 짧은 대괄호 묶음은 모두 인용으로 본다.
+    const explanation = (chat.choices?.[0]?.message?.content || '')
+      .replace(/\s*\[[^\]\n]{1,80}\]/g, '')
+      .replace(/\*\*([^*]+)\*\*/g, '$1')
+      .replace(/[ \t]{2,}/g, ' ')
+      .trim()
     // 빈 본문을 그대로 내보내면 화면에 아무것도 안 뜨고 원인도 안 보인다.
     // 토큰이 모자라 잘렸는지(length) 다른 이유인지 알 수 있게 남긴다.
     if (!explanation) {

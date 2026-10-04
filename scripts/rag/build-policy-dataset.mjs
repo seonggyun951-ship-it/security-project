@@ -13,6 +13,9 @@ import { writeFileSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 import { REQUEST_POLICY, WEB_PORTS, DANGEROUS_PORTS, ENVIRONMENTS } from '../../src/lib/rules.js'
+// 대역이 무슨 환경인지는 설계에서 뽑아 둔 값을 쓴다(rules.js와 같은 출처).
+import DESIGN from '../../src/lib/design-facts.js'
+import { pruneStale } from './prune-stale.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(HERE, '../..')
@@ -82,12 +85,19 @@ add('policy-sensitive-ports',
   { kind: 'request_policy', ports: REQUEST_POLICY.SENSITIVE_PORTS })
 
 // 사내망 정의. 이 값이 바뀌면 판정이 통째로 달라지므로 별도 문서로 둔다.
+const ZONE_LABEL = { app: '운영 앱', env: '일반 환경', general_db: '일반 DB', pii_db: '개인정보 DB' }
+const zoneLine = (cidr) => {
+  const z = DESIGN.cidrs.find((c) => c.cidr === cidr)
+  return z ? `${cidr} — ${z.vpc} (${ZONE_LABEL[z.class] || z.class})` : cidr
+}
 add('policy-internal-cidrs',
   [
     '이 시스템이 사내망으로 보는 대역',
     '',
     `사내망은 다음 대역입니다: ${REQUEST_POLICY.INTERNAL_CIDRS.join(', ')}.`,
-    '이 목록은 우리가 만들어 쓰는 환경 VPC의 대역입니다.',
+    ...REQUEST_POLICY.INTERNAL_CIDRS.map(zoneLine),
+    '이 목록은 우리가 만들어 쓰는 VPC 대역 전체입니다. 데이터 계층(일반 DB·개인정보 DB) 대역도 사내망입니다.',
+    '다만 데이터 계층 대역이 들어간 신청은 사내망이어도 별도 경고가 붙습니다(데이터 계층 정책 문서 참고).',
     '',
     '주의 — 사설 주소(RFC1918)라고 모두 사내망은 아닙니다.',
     '예를 들어 10.0.1.0/24나 172.31.0.0/16은 사설 대역이지만 이 목록에 없으므로 사내망이 아닙니다.',
@@ -97,6 +107,43 @@ add('policy-internal-cidrs',
     '사무실 고정 공인 IP처럼 사설 대역이 아니지만 계속 신뢰할 출발지가 생기면 이 목록에 추가합니다.',
   ].join('\n'),
   { kind: 'request_policy', internal_cidrs: REQUEST_POLICY.INTERNAL_CIDRS })
+
+// 데이터 계층 경고(rules.js의 checkDesignZones). '위험한가'가 아니라 '설계에 맞는가'를 보는 판정이라
+// 민감 포트 정책과 섞이지 않게 따로 적는다.
+const piiZones = DESIGN.cidrs.filter((c) => c.pii)
+const dataZones = DESIGN.cidrs.filter((c) => c.direct_access_forbidden && !c.pii)
+add('policy-data-zones',
+  [
+    '이 시스템의 데이터 계층(일반 DB·개인정보 DB) 신청 정책',
+    '',
+    `개인정보 DB 대역: ${piiZones.map((z) => `${z.cidr}(${z.vpc})`).join(', ')}.`,
+    `일반 DB 대역: ${dataZones.map((z) => `${z.cidr}(${z.vpc})`).join(', ')}.`,
+    `일반 DB에 들어와도 되는 출발지: ${DESIGN.general_db_allowed_sources.join(', ')} (운영 VPC 프라이빗 서브넷).`,
+    '데이터 계층에 관련된 보안 그룹·NACL 신청은 위험도와 별개로 경고를 붙여 접수합니다.',
+    '반려가 아니라 관리자가 반드시 보도록 하는 표시입니다. 승인 화면 맨 위에 접히지 않고 뜹니다.',
+    '',
+    '설계상 경로',
+    '개인정보 DB는 앱이 대역으로 직접 붙는 곳이 아닙니다. 운영 VPC는 PrivateLink 엔드포인트로 들어오고,',
+    '그 뒤의 DB 접근제어 게이트웨이(DB SAFER 같은 제품)를 거쳐야만 DB에 닿습니다.',
+    '모든 접속과 쿼리는 게이트웨이에서 기록되고 2년간 보관됩니다(개인정보보호법 안전성 확보조치).',
+    '일반 DB는 인터넷과 격리되어 있고, 운영 앱이 프라이빗 서브넷에서 VPC 피어링으로 DB 포트에만 접근합니다.',
+    '',
+    '판정 — 규칙이 붙는 대상이 개인정보 VPC일 때',
+    '출발지도 개인정보 VPC 안이면 "개인정보 VPC 안의 통신"으로 경고합니다. PrivateLink 뒤의 NLB → 게이트웨이 → DB',
+    '내부 경로라면 정상이며, 게이트웨이를 거치는 경로인지 확인하라는 뜻입니다.',
+    '출발지가 개인정보 VPC 밖이면(운영 VPC·인터넷 포함) "바깥에서 개인정보 VPC로 바로 들어오는 규칙"으로 경고합니다.',
+    'PrivateLink를 거치면 VPC 안의 SG가 보는 출발지는 VPC 안의 NLB 주소이므로, 바깥 대역을 허용하는 규칙은',
+    '엔드포인트와 게이트웨이를 건너뛰는 경로이고 접속기록이 남지 않습니다.',
+    '',
+    '판정 — 규칙이 붙는 대상이 일반 DB VPC일 때',
+    '출발지가 운영 VPC 프라이빗 서브넷이면 설계 경로라 경고하지 않습니다.',
+    '출발지가 DB VPC 안이면 "일반 DB VPC 안의 통신"(복제·관리용인지 확인), 그 밖이면',
+    '"운영 앱이 아닌 곳에서 일반 DB로 들어오는 규칙"으로 경고합니다.',
+    '',
+    '판정 — 대상이 데이터 계층이 아니거나 알 수 없을 때',
+    '출발지가 데이터 계층 대역이면 "개인정보 DB 대역" 또는 "일반 DB 대역"으로 경고합니다.',
+  ].join('\n'),
+  { kind: 'request_policy', pii_cidrs: piiZones.map((z) => z.cidr), data_cidrs: dataZones.map((z) => z.cidr) })
 
 // NACL은 SG와 판정 기준이 다르다. 섞이면 안 되므로 따로 적는다.
 add('policy-nacl',
@@ -169,6 +216,10 @@ add('policy-environments',
     ...ENVIRONMENTS.map((e) =>
       `${e.label} — 대역 ${e.cidr}. ${e.can}. 권한 부여에 ${e.needsSuper ? '관리자와 최고 관리자 승인이 모두' : '관리자 승인이'} 필요합니다.`),
     '',
+    // ENVIRONMENTS가 데이터 계층을 일부러 뺀다(rules.js). 빠진 이유를 문서에도 남긴다.
+    `일반 DB(${dataZones.map((z) => z.vpc).join(', ')})와 개인정보 DB(${piiZones.map((z) => z.vpc).join(', ')})는 환경 권한을 주는 대상이 아닙니다.`,
+    '사람이 IAM 그룹으로 붙는 곳이 아니라, 앱이 피어링이나 PrivateLink·DB 접근제어를 거쳐서만 접근하는 곳입니다.',
+    '',
     '권한은 IAM 그룹에 넣고 빼는 방식으로 관리합니다.',
     `그룹에 들어가면 해당 환경의 역할을 맡을 수 있고, 맡으면 ${hours}시간짜리 임시 자격증명을 받습니다.`,
     '역할을 맡으면 원래 권한은 버려지고 그 역할의 권한만 적용됩니다. 두 권한이 합쳐지지 않습니다.',
@@ -230,3 +281,7 @@ const res = await fetch(FN_URL, {
 })
 const body = await res.json()
 console.log(body.ok ? `\n적재 완료: ${body.inserted}건` : `\n실패: ${body.error || JSON.stringify(body.failures)}`)
+if (!body.ok) process.exit(1)
+
+// 내용이 바뀐 정책은 새 문서로 추가될 뿐 옛 문서가 남는다. 전부 넣은 뒤에 옛 것을 지운다.
+await pruneStale('policy', docs, key)

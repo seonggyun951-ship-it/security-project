@@ -410,33 +410,94 @@ export const isInternalCidr = (cidr) =>
 // 그걸 대역으로 직접 여는 신청이면 설계 위반이므로 관리자가 반드시 보게 남긴다.
 //
 // finding에 kind를 붙인다. 화면이 개인정보('pii')는 더 눈에 띄게 그린다.
-export function checkDesignZones(rules = []) {
+//
+// targetCidr: 이 규칙이 붙는 SG·NACL이 있는 VPC의 대역(payload.target_vpc_cidr).
+// 대상을 알면 '어디로 들어가는 규칙인가'로 판정한다:
+//   대상이 개인정보 VPC  — 안에서 오면 내부 경로(게이트웨이 경유 확인), 밖에서 오면 우회 경로
+//   대상이 일반 DB VPC   — 운영 앱 프라이빗 서브넷에서 오면 설계 경로(경고 없음), 그 밖은 경고
+// 대상이 데이터 계층이 아니거나 모르면(예전 신청) 예전처럼 출발지만 보고 판정한다.
+export function checkDesignZones(rules = [], targetCidr = null) {
   const findings = []
-  const seen = new Set()   // 같은 대역을 여러 규칙이 쓰면 한 번만
+  const seen = new Set()   // 같은 판정을 여러 규칙이 되풀이하면 한 번만
+  const push = (key, f) => { if (!seen.has(key)) { seen.add(key); findings.push(f) } }
+  const target = targetCidr ? designZoneOf(targetCidr) : null
+
   for (const r of rules) {
     if (r.action === 'deny') continue   // 막는 규칙은 대상이 아니다
     const cidr = String(r.cidr || '').trim()
-    if (!cidr || cidr === '0.0.0.0/0' || cidr === '::/0') continue
+    if (!cidr) continue
+    const isPublic = cidr === '0.0.0.0/0' || cidr === '::/0'
+    const src = isPublic ? null : designZoneOf(cidr)
+    const sameVpc = !!target && !!src && src.cidr === target.cidr
+    const srcLabel = isPublic ? '인터넷 전체' : `${cidr}${src ? `(${src.vpc})` : ''}`
 
-    const zone = designZoneOf(cidr)
-    if (!zone || !zone.direct_access_forbidden) continue
-    if (seen.has(zone.cidr)) continue
-    seen.add(zone.cidr)
+    // ① 대상이 개인정보 VPC
+    if (target?.pii) {
+      // 경고는 남긴다(개인정보 DB로 가는 길이라 관리자가 봐야 한다). 문구만 상황에 맞춘다 —
+      // '직접 접근 금지, PrivateLink로 오라'는 이미 그 안에 있는 경로엔 틀린 말이다.
+      if (sameVpc) {
+        push('pii-inside', {
+          severity: 'medium',
+          kind: 'pii',
+          title: `개인정보 VPC 안의 통신입니다 (${target.vpc} ${target.cidr})`,
+          detail: `출발지 ${cidr}와 이 규칙이 붙는 대상이 모두 ${target.vpc} 안에 있습니다.`,
+          why: 'PrivateLink 뒤의 NLB → DB 접근제어 게이트웨이(DB SAFER) → DB로 이어지는 내부 경로라면 설계상 정상입니다. 다만 개인정보 DB로 가는 길이므로, 이 규칙이 접근제어 게이트웨이를 거치는 경로인지 승인 전에 확인하세요. 게이트웨이를 건너뛰고 DB에 바로 붙는 규칙이면 접속기록(2년 보관 대상)이 남지 않습니다.',
+        })
+      } else {
+        // 앱이 게이트웨이를 건너뛰고 DB에 바로 붙는 경우. 출발지가 평범한 대역(운영 VPC 등)이라
+        // 출발지만 보는 판정으로는 잡히지 않았다.
+        push('pii-from-outside', {
+          severity: 'medium',
+          kind: 'pii',
+          title: `바깥에서 개인정보 VPC로 바로 들어오는 규칙입니다 (${target.vpc} ${target.cidr})`,
+          detail: `출발지 ${srcLabel}가 ${target.vpc} 밖에 있습니다.`,
+          why: '개인정보 VPC에는 바깥에서 PrivateLink로만 들어옵니다. PrivateLink를 거치면 이 VPC 안의 SG가 보는 출발지는 VPC 안의 NLB 주소이므로, 바깥 대역을 허용하는 규칙은 엔드포인트와 DB 접근제어 게이트웨이를 건너뛰는 경로입니다. 그러면 접속기록(2년 보관 대상)이 남지 않습니다. 이 규칙이 정말 필요한지, PrivateLink로 대신할 수 없는지 승인 전에 확인하세요.',
+        })
+      }
+      continue
+    }
 
-    if (zone.pii) {
-      findings.push({
+    // ② 대상이 일반 DB VPC
+    if (target?.class === 'general_db') {
+      if (sameVpc) {
+        push('data-inside', {
+          severity: 'medium',
+          kind: 'data',
+          title: `일반 DB VPC 안의 통신입니다 (${target.vpc} ${target.cidr})`,
+          detail: `출발지 ${cidr}와 이 규칙이 붙는 대상이 모두 ${target.vpc} 안에 있습니다.`,
+          why: '복제·관리처럼 DB 계층 안에서 오가는 통신이라면 정상입니다. 앱이 DB에 붙는 길은 운영 VPC에서 피어링으로 오는 것이 설계이므로, 그 용도라면 출발지를 운영 VPC 프라이빗 서브넷으로 적어야 합니다.',
+        })
+        continue
+      }
+      // 설계가 정한 경로(운영 앱 프라이빗 → 피어링 → DB)는 경고하지 않는다
+      const fromApp = !isPublic && DESIGN.general_db_allowed_sources.some((net) => cidrContains(net, cidr))
+      if (fromApp) continue
+      push('data-from-outside', {
+        severity: 'medium',
+        kind: 'data',
+        title: `운영 앱이 아닌 곳에서 일반 DB로 들어오는 규칙입니다 (${target.vpc} ${target.cidr})`,
+        detail: `출발지 ${srcLabel}는 운영 VPC 프라이빗 서브넷(${DESIGN.general_db_allowed_sources.join(', ')})이 아닙니다.`,
+        why: '일반 DB는 인터넷과 격리되어 있고, 운영 앱이 프라이빗 서브넷에서 VPC 피어링으로만 들어오는 것이 설계입니다. 다른 출발지를 여는 것이 맞는지 승인 전에 확인하세요.',
+      })
+      continue
+    }
+
+    // ③ 대상이 데이터 계층이 아니거나 모름 — 출발지가 데이터 계층 대역인지만 본다
+    if (!src || !src.direct_access_forbidden) continue
+    if (src.pii) {
+      push(`pii-src-${src.cidr}`, {
         severity: 'medium',
         kind: 'pii',
-        title: `개인정보 DB 대역입니다 (${zone.vpc} ${zone.cidr})`,
-        detail: `${cidr}는 개인정보 DB(${zone.vpc})에 속합니다.`,
+        title: `개인정보 DB 대역입니다 (${src.vpc} ${src.cidr})`,
+        detail: `${cidr}는 개인정보 DB(${src.vpc})에 속합니다.`,
         why: '개인정보 DB는 대역으로 직접 접근하지 않습니다. PrivateLink + DB 접근제어(DB SAFER)를 거쳐야 하며, 모든 접속은 기록되어 2년 보관됩니다(개인정보보호법). 승인 전 이 접근이 정말 필요한지 확인하세요.',
       })
     } else {
-      findings.push({
+      push(`data-src-${src.cidr}`, {
         severity: 'medium',
         kind: 'data',
-        title: `일반 DB 대역입니다 (${zone.vpc} ${zone.cidr})`,
-        detail: `${cidr}는 일반 DB(${zone.vpc})에 속합니다.`,
+        title: `일반 DB 대역입니다 (${src.vpc} ${src.cidr})`,
+        detail: `${cidr}는 일반 DB(${src.vpc})에 속합니다.`,
         why: 'DB 계층은 인터넷과 격리되며 앱에서는 VPC 피어링으로만 접근하는 것이 설계입니다. 대역을 직접 여는 것이 맞는지 확인하세요.',
       })
     }
@@ -467,7 +528,8 @@ function toAwsShape(rules) {
 }
 
 // SG 신청 하나를 점검한다. 반환은 화면 점검과 같은 finding 배열.
-export function checkSgRules(rules = []) {
+// ctx.targetCidr: 이 SG가 있는 VPC의 대역. 데이터 계층 판정에만 쓴다(checkDesignZones).
+export function checkSgRules(rules = [], ctx = {}) {
   // 전체 개방·위험 포트는 이미 있는 엔진이 판정한다 (같은 규칙을 두 벌 쓰지 않기 위해)
   const findings = analyzeSecurityGroup(toAwsShape(rules)).filter((f) => f.severity !== 'ok')
 
@@ -525,7 +587,7 @@ export function checkSgRules(rules = []) {
   }
 
   // 설계 대조 — 데이터 계층(일반DB·개인정보) 대역을 직접 여는지
-  findings.push(...checkDesignZones(rules))
+  findings.push(...checkDesignZones(rules, ctx.targetCidr))
 
   return findings
 }
@@ -539,7 +601,7 @@ export function checkSgRules(rules = []) {
 //      (3389 RDP, 3306 MySQL, 5432 PostgreSQL, 1433 MSSQL, 6379 Redis, 27017 MongoDB).
 //      NACL은 규칙 번호가 낮은 것부터 먼저 맞는 하나만 적용하므로, 더 낮은 번호에
 //      거부 규칙이 있으면 그 포트는 열리지 않는다. 그 유무를 같이 보고 판정한다.
-export function checkNaclRules(rules = []) {
+export function checkNaclRules(rules = [], ctx = {}) {
   const findings = []
 
   // 이 규칙보다 앞 번호에서 해당 포트를 막고 있는지.
@@ -642,7 +704,7 @@ export function checkNaclRules(rules = []) {
   }
 
   // 설계 대조 — 데이터 계층(일반DB·개인정보) 대역을 직접 여는지
-  findings.push(...checkDesignZones(rules))
+  findings.push(...checkDesignZones(rules, ctx.targetCidr))
 
   return findings
 }
@@ -659,13 +721,15 @@ export function requestVerdict(findings) {
 }
 
 // 신청 종류에 맞는 점검기를 고른다. 점검 대상이 아니면 null.
+// payload.target_vpc_cidr: 신청 화면이 넣어 주는 대상 VPC 대역. 없으면(예전 신청) 출발지만 보고 판정한다.
 export function checkRequest(action, payload = {}) {
+  const ctx = { targetCidr: payload.target_vpc_cidr || null }
   if (action === 'create_sg' || action === 'add_rules') {
-    const findings = checkSgRules(payload.rules || [])
+    const findings = checkSgRules(payload.rules || [], ctx)
     return { findings, verdict: requestVerdict(findings) }
   }
   if (action === 'add_nacl_rules') {
-    const findings = checkNaclRules(payload.rules || [])
+    const findings = checkNaclRules(payload.rules || [], ctx)
     return { findings, verdict: requestVerdict(findings) }
   }
   return null

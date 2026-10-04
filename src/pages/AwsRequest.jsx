@@ -262,7 +262,7 @@ export default function AwsRequest({ resourceType = 'security_group' }) {
               {resourceType === 'security_group' && <SgForm sgOptions={sgOptions} recentIds={recentIds} vpcOptions={vpcOptions} accountId={accountId} onSubmit={submitRequest} submitting={submitting} />}
               {resourceType === 'waf_web_acl' && <WafForm aclOptions={aclOptions} recentIds={recentIds} accountId={accountId} onSubmit={submitRequest} submitting={submitting} />}
               {resourceType === 'iam_user' && <IamUserForm onSubmit={submitRequest} submitting={submitting} />}
-              {resourceType === 'network_acl' && <NaclForm naclOptions={naclOptions} prefill={prefill} onSubmit={submitRequest} submitting={submitting} />}
+              {resourceType === 'network_acl' && <NaclForm naclOptions={naclOptions} vpcOptions={vpcOptions} prefill={prefill} onSubmit={submitRequest} submitting={submitting} />}
             </>
           ) : (
             <>

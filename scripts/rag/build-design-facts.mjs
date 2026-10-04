@@ -45,7 +45,15 @@ const cidrs = aws.vpcs.map((v) => ({
   direct_access_forbidden: classOf(v) === 'pii_db' || classOf(v) === 'general_db',
   // 개인정보 대역은 별도로 표시 — 판정 문구가 달라진다
   pii: classOf(v) === 'pii_db',
+  // 서브넷과 계층. 일반 DB에 들어와도 되는 출발지(운영 VPC 프라이빗)를 가르는 데 쓴다.
+  subnets: (v.subnets || []).map((s) => ({ cidr: s.cidr, tier: s.tier })),
 }))
+
+// 일반 DB에 접근해도 되는 출발지 — 설계상 운영 앱(프라이빗 서브넷)이 피어링으로 들어온다.
+// connections의 'allow' 문장을 뜯지 않고 서브넷 계층에서 뽑는다(문장은 사람이 읽으라고 쓴 것).
+const appPrivate = cidrs
+  .filter((c) => c.class === 'app')
+  .flatMap((c) => c.subnets.filter((s) => s.tier === 'private').map((s) => s.cidr))
 
 const facts = {
   // 이 파일은 자동 생성이다. 손으로 고치지 말 것 — build-design-facts.mjs를 돌린다.
@@ -55,6 +63,8 @@ const facts = {
   cidrs,
   // 사내망 — 우리가 만든 VPC 대역 전체. rules.js의 INTERNAL_CIDRS가 이걸 쓴다.
   internal_cidrs: cidrs.map((c) => c.cidr),
+  // 일반 DB에 들어와도 되는 출발지(운영 VPC 프라이빗 서브넷)
+  general_db_allowed_sources: appPrivate,
   // 나가는 고정 IP (참고용)
   nat_egress_ips: aws.nat_egress_ips,
 }

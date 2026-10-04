@@ -48,10 +48,18 @@ export function SgForm({ sgOptions, recentIds = [], vpcOptions = [], accountId =
     updateRule(i, { cidr: `${ip}/32` })
   }
 
+  // 이 규칙이 붙을 SG가 있는 VPC의 대역. 새 SG면 고른 VPC, 기존 SG면 그 SG의 VPC.
+  // 판정이 '같은 개인정보 VPC 안의 통신'과 '바깥에서 그 대역으로 들어오는 것'을 가르는 데 쓴다.
+  // payload에도 남겨 승인 화면·설명이 같은 값으로 판정하게 한다.
+  const targetVpcId = action === 'create_sg'
+    ? form.vpc_id.trim()
+    : (sgOptions.find((o) => o.resource_id === form.sg_id)?.vpc_id || '')
+  const targetVpcCidr = vpcOptions.find((v) => v.resource_id === targetVpcId)?.cidr || null
+
   // 적는 동안 규칙 엔진을 부른다. 판정 기준은 lib/rules.js 한 곳 그대로다.
   const live = useMemo(
-    () => liveCheck('add_rules', { rules: toCleanRules(rules) }),
-    [rules])
+    () => liveCheck('add_rules', { rules: toCleanRules(rules), target_vpc_cidr: targetVpcCidr }),
+    [rules, targetVpcCidr])
   const hardBlocked = live.some((f) => f.severity === 'high' || f.severity === 'critical')
 
   const summary = useMemo(() => {
@@ -90,6 +98,7 @@ export function SgForm({ sgOptions, recentIds = [], vpcOptions = [], accountId =
       payload: {
         sg_name: form.sg_name.trim() || null,
         vpc_id: action === 'create_sg' ? form.vpc_id.trim() : null,
+        target_vpc_cidr: targetVpcCidr,
         description: form.description.trim() || null,
         rules: cleanRules,
         expires_at: expiresAt,

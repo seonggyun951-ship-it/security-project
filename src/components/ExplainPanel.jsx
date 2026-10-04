@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { callFunction } from '../lib/db'
 import { checkRequest } from '../lib/rules'
 import { summarizePayload } from '../lib/discord'
@@ -16,13 +16,22 @@ import { knowledgeRefsFor } from '../lib/scan'
 // 쓰는 곳이 둘이다.
 //   request  신청 검토 — 규칙 엔진 판정을 여기서 계산해 넘긴다
 //   finding  점검 결과 — 이미 나온 판정을 그대로 받는다
-export default function ExplainPanel({ request, finding }) {
+//
+// trigger: 바깥에서 한꺼번에 시작시키는 신호(한 번에 승인 패널의 '모두 설명 보기').
+// 값이 바뀔 때 아직 안 연(idle) 것만 시작한다 — 이미 연 설명을 다시 부르지 않는다.
+export default function ExplainPanel({ request, finding, trigger = 0 }) {
   const [state, setState] = useState('idle') // idle | loading | done | error
   const [text, setText] = useState('')
   const [sources, setSources] = useState([])
   const [error, setError] = useState('')
   const [showSources, setShowSources] = useState(false)
   const [openSource, setOpenSource] = useState(null)
+
+  useEffect(() => {
+    if (trigger > 0 && state === 'idle') run()
+    // state는 일부러 뺀다 — 신호가 바뀔 때만 반응해야 한다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trigger])
 
   const run = async () => {
     setState('loading')
@@ -59,6 +68,14 @@ export default function ExplainPanel({ request, finding }) {
           severity: f.severity, title: f.title, why: f.why,
         })),
         verdict: check?.verdict ?? null,
+        // 어느 VPC의 무엇을 위한 신청인지. 함수가 VPC ID를 이름·대역으로 바꿔 설명에 넣는다.
+        // 이게 없으면 개인정보 VPC 안의 정상 경로도 '외부에서 DB 대역을 연다'로 설명된다.
+        context: {
+          vpc_id: request.payload?.vpc_id || null,
+          target_id: request.target_id || request.payload?.sg_id || request.payload?.nacl_id || null,
+          description: request.payload?.description || null,
+          reason: request.reason || null,
+        },
       }
     }
 
@@ -144,6 +161,7 @@ export default function ExplainPanel({ request, finding }) {
 
 // 출처 이름은 전부 적어둔다. 빠뜨리면 화면에 'gcp_baseline' 같은 원본 값이 그대로 나온다.
 const SOURCE_LABEL = {
+  virtual_infra: '우리 설계',
   rule_engine: '판정 사례',
   policy: '우리 정책',
   concept: 'AWS 개념',

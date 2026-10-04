@@ -1,4 +1,5 @@
 // AWS 자동화 신청/승인 공통 모듈 — 신청자 페이지와 승인자 페이지가 함께 사용
+import { useState } from 'react'
 import { elapsedLabel, isAged } from './date'
 import { summarizePayload } from './discord'
 import { checkRequest, ENVIRONMENTS, envMeta, envNeedsSuper } from './rules'
@@ -63,6 +64,18 @@ export const isDeleteAction = (a) => DELETE_ACTIONS.includes(a)
 export function needsSuperApproval(r) {
   if (isDeleteAction(r.action)) return true
   return r.action === 'grant_env_access' && envNeedsSuper(r.payload?.environment)
+}
+
+// 한 번에 승인에서 빼는 신청과 그 이유. null이면 함께 승인할 수 있다.
+//   삭제          되돌릴 수 없다 — 한 건씩 보고 누르게 한다
+//   2단계 승인    prod·db 권한처럼 최고 관리자까지 가는 것
+//   IAM 계정 생성  승인하면서 액세스 키 발급 여부를 정하고, 발급되면 비밀 키를 그 자리에서 한 번만 보여준다
+export function bulkBlockReason(r) {
+  if (r.status !== 'pending') return '대기 중인 신청만 함께 승인할 수 있습니다'
+  if (isDeleteAction(r.action)) return '삭제는 되돌릴 수 없어 하나씩 승인합니다'
+  if (needsSuperApproval(r)) return '2단계 승인 대상이라 하나씩 승인합니다'
+  if (r.resource_type === 'iam_user') return '액세스 키 발급 여부를 정해야 해서 하나씩 승인합니다'
+  return null
 }
 
 // 배포된 IAM 정책이 딱 이 두 관리형 정책으로만 AttachUserPolicy 하도록 제한되어 있음
@@ -351,12 +364,28 @@ export function ZoneAlerts({ alerts = [] }) {
 // 처리 버튼은 표에 두지 않는다.
 // 버튼 폭이 신청 종류마다 달라(삭제·IAM은 버튼이 둘셋) 열 폭을 맞출 수 없고,
 // 넘치면 가로 스크롤이 생긴다. 처리는 행을 골라 오른쪽 검토 패널에서 한다.
-export function ReqTable({ requests, onOpen, selectedId }) {
+//
+// checked/onCheck를 넘기면 맨 앞에 체크박스 열이 생긴다(관리자 승인 화면의 한 번에 승인).
+// 함께 승인할 수 없는 신청은 체크를 막고 '개별 승인'으로 표시한다 — 이유는 bulkBlockReason.
+export function ReqTable({ requests, onOpen, selectedId, checked, onCheck, onCheckAll }) {
+  const checkable = !!onCheck
+  const able = checkable ? requests.filter((r) => !bulkBlockReason(r)) : []
+  const pickedCount = checkable ? able.filter((r) => checked?.has(r.id)).length : 0
   return (
     <div className="rt-scroll">
-      <table className="rt">
+      <table className={`rt ${checkable ? 'has-check' : ''}`}>
         <thead>
           <tr>
+            {checkable && (
+              <th className="rt-ck">
+                <input type="checkbox" title="함께 승인할 수 있는 것만 전체 선택"
+                  disabled={able.length === 0}
+                  checked={able.length > 0 && pickedCount === able.length}
+                  // 일부만 고른 상태는 checked로 표현할 수 없어 DOM 속성으로 둔다
+                  ref={(el) => { if (el) el.indeterminate = pickedCount > 0 && pickedCount < able.length }}
+                  onChange={(e) => onCheckAll?.(e.target.checked ? able.map((r) => r.id) : [])} />
+              </th>
+            )}
             <th>상태</th><th>신청</th><th>내용</th>
             <th className="rt-right">경과</th>
           </tr>
@@ -366,16 +395,28 @@ export function ReqTable({ requests, onOpen, selectedId }) {
             const meta = REQ_STATUS_META[r.status] || { label: r.status, color: 'var(--ink-3)' }
             const risk = reqRisk(r)
             const summary = summarizePayload(r.action, r.payload)
+            const blocked = checkable ? bulkBlockReason(r) : null
+            const isChecked = checkable && checked?.has(r.id)
 
             return (
               <tr key={r.id}
-                className={`${risk ? `rt-${risk}` : ''} ${onOpen ? 'rt-click' : ''} ${selectedId === r.id ? 'rt-sel' : ''}`}
+                className={`${risk ? `rt-${risk}` : ''} ${onOpen ? 'rt-click' : ''} ${selectedId === r.id ? 'rt-sel' : ''} ${isChecked ? 'rt-checked' : ''}`}
                 onClick={() => onOpen?.(r)}>
+                {checkable && (
+                  // 칸 전체를 누르기 쉽게 하되, 행을 여는 클릭으로 번지지 않게 막는다
+                  <td className="rt-ck" onClick={(e) => e.stopPropagation()}>
+                    <input type="checkbox" checked={!!isChecked} disabled={!!blocked}
+                      title={blocked || '함께 승인할 신청으로 고르기'}
+                      onChange={() => onCheck(r.id)} />
+                  </td>
+                )}
                 <td>
                   <span className="rt-chip" style={{ background: meta.bg, color: meta.color }}>{meta.label}</span>
                   {/* 색 띠만으로는 뜻이 안 보여서 글자로도 표시한다 */}
                   {risk === 'risk' && <span className="rt-flag rt-flag-risk">검토필요</span>}
                   {risk === 'aged' && <span className="rt-flag rt-flag-aged">지연</span>}
+                  {reqZoneAlerts(r).some((c) => c.kind === 'pii') && <span className="rt-flag rt-flag-pii">🔒 개인정보</span>}
+                  {blocked && r.status === 'pending' && <span className="rt-flag rt-flag-solo" title={blocked}>개별 승인</span>}
                 </td>
                 <td>
                   <div className="rt-title">{ACTION_LABEL[r.action] || r.action} · {r.title || r.target_id || ''}</div>
@@ -522,6 +563,103 @@ export function ReqDrawer({ r, busyId, onApprove, onReject, onClose, isSuper = f
         {/* 이력에서 지우는 버튼은 두지 않는다 — 승인 이력은 감사 자료라 남아야 한다.
             취소는 status를 'cancelled'로 바꿀 뿐 행은 남는다. */}
       </aside>
+  )
+}
+
+// 한 번에 승인 — 고른 신청을 한 패널에 쌓아 보여준다.
+//
+// 승인 버튼이 하나라 하나씩 열어볼 때보다 덜 보고 누르기 쉽다. 그래서 카드마다
+// 개인정보 배너·주의·신청 내용·사유를 접지 않고 다 펼친다.
+// 판정 설명(AI)만 '모두 설명 보기'로 부른다 — 한 건에 수 초가 걸리고 호출 한도를 쓴다.
+export function BulkPanel({ requests, busyId, busy, onApprove, onUncheck, onClear }) {
+  const [explainAll, setExplainAll] = useState(0)
+  const hasPii = requests.some((r) => reqZoneAlerts(r).some((c) => c.kind === 'pii'))
+  return (
+    <aside className="rv">
+      <div className="rd-head">
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {hasPii && <span className="rt-chip bk-pii">🔒 개인정보 포함</span>}
+          <div className="rd-title">선택한 신청 {requests.length}건</div>
+          <div className="rd-sub">고른 신청을 한 번에 승인합니다. 하나씩 순서대로 처리합니다.</div>
+        </div>
+        <button className="rd-x" onClick={onClear} aria-label="선택 해제" disabled={busy}>✕</button>
+      </div>
+
+      <div className="rd-body">
+        <div className="bk-explain">
+          <span>판정 설명</span>
+          <button className="ac-btn ac-btn-secondary" disabled={busy}
+            // 이미 연 설명은 그대로 두고 아직 안 연 것만 시작한다(ExplainPanel이 idle일 때만 반응)
+            onClick={() => setExplainAll((n) => n + 1)}>모두 설명 보기</button>
+        </div>
+
+        {requests.map((r) => {
+          const detail = reqDetailLines(r)
+          const warnings = reqWarnings(r)
+          return (
+            <div key={r.id} className={`bk-card ${busyId === r.id ? 'is-busy' : ''}`}>
+              <div className="bk-card-h">
+                <span className="bk-name">{r.title || r.target_id || ''}</span>
+                <span className="bk-kind">{ACTION_LABEL[r.action] || r.action}</span>
+                {busyId === r.id
+                  ? <span className="bk-doing">처리 중…</span>
+                  : <button className="rd-x" disabled={busy} title="선택에서 빼기" onClick={() => onUncheck(r.id)}>✕</button>}
+              </div>
+              <div className="bk-card-b">
+                <ZoneAlerts alerts={reqZoneAlerts(r)} />
+                {warnings.map((w, i) => <div key={i} className="ac-req-warn">⚠️ {w}</div>)}
+                {detail.map((line, i) => <div key={i} className="rd-fline">{line}</div>)}
+                <div className="rd-kv"><span className="rd-k">신청자</span><span className="rd-v">{r.requester_email || '알 수 없음'}</span></div>
+                {r.reason && <div className="rd-kv"><span className="rd-k">사유</span><span className="rd-v">{r.reason}</span></div>}
+                <ExplainPanel key={r.id} request={r} trigger={explainAll} />
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="rd-foot">
+        <button className="ac-btn ac-btn-secondary" disabled={busy} onClick={onClear}>선택 해제</button>
+        <button className="ac-btn" style={{ flex: 1 }} disabled={busy} onClick={onApprove}>
+          {busy ? '처리 중...' : `${requests.length}건 승인`}
+        </button>
+      </div>
+    </aside>
+  )
+}
+
+// 한 번에 승인한 뒤의 건별 결과. 알림창을 건마다 띄우지 않고 여기 모아 보여준다.
+export function BulkResult({ results, onClose }) {
+  const failed = results.filter((x) => !x.ok).length
+  return (
+    <aside className="rv">
+      <div className="rd-head">
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="rd-title">처리 결과</div>
+          <div className="rd-sub">
+            {results.length}건 중 {results.length - failed}건 승인{failed > 0 ? ` · ${failed}건 실패` : ''}
+          </div>
+        </div>
+        <button className="rd-x" onClick={onClose} aria-label="닫기">✕</button>
+      </div>
+      <div className="rd-body">
+        {results.map((x) => (
+          <div key={x.id} className={`bk-res ${x.ok ? 'is-ok' : 'is-fail'}`}>
+            <span className="bk-res-i">{x.ok ? '✓' : '✕'}</span>
+            <span>
+              <b>{x.title}</b> <span className="bk-kind">{x.label}</span>
+              <span className="bk-res-m">{x.message}</span>
+            </span>
+          </div>
+        ))}
+        {failed > 0 && (
+          <p className="bk-res-note">실패 원인은 위에 적었습니다. AWS에 바로 적용하는 신청은 실패하면 '실패' 상태로 승인 이력에 남으므로, 원인을 고친 뒤 다시 신청해야 합니다.</p>
+        )}
+      </div>
+      <div className="rd-foot">
+        <button className="ac-btn ac-btn-secondary" style={{ flex: 1 }} onClick={onClose}>확인</button>
+      </div>
+    </aside>
   )
 }
 

@@ -98,7 +98,7 @@ function RuleTable({ rules, setRules, showPreset }) {
   )
 }
 
-export function NaclForm({ naclOptions, prefill, onSubmit, submitting }) {
+export function NaclForm({ naclOptions, vpcOptions = [], prefill, onSubmit, submitting }) {
   // 점검 결과에서 '조치 신청'으로 넘어오면 대상과 규칙이 채워져 온다.
   const [form, setForm] = useState({
     nacl_id: prefill?.nacl_id || '',
@@ -122,12 +122,14 @@ export function NaclForm({ naclOptions, prefill, onSubmit, submitting }) {
     }
 
     const picked = naclOptions.find((o) => o.resource_id === form.nacl_id.trim())
+    // NACL이 있는 VPC의 대역. 판정이 '같은 데이터 계층 VPC 안의 통신'을 가르는 데 쓴다(rules.js checkDesignZones).
+    const targetVpcCidr = vpcOptions.find((v) => v.resource_id === picked?.vpc_id)?.cidr || null
     const ok = await onSubmit({
       resource_type: 'network_acl',
       action: 'add_nacl_rules',
       title: form.nacl_id.trim(),
       target_id: form.nacl_id.trim(),
-      payload: { nacl_id: form.nacl_id.trim(), nacl_name: picked?.resource_name || null, rules: clean },
+      payload: { nacl_id: form.nacl_id.trim(), nacl_name: picked?.resource_name || null, target_vpc_cidr: targetVpcCidr, rules: clean },
       reason: form.reason.trim() || null,
     })
     if (ok) reset()

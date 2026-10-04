@@ -21,6 +21,7 @@ import {
   SEVERITY_LABEL, DANGEROUS_PORTS,
   isInternalCidr, REQUEST_POLICY, ENVIRONMENTS,
 } from '../../src/lib/rules.js'
+import { pruneStale } from './prune-stale.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const OUT = resolve(HERE, 'rule-dataset.json')
@@ -377,3 +378,8 @@ for (let i = 0; i < docs.length; i += CHUNK) {
   console.log(`  ${i + slice.length}/${docs.length} 적재됨`)
 }
 console.log(`\n적재 완료: ${sent}건`)
+
+// 판정이 바뀐 사례는 새 문서로 추가될 뿐 옛 판정이 남는다. 전부 들어갔을 때만 옛 것을 지운다 —
+// 일부만 들어간 채 지우면 그 사례가 아예 사라진다.
+if (sent === docs.length) await pruneStale('rule_engine', docs, key)
+else console.log(`일부(${docs.length - sent}건)가 안 들어가서 옛 문서 정리는 건너뜀`)
