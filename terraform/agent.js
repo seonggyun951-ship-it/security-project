@@ -170,6 +170,25 @@ function runTerraform(cmd) {
   }
 }
 
+// 신청 코드에 들어 있는 리소스 주소. plan·apply를 이것들로만 좁힌다(-target).
+//
+// 폴더 전체를 apply하면 폴더에 남아 있는 다른 코드까지 같이 적용된다. 2026-10-07에
+// 8월에 지운 옛 기본 인프라 코드(security-vpc, SSH 전체 개방 SG, EC2 2대)가 남아 있어
+// 서브넷 신청 하나에 그 전부를 다시 만들려 했다(VPC 한도에 막혀 EC2까지는 안 갔다).
+// 라우팅 테이블 신청은 테이블 + 서브넷 연결 여러 개라 리소스를 전부 뽑는다.
+// 데이터 소스(AMI 조회 등)는 Terraform이 의존 관계로 알아서 포함한다.
+function targetsOf(tfContent) {
+  return [...tfContent.matchAll(/^resource\s+"([^"]+)"\s+"([^"]+)"/gm)].map((m) => `${m[1]}.${m[2]}`)
+}
+
+// 그 주소들 중 이미 state에 들어간 것. apply가 실패해도 일부는 만들어졌을 수 있다.
+function inState(addresses) {
+  const list = runTerraform('state list -no-color')
+  if (!list.ok) return []
+  const have = new Set(list.output.split('\n').map((s) => s.trim()).filter(Boolean))
+  return addresses.filter((a) => have.has(a))
+}
+
 // ---- 메인 폴링 루프 ----
 
 async function processApproved() {
@@ -200,8 +219,11 @@ async function processApproved() {
     // .tf 파일 생성
     fs.writeFileSync(tfFile, tfContent, 'utf-8')
 
-    // terraform plan
-    const plan = runTerraform('plan -no-color -input=false')
+    const addresses = targetsOf(tfContent)
+    const targetArgs = addresses.map((a) => `-target=${a}`).join(' ')
+
+    // terraform plan — 이 신청의 리소스만
+    const plan = runTerraform(`plan -no-color -input=false ${targetArgs}`)
     if (!plan.ok) {
       console.log('    plan 실패:', plan.output.slice(0, 200))
       const { error: dbErr1 } = await supabase.from('aws_requests').update({
@@ -215,18 +237,28 @@ async function processApproved() {
       continue
     }
 
-    // terraform apply
-    const apply = runTerraform('apply -auto-approve -no-color -input=false')
+    // terraform apply — 이 신청의 리소스만
+    const apply = runTerraform(`apply -auto-approve -no-color -input=false ${targetArgs}`)
     if (!apply.ok) {
       console.log('    apply 실패:', apply.output.slice(0, 200))
+      // 실패해도 일부 리소스는 이미 만들어졌을 수 있다. 그때 코드 파일을 지우면 state에만 남아,
+      // 다음 apply에서 '코드에 없는 리소스'로 지워진다(2026-10-07 dev-demo-a가 그럴 뻔했다).
+      // 만들어진 게 있으면 파일을 남기고 사람이 보게 알린다.
+      const made = inState(addresses)
+      const partial = made.length > 0
       const { error: dbErr2 } = await supabase.from('aws_requests').update({
         status: 'failed',
-        error_message: 'terraform apply 실패: ' + apply.output.slice(0, 500),
+        error_message: (partial
+          ? `terraform apply 일부 적용 — 만들어진 리소스: ${made.join(', ')}. 코드 파일을 남겨 두었으니 AWS에서 확인 후 정리하세요.\n`
+          : 'terraform apply 실패: ') + apply.output.slice(0, 500),
         applied_at: new Date().toISOString(),
       }).eq('id', req.id)
       if (dbErr2) console.error('    DB 상태 업데이트 실패:', dbErr2.message)
-      await notifyDiscord(`❌ **Terraform apply 실패**\n${req.resource_type}: ${req.title || req.id}\n${apply.output.slice(0, 200)}`)
-      fs.unlinkSync(tfFile) // 실패한 .tf 정리 (재시도 방지)
+      await notifyDiscord(partial
+        ? `⚠️ **Terraform 일부 적용**\n${req.resource_type}: ${req.title || req.id}\n만들어진 리소스: ${made.join(', ')}\n코드 파일을 남겨 두었습니다. AWS에서 확인해주세요.\n${apply.output.slice(0, 200)}`
+        : `❌ **Terraform apply 실패**\n${req.resource_type}: ${req.title || req.id}\n${apply.output.slice(0, 200)}`)
+      if (!partial) fs.unlinkSync(tfFile) // 아무것도 안 만들어졌을 때만 정리 (재시도 방지)
+      else console.log(`    ⚠️ 일부 적용됨 — 코드 파일 유지: ${made.join(', ')}`)
       continue
     }
 
